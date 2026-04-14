@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/keybinding"
@@ -206,7 +207,7 @@ func (a *App) renderBoard() string {
 			b.WriteString(fmt.Sprintf("  %s", name))
 		}
 		if i < 3 {
-			pad := colWidth - len(name) - 2
+			pad := colWidth - utf8.RuneCountInString(name) - 2
 			if pad > 0 {
 				b.WriteString(strings.Repeat(" ", pad))
 			}
@@ -222,12 +223,14 @@ func (a *App) renderBoard() string {
 				prefix = "▸ "
 			}
 			line := fmt.Sprintf("%s%s %s", prefix, ticket.ID, ticket.Title)
-			if len(line) > colWidth {
-				line = line[:colWidth-1] + "…"
+			runeCount := utf8.RuneCountInString(line)
+			if runeCount > colWidth {
+				runes := []rune(line)
+				line = string(runes[:colWidth-1]) + "…"
 			}
 			b.WriteString(line)
 			if i < 3 {
-				pad := colWidth - len(line)
+				pad := colWidth - utf8.RuneCountInString(line)
 				if pad > 0 {
 					b.WriteString(strings.Repeat(" ", pad))
 				}
