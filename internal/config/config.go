@@ -1,5 +1,12 @@
 package config
 
+import (
+	"fmt"
+	"os"
+
+	"github.com/BurntSushi/toml"
+)
+
 type Config struct {
 	General GeneralConfig
 	Board   BoardConfig
@@ -44,4 +51,16 @@ type DBConfig struct {
 type MCPConfig struct {
 	NPMPath  string `toml:"npm_path"`
 	NodePath string `toml:"node_path"`
+}
+
+func loadFromFile(cfg *Config, path string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil
+	}
+
+	if _, err := toml.DecodeFile(path, cfg); err != nil {
+		return fmt.Errorf("config.load: parsing %s: %w", path, err)
+	}
+
+	return nil
 }
