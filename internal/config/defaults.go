@@ -1,1 +1,28 @@
 package config
+
+func SetDefaults() *Config {
+	return &Config{
+		General: GeneralConfig{
+			Log:  "info",
+			Addr: ":8080",
+			Mode: "tui",
+			Tmux: "auto",
+		},
+		Board: BoardConfig{
+			Statuses: []string{"backlog", "in_progress", "review", "done"},
+		},
+		Agent: AgentConfig{
+			Default: "opencode",
+		},
+		TUI: TUIConfig{
+			Theme:  "default",
+			Layout: "compact",
+		},
+		LLM: LLMConfig{},
+		DB:  DBConfig{},
+		MCP: MCPConfig{
+			NPMPath:  "npm",
+			NodePath: "node",
+		},
+	}
+}
