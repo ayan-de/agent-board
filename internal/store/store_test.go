@@ -234,3 +234,261 @@ func TestCreateTicketWithTagsAndDeps(t *testing.T) {
 		t.Errorf("DependsOn = %v, want [AGT-01]", ticket.DependsOn)
 	}
 }
+
+func TestGetTicket(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	created, err := s.CreateTicket(context.Background(), Ticket{
+		Title:    "Get me",
+		Status:   "backlog",
+		Priority: "high",
+		Tags:     []string{"test"},
+	})
+	if err != nil {
+		t.Fatalf("CreateTicket: %v", err)
+	}
+
+	got, err := s.GetTicket(context.Background(), created.ID)
+	if err != nil {
+		t.Fatalf("GetTicket: %v", err)
+	}
+	if got.Title != "Get me" {
+		t.Errorf("Title = %q, want %q", got.Title, "Get me")
+	}
+	if got.Priority != "high" {
+		t.Errorf("Priority = %q, want %q", got.Priority, "high")
+	}
+	if len(got.Tags) != 1 || got.Tags[0] != "test" {
+		t.Errorf("Tags = %v, want [test]", got.Tags)
+	}
+}
+
+func TestGetTicketNotFound(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	_, err := s.GetTicket(context.Background(), "AGT-99")
+	if err == nil {
+		t.Fatal("should return error for missing ticket")
+	}
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestListTicketsAll(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	s.CreateTicket(context.Background(), Ticket{Title: "A", Status: "backlog"})
+	s.CreateTicket(context.Background(), Ticket{Title: "B", Status: "in_progress"})
+	s.CreateTicket(context.Background(), Ticket{Title: "C", Status: "done"})
+
+	tickets, err := s.ListTickets(context.Background(), TicketFilters{})
+	if err != nil {
+		t.Fatalf("ListTickets: %v", err)
+	}
+	if len(tickets) != 3 {
+		t.Errorf("got %d tickets, want 3", len(tickets))
+	}
+}
+
+func TestListTicketsByStatus(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	s.CreateTicket(context.Background(), Ticket{Title: "A", Status: "backlog"})
+	s.CreateTicket(context.Background(), Ticket{Title: "B", Status: "in_progress"})
+	s.CreateTicket(context.Background(), Ticket{Title: "C", Status: "backlog"})
+
+	tickets, err := s.ListTickets(context.Background(), TicketFilters{Status: "backlog"})
+	if err != nil {
+		t.Fatalf("ListTickets: %v", err)
+	}
+	if len(tickets) != 2 {
+		t.Errorf("got %d tickets, want 2", len(tickets))
+	}
+}
+
+func TestListTicketsByAgent(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	s.CreateTicket(context.Background(), Ticket{Title: "A", Status: "backlog", Agent: "claude-code"})
+	s.CreateTicket(context.Background(), Ticket{Title: "B", Status: "backlog", Agent: "opencode"})
+
+	tickets, err := s.ListTickets(context.Background(), TicketFilters{Agent: "claude-code"})
+	if err != nil {
+		t.Fatalf("ListTickets: %v", err)
+	}
+	if len(tickets) != 1 {
+		t.Errorf("got %d tickets, want 1", len(tickets))
+	}
+	if tickets[0].Agent != "claude-code" {
+		t.Errorf("Agent = %q, want %q", tickets[0].Agent, "claude-code")
+	}
+}
+
+func TestListTicketsByPriority(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	s.CreateTicket(context.Background(), Ticket{Title: "A", Status: "backlog", Priority: "high"})
+	s.CreateTicket(context.Background(), Ticket{Title: "B", Status: "backlog", Priority: "low"})
+
+	tickets, err := s.ListTickets(context.Background(), TicketFilters{Priority: "high"})
+	if err != nil {
+		t.Fatalf("ListTickets: %v", err)
+	}
+	if len(tickets) != 1 {
+		t.Errorf("got %d tickets, want 1", len(tickets))
+	}
+}
+
+func TestListTicketsByTag(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	s.CreateTicket(context.Background(), Ticket{Title: "A", Status: "backlog", Tags: []string{"auth", "backend"}})
+	s.CreateTicket(context.Background(), Ticket{Title: "B", Status: "backlog", Tags: []string{"frontend"}})
+
+	tickets, err := s.ListTickets(context.Background(), TicketFilters{Tag: "auth"})
+	if err != nil {
+		t.Fatalf("ListTickets: %v", err)
+	}
+	if len(tickets) != 1 {
+		t.Errorf("got %d tickets, want 1", len(tickets))
+	}
+}
+
+func TestUpdateTicket(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	created, err := s.CreateTicket(context.Background(), Ticket{
+		Title:    "Original",
+		Status:   "backlog",
+		Priority: "medium",
+	})
+	if err != nil {
+		t.Fatalf("CreateTicket: %v", err)
+	}
+
+	created.Title = "Updated"
+	created.Description = "New description"
+	created.Tags = []string{"updated"}
+
+	updated, err := s.UpdateTicket(context.Background(), created)
+	if err != nil {
+		t.Fatalf("UpdateTicket: %v", err)
+	}
+	if updated.Title != "Updated" {
+		t.Errorf("Title = %q, want %q", updated.Title, "Updated")
+	}
+	if updated.Description != "New description" {
+		t.Errorf("Description = %q, want %q", updated.Description, "New description")
+	}
+	if len(updated.Tags) != 1 || updated.Tags[0] != "updated" {
+		t.Errorf("Tags = %v, want [updated]", updated.Tags)
+	}
+
+	got, err := s.GetTicket(context.Background(), created.ID)
+	if err != nil {
+		t.Fatalf("GetTicket: %v", err)
+	}
+	if got.Title != "Updated" {
+		t.Errorf("persisted Title = %q, want %q", got.Title, "Updated")
+	}
+}
+
+func TestUpdateTicketNotFound(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	_, err := s.UpdateTicket(context.Background(), Ticket{ID: "AGT-99", Title: "Ghost", Status: "backlog"})
+	if err == nil {
+		t.Fatal("should return error for missing ticket")
+	}
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestDeleteTicket(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	created, err := s.CreateTicket(context.Background(), Ticket{Title: "Delete me", Status: "backlog"})
+	if err != nil {
+		t.Fatalf("CreateTicket: %v", err)
+	}
+
+	err = s.DeleteTicket(context.Background(), created.ID)
+	if err != nil {
+		t.Fatalf("DeleteTicket: %v", err)
+	}
+
+	_, err = s.GetTicket(context.Background(), created.ID)
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("after delete, GetTicket error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestDeleteTicketNotFound(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	err := s.DeleteTicket(context.Background(), "AGT-99")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("DeleteTicket error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestMoveStatus(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	created, err := s.CreateTicket(context.Background(), Ticket{Title: "Move me", Status: "backlog"})
+	if err != nil {
+		t.Fatalf("CreateTicket: %v", err)
+	}
+
+	err = s.MoveStatus(context.Background(), created.ID, "in_progress")
+	if err != nil {
+		t.Fatalf("MoveStatus: %v", err)
+	}
+
+	got, err := s.GetTicket(context.Background(), created.ID)
+	if err != nil {
+		t.Fatalf("GetTicket: %v", err)
+	}
+	if got.Status != "in_progress" {
+		t.Errorf("Status = %q, want %q", got.Status, "in_progress")
+	}
+}
+
+func TestMoveStatusInvalid(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	created, err := s.CreateTicket(context.Background(), Ticket{Title: "Move me", Status: "backlog"})
+	if err != nil {
+		t.Fatalf("CreateTicket: %v", err)
+	}
+
+	err = s.MoveStatus(context.Background(), created.ID, "nonexistent")
+	if !errors.Is(err, ErrInvalidStatus) {
+		t.Errorf("MoveStatus error = %v, want ErrInvalidStatus", err)
+	}
+}
+
+func TestMoveStatusNotFound(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	err := s.MoveStatus(context.Background(), "AGT-99", "backlog")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("MoveStatus error = %v, want ErrNotFound", err)
+	}
+}
