@@ -109,6 +109,30 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch action {
 	case keybinding.ActionQuit, keybinding.ActionForceQuit:
 		return a, tea.Quit
+	case keybinding.ActionPrevColumn:
+		if a.colIndex > 0 {
+			a.colIndex--
+		}
+	case keybinding.ActionNextColumn:
+		if a.colIndex < 3 {
+			a.colIndex++
+		}
+	case keybinding.ActionPrevTicket:
+		if a.cursors[a.colIndex] > 0 {
+			a.cursors[a.colIndex]--
+		}
+	case keybinding.ActionNextTicket:
+		if a.cursors[a.colIndex] < len(a.columns[a.colIndex])-1 {
+			a.cursors[a.colIndex]++
+		}
+	case keybinding.ActionJumpColumn1:
+		a.colIndex = 0
+	case keybinding.ActionJumpColumn2:
+		a.colIndex = 1
+	case keybinding.ActionJumpColumn3:
+		a.colIndex = 2
+	case keybinding.ActionJumpColumn4:
+		a.colIndex = 3
 	}
 
 	return a, nil

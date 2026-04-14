@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -126,5 +128,95 @@ func TestUpdateForceQuit(t *testing.T) {
 	msg := cmd()
 	if _, ok := msg.(tea.QuitMsg); !ok {
 		t.Errorf("cmd produced %T, want tea.QuitMsg", msg)
+	}
+}
+
+func TestUpdateNavigationPrevNextColumn(t *testing.T) {
+	app := newTestApp(t)
+
+	nextKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}}
+	for i := 0; i < 4; i++ {
+		app.Update(nextKey)
+	}
+	if app.colIndex != 3 {
+		t.Errorf("colIndex = %d after 4 next, want 3", app.colIndex)
+	}
+
+	prevKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}}
+	for i := 0; i < 5; i++ {
+		app.Update(prevKey)
+	}
+	if app.colIndex != 0 {
+		t.Errorf("colIndex = %d after 5 prev, want 0", app.colIndex)
+	}
+}
+
+func TestUpdateNavigationJumpColumns(t *testing.T) {
+	app := newTestApp(t)
+
+	tests := []struct {
+		key  rune
+		want int
+	}{
+		{'3', 2},
+		{'1', 0},
+		{'4', 3},
+	}
+	for _, tt := range tests {
+		app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{tt.key}})
+		if app.colIndex != tt.want {
+			t.Errorf("after pressing %c, colIndex = %d, want %d", tt.key, app.colIndex, tt.want)
+		}
+	}
+}
+
+func TestUpdateNavigationPrevNextTicket(t *testing.T) {
+	app := newTestApp(t)
+	ctx := context.Background()
+
+	for i := 0; i < 3; i++ {
+		_, _ = app.store.CreateTicket(ctx, store.Ticket{
+			Title:  fmt.Sprintf("Ticket %d", i+1),
+			Status: "backlog",
+		})
+	}
+	_ = app.loadColumns()
+
+	nextKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
+	app.Update(nextKey)
+	if app.cursors[0] != 1 {
+		t.Errorf("cursor = %d, want 1", app.cursors[0])
+	}
+	app.Update(nextKey)
+	if app.cursors[0] != 2 {
+		t.Errorf("cursor = %d, want 2", app.cursors[0])
+	}
+	app.Update(nextKey)
+	if app.cursors[0] != 2 {
+		t.Errorf("cursor = %d after clamp, want 2", app.cursors[0])
+	}
+
+	prevKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}}
+	app.Update(prevKey)
+	if app.cursors[0] != 1 {
+		t.Errorf("cursor = %d, want 1", app.cursors[0])
+	}
+	app.Update(prevKey)
+	if app.cursors[0] != 0 {
+		t.Errorf("cursor = %d, want 0", app.cursors[0])
+	}
+	app.Update(prevKey)
+	if app.cursors[0] != 0 {
+		t.Errorf("cursor = %d after clamp, want 0", app.cursors[0])
+	}
+}
+
+func TestUpdateNavigationEmptyColumn(t *testing.T) {
+	app := newTestApp(t)
+
+	app.colIndex = 1
+	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	if app.cursors[1] != 0 {
+		t.Errorf("cursor = %d on empty column, want 0", app.cursors[1])
 	}
 }
