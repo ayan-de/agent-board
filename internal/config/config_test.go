@@ -309,3 +309,98 @@ func TestLoadFromFileInvalidTOML(t *testing.T) {
 		t.Fatal("loadFromFile with invalid TOML should return error")
 	}
 }
+
+func TestLoadFromDir(t *testing.T) {
+	baseDir := t.TempDir()
+	projectName := "my-app"
+
+	globalCfg := []byte(`
+[general]
+log = "debug"
+
+[tui]
+theme = "catppuccin"
+
+[agent]
+default = "claude-code"
+`)
+	globalPath := filepath.Join(baseDir, "config.toml")
+	if err := os.WriteFile(globalPath, globalCfg, 0644); err != nil {
+		t.Fatalf("write global config: %v", err)
+	}
+
+	projDir := filepath.Join(baseDir, "projects", projectName)
+	if err := os.MkdirAll(projDir, 0755); err != nil {
+		t.Fatalf("mkdir project: %v", err)
+	}
+	projCfg := []byte(`
+[board]
+statuses = ["todo", "doing", "done"]
+
+[tui]
+theme = "dracula"
+`)
+	projPath := filepath.Join(projDir, "config.toml")
+	if err := os.WriteFile(projPath, projCfg, 0644); err != nil {
+		t.Fatalf("write project config: %v", err)
+	}
+
+	t.Setenv("AGENTBOARD_LLM_API_KEY", "sk-from-env")
+	t.Setenv("AGENTBOARD_LOG", "error")
+
+	cfg, err := LoadFromDir(baseDir, projectName)
+	if err != nil {
+		t.Fatalf("LoadFromDir: %v", err)
+	}
+
+	if cfg.General.Log != "error" {
+		t.Errorf("General.Log = %q, env should override to %q", cfg.General.Log, "error")
+	}
+	if cfg.General.Addr != ":8080" {
+		t.Errorf("General.Addr = %q, want default %q", cfg.General.Addr, ":8080")
+	}
+	if cfg.TUI.Theme != "dracula" {
+		t.Errorf("TUI.Theme = %q, project should override to %q", cfg.TUI.Theme, "dracula")
+	}
+	if cfg.Agent.Default != "claude-code" {
+		t.Errorf("Agent.Default = %q, want global %q", cfg.Agent.Default, "claude-code")
+	}
+
+	wantStatuses := []string{"todo", "doing", "done"}
+	if len(cfg.Board.Statuses) != len(wantStatuses) {
+		t.Fatalf("Board.Statuses len = %d, want %d", len(cfg.Board.Statuses), len(wantStatuses))
+	}
+	for i, s := range cfg.Board.Statuses {
+		if s != wantStatuses[i] {
+			t.Errorf("Board.Statuses[%d] = %q, want %q", i, s, wantStatuses[i])
+		}
+	}
+
+	if cfg.LLM.APIKey != "sk-from-env" {
+		t.Errorf("LLM.APIKey = %q, want env %q", cfg.LLM.APIKey, "sk-from-env")
+	}
+	if cfg.DB.Path != filepath.Join(baseDir, "projects", projectName, "board.db") {
+		t.Errorf("DB.Path = %q, unexpected", cfg.DB.Path)
+	}
+}
+
+func TestLoadFromDirNoConfigsExist(t *testing.T) {
+	baseDir := t.TempDir()
+
+	cfg, err := LoadFromDir(baseDir, "new-project")
+	if err != nil {
+		t.Fatalf("LoadFromDir: %v", err)
+	}
+
+	if cfg.General.Log != "info" {
+		t.Errorf("General.Log = %q, want default %q", cfg.General.Log, "info")
+	}
+	if cfg.Agent.Default != "opencode" {
+		t.Errorf("Agent.Default = %q, want default %q", cfg.Agent.Default, "opencode")
+	}
+}
+
+func TestGetGitRemote(t *testing.T) {
+	remote := getGitRemote()
+	_ = remote
+}
