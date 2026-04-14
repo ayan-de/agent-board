@@ -103,6 +103,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "esc" && a.view != viewBoard {
+		a.view = viewBoard
+		a.activeTicket = nil
+		return a, nil
+	}
+
 	key := msg.String()
 	action, _ := a.resolver.Resolve(key)
 

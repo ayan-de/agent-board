@@ -302,3 +302,24 @@ func TestUpdateShowHelp(t *testing.T) {
 		t.Errorf("view = %v, want viewBoard", app.view)
 	}
 }
+
+func TestUpdateEscapeReturnsToBoard(t *testing.T) {
+	app := newTestApp(t)
+	ctx := context.Background()
+
+	_, _ = app.store.CreateTicket(ctx, store.Ticket{Title: "Escape Me", Status: "backlog"})
+	_ = app.loadColumns()
+
+	app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if app.view != viewTicket {
+		t.Fatalf("view = %v, want viewTicket before escape", app.view)
+	}
+
+	app.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	if app.view != viewBoard {
+		t.Errorf("view = %v after escape, want viewBoard", app.view)
+	}
+	if app.activeTicket != nil {
+		t.Error("activeTicket should be nil after escape")
+	}
+}
