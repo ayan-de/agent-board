@@ -220,3 +220,44 @@ func TestUpdateNavigationEmptyColumn(t *testing.T) {
 		t.Errorf("cursor = %d on empty column, want 0", app.cursors[1])
 	}
 }
+
+func TestUpdateAddTicket(t *testing.T) {
+	app := newTestApp(t)
+
+	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+
+	if len(app.columns[0]) != 1 {
+		t.Fatalf("backlog has %d tickets, want 1", len(app.columns[0]))
+	}
+	if app.columns[0][0].Title != "New Ticket" {
+		t.Errorf("title = %q, want %q", app.columns[0][0].Title, "New Ticket")
+	}
+}
+
+func TestUpdateDeleteTicket(t *testing.T) {
+	app := newTestApp(t)
+	ctx := context.Background()
+
+	_, _ = app.store.CreateTicket(ctx, store.Ticket{Title: "To Delete", Status: "backlog"})
+	_ = app.loadColumns()
+
+	if len(app.columns[0]) != 1 {
+		t.Fatalf("setup: backlog has %d tickets, want 1", len(app.columns[0]))
+	}
+
+	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+
+	if len(app.columns[0]) != 0 {
+		t.Errorf("backlog has %d tickets after delete, want 0", len(app.columns[0]))
+	}
+}
+
+func TestUpdateDeleteTicketEmptyColumn(t *testing.T) {
+	app := newTestApp(t)
+
+	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+
+	if len(app.columns[0]) != 0 {
+		t.Errorf("backlog has %d tickets, want 0", len(app.columns[0]))
+	}
+}

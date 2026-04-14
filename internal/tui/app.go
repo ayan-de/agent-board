@@ -133,6 +133,22 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.colIndex = 2
 	case keybinding.ActionJumpColumn4:
 		a.colIndex = 3
+	case keybinding.ActionAddTicket:
+		_, err := a.store.CreateTicket(context.Background(), store.Ticket{
+			Title:  "New Ticket",
+			Status: "backlog",
+		})
+		if err != nil {
+			return a, nil
+		}
+		_ = a.loadColumns()
+	case keybinding.ActionDeleteTicket:
+		col := a.columns[a.colIndex]
+		if len(col) > 0 {
+			cursor := a.cursors[a.colIndex]
+			_ = a.store.DeleteTicket(context.Background(), col[cursor].ID)
+			_ = a.loadColumns()
+		}
 	}
 
 	return a, nil
