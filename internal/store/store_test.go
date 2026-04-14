@@ -492,3 +492,166 @@ func TestMoveStatusNotFound(t *testing.T) {
 		t.Errorf("MoveStatus error = %v, want ErrNotFound", err)
 	}
 }
+
+func TestCreateSession(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	ticket, err := s.CreateTicket(context.Background(), Ticket{Title: "Session test", Status: "in_progress"})
+	if err != nil {
+		t.Fatalf("CreateTicket: %v", err)
+	}
+
+	session, err := s.CreateSession(context.Background(), Session{
+		TicketID: ticket.ID,
+		Agent:    "claude-code",
+		Status:   "running",
+	})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+
+	if session.ID == "" {
+		t.Fatal("session ID should be auto-generated")
+	}
+	if session.TicketID != ticket.ID {
+		t.Errorf("TicketID = %q, want %q", session.TicketID, ticket.ID)
+	}
+	if session.Agent != "claude-code" {
+		t.Errorf("Agent = %q, want %q", session.Agent, "claude-code")
+	}
+	if session.StartedAt.IsZero() {
+		t.Fatal("StartedAt should be set")
+	}
+	if session.EndedAt != nil {
+		t.Fatal("EndedAt should be nil for running session")
+	}
+}
+
+func TestGetSession(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	ticket, _ := s.CreateTicket(context.Background(), Ticket{Title: "T", Status: "backlog"})
+	created, _ := s.CreateSession(context.Background(), Session{
+		TicketID: ticket.ID, Agent: "opencode", Status: "running",
+	})
+
+	got, err := s.GetSession(context.Background(), created.ID)
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	if got.Agent != "opencode" {
+		t.Errorf("Agent = %q, want %q", got.Agent, "opencode")
+	}
+}
+
+func TestGetSessionNotFound(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	_, err := s.GetSession(context.Background(), "nonexistent")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestListSessionsByTicket(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	t1, _ := s.CreateTicket(context.Background(), Ticket{Title: "T1", Status: "backlog"})
+	t2, _ := s.CreateTicket(context.Background(), Ticket{Title: "T2", Status: "backlog"})
+
+	s.CreateSession(context.Background(), Session{TicketID: t1.ID, Agent: "claude-code", Status: "completed"})
+	s.CreateSession(context.Background(), Session{TicketID: t1.ID, Agent: "opencode", Status: "running"})
+	s.CreateSession(context.Background(), Session{TicketID: t2.ID, Agent: "cursor", Status: "running"})
+
+	sessions, err := s.ListSessions(context.Background(), t1.ID)
+	if err != nil {
+		t.Fatalf("ListSessions: %v", err)
+	}
+	if len(sessions) != 2 {
+		t.Errorf("got %d sessions, want 2", len(sessions))
+	}
+}
+
+func TestListSessionsEmpty(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	ticket, _ := s.CreateTicket(context.Background(), Ticket{Title: "T", Status: "backlog"})
+
+	sessions, err := s.ListSessions(context.Background(), ticket.ID)
+	if err != nil {
+		t.Fatalf("ListSessions: %v", err)
+	}
+	if len(sessions) != 0 {
+		t.Errorf("got %d sessions, want 0", len(sessions))
+	}
+}
+
+func TestEndSession(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	ticket, _ := s.CreateTicket(context.Background(), Ticket{Title: "T", Status: "backlog"})
+	created, _ := s.CreateSession(context.Background(), Session{
+		TicketID: ticket.ID, Agent: "claude-code", Status: "running",
+	})
+
+	err := s.EndSession(context.Background(), created.ID, "completed")
+	if err != nil {
+		t.Fatalf("EndSession: %v", err)
+	}
+
+	got, err := s.GetSession(context.Background(), created.ID)
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	if got.Status != "completed" {
+		t.Errorf("Status = %q, want %q", got.Status, "completed")
+	}
+	if got.EndedAt == nil {
+		t.Fatal("EndedAt should be set after EndSession")
+	}
+}
+
+func TestEndSessionNotFound(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	err := s.EndSession(context.Background(), "nonexistent", "completed")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestDeleteTicketCascadesSessions(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	ticket, err := s.CreateTicket(context.Background(), Ticket{Title: "With session", Status: "in_progress"})
+	if err != nil {
+		t.Fatalf("CreateTicket: %v", err)
+	}
+
+	session, err := s.CreateSession(context.Background(), Session{
+		TicketID: ticket.ID,
+		Agent:    "claude-code",
+		Status:   "running",
+	})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+
+	err = s.DeleteTicket(context.Background(), ticket.ID)
+	if err != nil {
+		t.Fatalf("DeleteTicket: %v", err)
+	}
+
+	_, err = s.GetSession(context.Background(), session.ID)
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("session should be deleted with ticket, error = %v, want ErrNotFound", err)
+	}
+}

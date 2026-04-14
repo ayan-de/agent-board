@@ -33,6 +33,11 @@ func Open(dbPath string, validStatuses []string) (*Store, error) {
 
 	db.SetMaxOpenConns(1)
 
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("store.open: enabling foreign keys: %w", err)
+	}
+
 	s := &Store{db: db, validStatuses: validStatuses}
 
 	if err := s.migrate(); err != nil {
