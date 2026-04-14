@@ -400,6 +400,41 @@ func TestLoadFromDirNoConfigsExist(t *testing.T) {
 	}
 }
 
+func TestLoadWithKeybindings(t *testing.T) {
+	dir := t.TempDir()
+	projectDir := dir + "/projects/test-project"
+	os.MkdirAll(projectDir, 0755)
+
+	tomlContent := `
+[general]
+log = "debug"
+
+[tui]
+theme = "dracula"
+layout = "comfortable"
+
+[tui.keybindings]
+next_column = "L"
+prev_column = "H"
+`
+	os.WriteFile(filepath.Join(projectDir, "config.toml"), []byte(tomlContent), 0644)
+
+	cfg, err := LoadFromDir(dir, "test-project")
+	if err != nil {
+		t.Fatalf("LoadFromDir: %v", err)
+	}
+
+	if cfg.TUI.Keybindings["next_column"] != "L" {
+		t.Errorf("keybindings next_column = %q, want %q", cfg.TUI.Keybindings["next_column"], "L")
+	}
+	if cfg.TUI.Keybindings["prev_column"] != "H" {
+		t.Errorf("keybindings prev_column = %q, want %q", cfg.TUI.Keybindings["prev_column"], "H")
+	}
+	if cfg.TUI.Theme != "dracula" {
+		t.Errorf("theme = %q, want %q", cfg.TUI.Theme, "dracula")
+	}
+}
+
 func TestGetGitRemote(t *testing.T) {
 	remote := getGitRemote()
 	_ = remote
