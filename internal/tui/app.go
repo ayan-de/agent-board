@@ -149,6 +149,19 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			_ = a.store.DeleteTicket(context.Background(), col[cursor].ID)
 			_ = a.loadColumns()
 		}
+	case keybinding.ActionOpenTicket:
+		col := a.columns[a.colIndex]
+		if len(col) > 0 {
+			ticket := col[a.cursors[a.colIndex]]
+			a.activeTicket = &ticket
+			a.view = viewTicket
+		}
+	case keybinding.ActionShowHelp:
+		if a.view == viewHelp {
+			a.view = viewBoard
+		} else {
+			a.view = viewHelp
+		}
 	}
 
 	return a, nil

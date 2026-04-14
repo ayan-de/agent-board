@@ -261,3 +261,44 @@ func TestUpdateDeleteTicketEmptyColumn(t *testing.T) {
 		t.Errorf("backlog has %d tickets, want 0", len(app.columns[0]))
 	}
 }
+
+func TestUpdateOpenTicket(t *testing.T) {
+	app := newTestApp(t)
+	ctx := context.Background()
+
+	ticket, _ := app.store.CreateTicket(ctx, store.Ticket{Title: "Open Me", Status: "backlog"})
+	_ = app.loadColumns()
+
+	app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if app.view != viewTicket {
+		t.Errorf("view = %v, want viewTicket", app.view)
+	}
+	if app.activeTicket == nil || app.activeTicket.ID != ticket.ID {
+		t.Errorf("activeTicket.ID = %v, want %s", app.activeTicket, ticket.ID)
+	}
+}
+
+func TestUpdateOpenTicketEmptyColumn(t *testing.T) {
+	app := newTestApp(t)
+
+	app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if app.view != viewBoard {
+		t.Errorf("view = %v, want viewBoard", app.view)
+	}
+}
+
+func TestUpdateShowHelp(t *testing.T) {
+	app := newTestApp(t)
+
+	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	if app.view != viewHelp {
+		t.Errorf("view = %v, want viewHelp", app.view)
+	}
+
+	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	if app.view != viewBoard {
+		t.Errorf("view = %v, want viewBoard", app.view)
+	}
+}
