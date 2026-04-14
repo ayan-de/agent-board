@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ayan-de/agent-board/internal/config"
@@ -321,5 +322,78 @@ func TestUpdateEscapeReturnsToBoard(t *testing.T) {
 	}
 	if app.activeTicket != nil {
 		t.Error("activeTicket should be nil after escape")
+	}
+}
+
+func TestViewBoardRendersColumnNames(t *testing.T) {
+	app := newTestApp(t)
+	app.width = 120
+	app.height = 40
+
+	view := app.View()
+	for _, name := range columnNames {
+		if !strings.Contains(view, name) {
+			t.Errorf("view missing column name %q", name)
+		}
+	}
+}
+
+func TestViewBoardRendersTickets(t *testing.T) {
+	app := newTestApp(t)
+	ctx := context.Background()
+	app.width = 120
+	app.height = 40
+
+	_, _ = app.store.CreateTicket(ctx, store.Ticket{Title: "First Task", Status: "backlog"})
+	_, _ = app.store.CreateTicket(ctx, store.Ticket{Title: "Second Task", Status: "in_progress"})
+	_ = app.loadColumns()
+
+	view := app.View()
+	if !strings.Contains(view, "First Task") {
+		t.Error("view missing ticket title 'First Task'")
+	}
+	if !strings.Contains(view, "Second Task") {
+		t.Error("view missing ticket title 'Second Task'")
+	}
+	if !strings.Contains(view, "AGT-01") {
+		t.Error("view missing ticket ID 'AGT-01'")
+	}
+}
+
+func TestViewTicketDetail(t *testing.T) {
+	app := newTestApp(t)
+	ctx := context.Background()
+
+	_, _ = app.store.CreateTicket(ctx, store.Ticket{
+		Title:       "Detail View",
+		Description: "This is the description",
+		Status:      "backlog",
+	})
+	_ = app.loadColumns()
+
+	app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	view := app.View()
+
+	if !strings.Contains(view, "Detail View") {
+		t.Error("ticket view missing title 'Detail View'")
+	}
+	if !strings.Contains(view, "This is the description") {
+		t.Error("ticket view missing description")
+	}
+	if !strings.Contains(view, "Press Esc to return") {
+		t.Error("ticket view missing return hint")
+	}
+}
+
+func TestViewHelp(t *testing.T) {
+	app := newTestApp(t)
+	app.view = viewHelp
+
+	view := app.View()
+	if !strings.Contains(view, "Help") {
+		t.Error("help view missing 'Help'")
+	}
+	if !strings.Contains(view, "quit") {
+		t.Error("help view missing 'quit' binding")
 	}
 }

@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/keybinding"
@@ -174,5 +175,103 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) View() string {
-	return ""
+	switch a.view {
+	case viewHelp:
+		return a.renderHelp()
+	case viewTicket:
+		return a.renderTicket()
+	default:
+		return a.renderBoard()
+	}
+}
+
+func (a *App) renderBoard() string {
+	var b strings.Builder
+
+	b.WriteString("AgentBoard")
+	if a.width > 0 {
+		b.WriteString(fmt.Sprintf("  [%dx%d]", a.width, a.height))
+	}
+	b.WriteString("\n\n")
+
+	colWidth := a.width / 4
+	if colWidth < 20 {
+		colWidth = 20
+	}
+
+	for i, name := range columnNames {
+		if i == a.colIndex {
+			b.WriteString(fmt.Sprintf("▶ %s", name))
+		} else {
+			b.WriteString(fmt.Sprintf("  %s", name))
+		}
+		if i < 3 {
+			pad := colWidth - len(name) - 2
+			if pad > 0 {
+				b.WriteString(strings.Repeat(" ", pad))
+			}
+		}
+	}
+	b.WriteString("\n")
+
+	for i := 0; i < 4; i++ {
+		cursor := a.cursors[i]
+		for j, ticket := range a.columns[i] {
+			prefix := "  "
+			if i == a.colIndex && j == cursor {
+				prefix = "▸ "
+			}
+			line := fmt.Sprintf("%s%s %s", prefix, ticket.ID, ticket.Title)
+			if len(line) > colWidth {
+				line = line[:colWidth-1] + "…"
+			}
+			b.WriteString(line)
+			if i < 3 {
+				pad := colWidth - len(line)
+				if pad > 0 {
+					b.WriteString(strings.Repeat(" ", pad))
+				}
+			}
+			b.WriteString("\n")
+		}
+		if len(a.columns[i]) == 0 {
+			b.WriteString("  (empty)")
+			if i < 3 {
+				pad := colWidth - 9
+				if pad > 0 {
+					b.WriteString(strings.Repeat(" ", pad))
+				}
+			}
+			b.WriteString("\n")
+		}
+	}
+
+	return b.String()
+}
+
+func (a *App) renderTicket() string {
+	if a.activeTicket == nil {
+		return "No ticket selected"
+	}
+	t := a.activeTicket
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("Ticket: %s\n", t.ID))
+	b.WriteString(fmt.Sprintf("Title:  %s\n", t.Title))
+	b.WriteString(fmt.Sprintf("Status: %s\n", t.Status))
+	if t.Description != "" {
+		b.WriteString(fmt.Sprintf("\n%s\n", t.Description))
+	}
+	b.WriteString("\nPress Esc to return")
+	return b.String()
+}
+
+func (a *App) renderHelp() string {
+	var b strings.Builder
+	b.WriteString("Help — Keybindings\n\n")
+	km := keybinding.DefaultKeyMap()
+	for _, binding := range km.Bindings {
+		b.WriteString(fmt.Sprintf("  %-12s %s\n", binding.Key, binding.Action.String()))
+	}
+	b.WriteString("\nPress ? to return")
+	return b.String()
 }
