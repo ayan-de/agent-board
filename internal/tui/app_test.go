@@ -7,6 +7,8 @@ import (
 	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/keybinding"
 	"github.com/ayan-de/agent-board/internal/store"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func newTestApp(t *testing.T) *App {
@@ -80,6 +82,18 @@ func TestNewAppLoadsColumns(t *testing.T) {
 		if col == nil {
 			t.Errorf("columns[%d] is nil", i)
 		}
+	}
+}
+
+func TestUpdateWindowSize(t *testing.T) {
+	app := newTestApp(t)
+	updated, _ := app.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	model := updated.(*App)
+	if model.width != 120 {
+		t.Errorf("width = %d, want 120", model.width)
+	}
+	if model.height != 40 {
+		t.Errorf("height = %d, want 40", model.height)
 	}
 }
 

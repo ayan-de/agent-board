@@ -89,3 +89,17 @@ func (a *App) loadColumns() error {
 func (a *App) Init() tea.Cmd {
 	return tea.EnterAltScreen
 }
+
+func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		a.width = msg.Width
+		a.height = msg.Height
+		return a, nil
+	}
+	return a, nil
+}
+
+func (a *App) View() string {
+	return ""
+}
