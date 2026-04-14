@@ -71,6 +71,9 @@ func (a *App) loadColumns() error {
 		if err != nil {
 			return fmt.Errorf("tui.loadColumns: %w", err)
 		}
+		if tickets == nil {
+			tickets = []store.Ticket{}
+		}
 		a.columns[i] = tickets
 	}
 	for i := range a.cursors {
