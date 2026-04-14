@@ -104,3 +104,27 @@ func TestInit(t *testing.T) {
 		t.Error("Init() returned nil cmd")
 	}
 }
+
+func TestUpdateQuit(t *testing.T) {
+	app := newTestApp(t)
+	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if cmd == nil {
+		t.Fatal("cmd is nil, expected tea.Quit")
+	}
+	msg := cmd()
+	if _, ok := msg.(tea.QuitMsg); !ok {
+		t.Errorf("cmd produced %T, want tea.QuitMsg", msg)
+	}
+}
+
+func TestUpdateForceQuit(t *testing.T) {
+	app := newTestApp(t)
+	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if cmd == nil {
+		t.Fatal("cmd is nil, expected tea.Quit")
+	}
+	msg := cmd()
+	if _, ok := msg.(tea.QuitMsg); !ok {
+		t.Errorf("cmd produced %T, want tea.QuitMsg", msg)
+	}
+}

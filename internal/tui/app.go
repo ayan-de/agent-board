@@ -96,7 +96,21 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.width = msg.Width
 		a.height = msg.Height
 		return a, nil
+	case tea.KeyMsg:
+		return a.handleKey(msg)
 	}
+	return a, nil
+}
+
+func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	key := msg.String()
+	action, _ := a.resolver.Resolve(key)
+
+	switch action {
+	case keybinding.ActionQuit, keybinding.ActionForceQuit:
+		return a, tea.Quit
+	}
+
 	return a, nil
 }
 
