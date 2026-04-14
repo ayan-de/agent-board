@@ -7,6 +7,8 @@ import (
 	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/keybinding"
 	"github.com/ayan-de/agent-board/internal/store"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 type focusArea int
@@ -82,4 +84,8 @@ func (a *App) loadColumns() error {
 		}
 	}
 	return nil
+}
+
+func (a *App) Init() tea.Cmd {
+	return tea.EnterAltScreen
 }

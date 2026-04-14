@@ -82,3 +82,11 @@ func TestNewAppLoadsColumns(t *testing.T) {
 		}
 	}
 }
+
+func TestInit(t *testing.T) {
+	app := newTestApp(t)
+	cmd := app.Init()
+	if cmd == nil {
+		t.Error("Init() returned nil cmd")
+	}
+}
