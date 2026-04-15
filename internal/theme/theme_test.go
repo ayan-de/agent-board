@@ -279,3 +279,110 @@ func TestLoadFromFSSkipsNonJSON(t *testing.T) {
 		t.Errorf("loadFromFS returned %d themes, want 0 (non-json skipped)", len(themes))
 	}
 }
+
+func TestRegisterBuiltins(t *testing.T) {
+	r := NewRegistry("dark")
+	registerBuiltins(r)
+
+	all := r.All()
+	if len(all) < 7 {
+		t.Errorf("got %d built-in themes, want at least 7", len(all))
+	}
+
+	names := make(map[string]bool)
+	for _, th := range all {
+		names[th.Name] = true
+		if th.Source != "builtin" {
+			t.Errorf("theme %q source = %q, want %q", th.Name, th.Source, "builtin")
+		}
+	}
+
+	expected := []string{"agentboard", "dracula", "gruvbox", "tokyonight", "nord", "catppuccin", "matrix"}
+	for _, name := range expected {
+		if !names[name] {
+			t.Errorf("missing built-in theme %q", name)
+		}
+	}
+}
+
+func TestBuiltinAgentboardThemeHasAllColors(t *testing.T) {
+	r := NewRegistry("dark")
+	registerBuiltins(r)
+
+	err := r.Set("agentboard")
+	if err != nil {
+		t.Fatalf("Set(agentboard) error: %v", err)
+	}
+
+	th := r.Active()
+	if th.Primary == "" {
+		t.Error("Primary is empty")
+	}
+	if th.Text == "" {
+		t.Error("Text is empty")
+	}
+	if th.Background == "" {
+		t.Error("Background is empty")
+	}
+	if th.Border == "" {
+		t.Error("Border is empty")
+	}
+}
+
+func TestRegistryLoadUserThemes(t *testing.T) {
+	r := NewRegistry("dark")
+	registerBuiltins(r)
+
+	userDir := t.TempDir()
+	themeJSON := `{
+		"name": "My Custom",
+		"theme": {
+			"primary": "#ff0000",
+			"text": "#ffffff",
+			"background": "#000000"
+		}
+	}`
+	os.WriteFile(filepath.Join(userDir, "custom.json"), []byte(themeJSON), 0644)
+
+	r.LoadUserThemes(userDir)
+
+	err := r.Set("My Custom")
+	if err != nil {
+		t.Fatalf("Set(My Custom) error: %v", err)
+	}
+	th := r.Active()
+	if th.Source != "user" {
+		t.Errorf("source = %q, want %q", th.Source, "user")
+	}
+	if th.Primary != lipgloss.Color("#ff0000") {
+		t.Errorf("Primary = %q, want %q", th.Primary, "#ff0000")
+	}
+}
+
+func TestRegistryLoadUserThemesOverridesBuiltin(t *testing.T) {
+	r := NewRegistry("dark")
+	registerBuiltins(r)
+
+	userDir := t.TempDir()
+	themeJSON := `{
+		"name": "dracula",
+		"theme": {
+			"primary": "#custom"
+		}
+	}`
+	os.WriteFile(filepath.Join(userDir, "dracula.json"), []byte(themeJSON), 0644)
+
+	r.LoadUserThemes(userDir)
+
+	err := r.Set("dracula")
+	if err != nil {
+		t.Fatalf("Set(dracula) error: %v", err)
+	}
+	th := r.Active()
+	if th.Source != "user" {
+		t.Errorf("source = %q, want %q (user override)", th.Source, "user")
+	}
+	if th.Primary != lipgloss.Color("#custom") {
+		t.Errorf("Primary = %q, want %q (user value)", th.Primary, "#custom")
+	}
+}

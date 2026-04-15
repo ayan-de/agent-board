@@ -89,6 +89,15 @@ func resolveColor(val any, mode string, resolved map[string]string) (string, err
 	}
 }
 
+func (r *Registry) LoadUserThemes(dirs ...string) {
+	for _, dir := range dirs {
+		themes := loadFromFS(dir, r.mode, "user")
+		for _, th := range themes {
+			r.Register(th)
+		}
+	}
+}
+
 func loadFromFS(dir string, mode string, source string) []*Theme {
 	entries, err := os.ReadDir(dir)
 	if err != nil {

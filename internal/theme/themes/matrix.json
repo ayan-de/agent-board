@@ -1,0 +1,41 @@
+{
+  "$schema": "https://agentboard.dev/theme.json",
+  "defs": {
+    "matrixInk0": "#0a0e0a",
+    "matrixInk1": "#0e130d",
+    "matrixInk2": "#141c12",
+    "matrixInk3": "#1e2a1b",
+    "rainGreen": "#2eff6a",
+    "rainGreenDim": "#1cc24b",
+    "rainGreenHi": "#62ff94",
+    "rainCyan": "#00efff",
+    "rainTeal": "#24f6d9",
+    "rainPurple": "#c770ff",
+    "rainOrange": "#ffa83d",
+    "alertRed": "#ff4b4b",
+    "alertYellow": "#e6ff57",
+    "alertBlue": "#30b3ff",
+    "rainGray": "#8ca391",
+    "lightBg": "#eef3ea",
+    "lightPaper": "#e4ebe1",
+    "lightInk1": "#dae1d7",
+    "lightText": "#203022",
+    "lightGray": "#748476"
+  },
+  "theme": {
+    "primary": { "dark": "rainGreen", "light": "rainGreenDim" },
+    "secondary": { "dark": "rainCyan", "light": "rainTeal" },
+    "accent": { "dark": "rainPurple", "light": "rainPurple" },
+    "error": { "dark": "alertRed", "light": "alertRed" },
+    "warning": { "dark": "alertYellow", "light": "alertYellow" },
+    "success": { "dark": "rainGreenHi", "light": "rainGreenDim" },
+    "info": { "dark": "alertBlue", "light": "alertBlue" },
+    "text": { "dark": "rainGreenHi", "light": "lightText" },
+    "textMuted": { "dark": "rainGray", "light": "lightGray" },
+    "background": { "dark": "matrixInk0", "light": "lightBg" },
+    "backgroundPanel": { "dark": "matrixInk1", "light": "lightPaper" },
+    "backgroundElement": { "dark": "matrixInk2", "light": "lightInk1" },
+    "border": { "dark": "matrixInk3", "light": "lightGray" },
+    "borderActive": { "dark": "rainGreen", "light": "rainGreenDim" }
+  }
+}
