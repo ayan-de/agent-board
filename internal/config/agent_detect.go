@@ -20,6 +20,7 @@ type agentSpec struct {
 var agentSpecs = []agentSpec{
 	{name: "claude-code", binary: "claude"},
 	{name: "opencode", binary: "opencode"},
+	{name: "codex", binary: "codex"},
 	{name: "cursor", binary: "cursor"},
 }
 

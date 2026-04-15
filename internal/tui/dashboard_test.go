@@ -37,8 +37,8 @@ func TestNewDashboardModel(t *testing.T) {
 	if m.resolver == nil {
 		t.Error("resolver is nil")
 	}
-	if len(m.agents) != 3 {
-		t.Errorf("agents = %d, want 3", len(m.agents))
+	if len(m.agents) != 4 {
+		t.Errorf("agents = %d, want 4", len(m.agents))
 	}
 	if m.width != 0 {
 		t.Errorf("width = %d, want 0", m.width)
@@ -74,7 +74,7 @@ func TestDashboardViewRendersAgentNames(t *testing.T) {
 		t.Fatal("view is empty")
 	}
 
-	for _, name := range []string{"claude-code", "opencode", "cursor"} {
+	for _, name := range []string{"claude-code", "opencode", "codex", "cursor"} {
 		if !strings.Contains(view, name) {
 			t.Errorf("view missing agent name %q", name)
 		}
