@@ -194,8 +194,10 @@ func (m DashboardModel) renderCard(agent config.DetectedAgent) string {
 	logoBlock := logoStyle.Render(agent.Logo)
 
 	name := m.styles.Title.Render(agent.Name)
+	dot := lipgloss.NewStyle().Foreground(logoColor).Render(" ●")
 	var infoBuilder strings.Builder
 	infoBuilder.WriteString(name)
+	infoBuilder.WriteString(dot)
 	infoBuilder.WriteString("\n")
 
 	statusVal := "not found"
