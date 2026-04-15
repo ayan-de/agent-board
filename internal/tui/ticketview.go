@@ -292,6 +292,9 @@ func (m TicketViewModel) handleEditKey(msg tea.KeyMsg) (TicketViewModel, tea.Cmd
 			m.editBuffer = string(runes[:len(runes)-1])
 		}
 		return m, nil
+	case tea.KeySpace:
+		m.editBuffer += " "
+		return m, nil
 	}
 
 	if msg.Type == tea.KeyRunes {

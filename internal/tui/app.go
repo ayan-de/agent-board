@@ -169,6 +169,11 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if a.view == viewTicket && a.ticketView.mode == ticketEditMode {
+		a.ticketView, _ = a.ticketView.Update(msg)
+		return a, nil
+	}
+
 	if a.view == viewTicket && action != keybinding.ActionShowDashboard {
 		a.ticketView, _ = a.ticketView.Update(msg)
 		return a, nil
