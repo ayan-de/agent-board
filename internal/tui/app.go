@@ -9,6 +9,7 @@ import (
 	"github.com/ayan-de/agent-board/internal/store"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type focusArea int
@@ -37,6 +38,7 @@ type App struct {
 	view  viewMode
 
 	kanban       KanbanModel
+	ticketView   TicketViewModel
 	activeTicket *store.Ticket
 }
 
@@ -53,12 +55,13 @@ func NewApp(cfg *config.Config, s *store.Store) (*App, error) {
 	}
 
 	a := &App{
-		store:    s,
-		resolver: resolver,
-		config:   cfg,
-		focus:    focusBoard,
-		view:     viewBoard,
-		kanban:   kanban,
+		store:      s,
+		resolver:   resolver,
+		config:     cfg,
+		focus:      focusBoard,
+		view:       viewBoard,
+		kanban:     kanban,
+		ticketView: NewTicketViewModel(s, resolver),
 	}
 
 	return a, nil
@@ -74,6 +77,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.width = msg.Width
 		a.height = msg.Height
 		a.kanban, _ = a.kanban.Update(msg)
+		a.ticketView, _ = a.ticketView.Update(msg)
 		return a, nil
 	case tea.KeyMsg:
 		return a.handleKey(msg)
@@ -82,14 +86,25 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.String() == "esc" && a.view != viewBoard {
-		a.view = viewBoard
-		a.activeTicket = nil
-		return a, nil
-	}
-
 	key := msg.String()
 	action, _ := a.resolver.Resolve(key)
+
+	if key == "esc" {
+		if a.view == viewTicket && a.ticketView.mode == ticketEditMode {
+			a.ticketView, _ = a.ticketView.Update(msg)
+			return a, nil
+		}
+		if a.view != viewBoard {
+			a.view = viewBoard
+			a.activeTicket = nil
+			return a, nil
+		}
+	}
+
+	if a.view == viewTicket {
+		a.ticketView, _ = a.ticketView.Update(msg)
+		return a, nil
+	}
 
 	switch action {
 	case keybinding.ActionQuit, keybinding.ActionForceQuit:
@@ -98,6 +113,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		selected := a.kanban.SelectedTicket()
 		if selected != nil {
 			a.activeTicket = selected
+			a.ticketView = a.ticketView.SetTicket(selected)
 			a.view = viewTicket
 		}
 	case keybinding.ActionShowHelp:
@@ -118,31 +134,16 @@ func (a *App) View() string {
 	case viewHelp:
 		return a.renderHelp()
 	case viewTicket:
-		return a.renderTicket()
+		return a.ticketView.View()
 	default:
 		return a.kanban.View()
 	}
 }
 
-func (a *App) renderTicket() string {
-	if a.activeTicket == nil {
-		return "No ticket selected"
-	}
-	t := a.activeTicket
-	var b strings.Builder
-	fmt.Fprintf(&b, "Ticket: %s\n", t.ID)
-	fmt.Fprintf(&b, "Title:  %s\n", t.Title)
-	fmt.Fprintf(&b, "Status: %s\n", t.Status)
-	if t.Description != "" {
-		fmt.Fprintf(&b, "\n%s\n", t.Description)
-	}
-	fmt.Fprint(&b, "\nPress Esc to return")
-	return b.String()
-}
-
 func (a *App) renderHelp() string {
 	var b strings.Builder
-	fmt.Fprint(&b, "Help — Keybindings\n\n")
+	helpTitle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("69")).Render("Help — Keybindings")
+	fmt.Fprintf(&b, "%s\n\n", helpTitle)
 	km := keybinding.DefaultKeyMap()
 	for _, binding := range km.Bindings {
 		fmt.Fprintf(&b, "  %-12s %s\n", binding.Key, binding.Action.String())

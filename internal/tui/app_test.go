@@ -154,6 +154,7 @@ func TestAppViewRouting(t *testing.T) {
 
 	app.view = viewTicket
 	app.activeTicket = &store.Ticket{ID: "TEST-01", Title: "Routed", Status: "backlog"}
+	app.ticketView = app.ticketView.SetTicket(app.activeTicket)
 	view = app.View()
 	if !strings.Contains(view, "Routed") {
 		t.Error("ticket view missing title")
