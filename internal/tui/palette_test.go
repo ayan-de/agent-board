@@ -103,9 +103,10 @@ func TestPaletteSelection(t *testing.T) {
 		},
 	})
 
-	p := NewCommandPalette(cr, func(item Item) {
+	p := NewCommandPalette(cr, nil)
+	p.onConfirm = func(item Item) {
 		selected = item
-	})
+	}
 	p.width = 120
 	p.height = 40
 	p.Open()

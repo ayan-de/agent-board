@@ -100,6 +100,11 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry) (*App, erro
 		a.registry.Set(item.ID)
 		a.applyTheme()
 	}
+	a.palette.onConfirm = func(item Item) {
+		a.registry.Set(item.ID)
+		a.applyTheme()
+		config.SaveTheme(a.config.ProjectConfigPath, item.ID)
+	}
 
 	return a, nil
 }

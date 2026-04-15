@@ -16,6 +16,9 @@ type Config struct {
 	LLM     LLMConfig
 	DB      DBConfig
 	MCP     MCPConfig
+
+	ConfigPath        string
+	ProjectConfigPath string
 }
 
 func LoadFromDir(baseDir, projectName string) (*Config, error) {
@@ -40,6 +43,9 @@ func LoadFromDir(baseDir, projectName string) (*Config, error) {
 	if cfg.DB.Path == "" {
 		cfg.DB.Path = filepath.Join(baseDir, "projects", projectName, "board.db")
 	}
+
+	cfg.ConfigPath = globalPath
+	cfg.ProjectConfigPath = projPath
 
 	applyEnvVars(cfg)
 

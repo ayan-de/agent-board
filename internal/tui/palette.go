@@ -17,6 +17,7 @@ type CommandPalette struct {
 	cursor    int
 	active    bool
 	onSelect  func(Item)
+	onConfirm func(Item)
 	maxHeight int
 
 	width  int
@@ -90,8 +91,8 @@ func (p *CommandPalette) handleKey(msg tea.KeyMsg) (CommandPalette, tea.Cmd) {
 				p.cursor = 0
 				return *p, nil
 			}
-			if p.onSelect != nil {
-				p.onSelect(item)
+			if p.onConfirm != nil {
+				p.onConfirm(item)
 			}
 		}
 		p.active = false
