@@ -161,7 +161,7 @@ func (m DashboardModel) View() string {
 	}
 
 	innerWidth := m.width - 4
-	cardWidth := 32
+	cardWidth := 42
 	cardsPerRow := innerWidth / cardWidth
 	if cardsPerRow < 1 {
 		cardsPerRow = 1
@@ -185,11 +185,18 @@ func (m DashboardModel) View() string {
 }
 
 func (m DashboardModel) renderCard(agent config.DetectedAgent) string {
-	var b strings.Builder
+	logoColor := lipgloss.Color(agent.LogoClr)
+	if !agent.Found {
+		logoColor = lipgloss.Color("240")
+	}
+
+	logoStyle := lipgloss.NewStyle().Foreground(logoColor)
+	logoBlock := logoStyle.Render(agent.Logo)
 
 	name := m.styles.Title.Render(agent.Name)
-	b.WriteString(name)
-	b.WriteString("\n")
+	var infoBuilder strings.Builder
+	infoBuilder.WriteString(name)
+	infoBuilder.WriteString("\n")
 
 	statusVal := "not found"
 	if agent.Found {
@@ -216,13 +223,15 @@ func (m DashboardModel) renderCard(agent config.DetectedAgent) string {
 		} else {
 			val = m.styles.Value.Render(f.value)
 		}
-		fmt.Fprintf(&b, "%s %s\n", label, val)
+		fmt.Fprintf(&infoBuilder, "%s %s\n", label, val)
 	}
+
+	row := lipgloss.JoinHorizontal(lipgloss.Top, logoBlock, "  ", infoBuilder.String())
 
 	style := m.styles.CardMissing
 	if agent.Found {
 		style = m.styles.CardFound
 	}
 
-	return style.Render(b.String())
+	return style.Width(38).Render(row)
 }
