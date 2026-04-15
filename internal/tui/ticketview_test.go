@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/keybinding"
 	"github.com/ayan-de/agent-board/internal/store"
 	"github.com/ayan-de/agent-board/internal/theme"
@@ -34,7 +35,13 @@ func newTestTicketView(t *testing.T) (TicketViewModel, *store.Store) {
 		Success: lipgloss.Color("42"), Accent: lipgloss.Color("213"),
 	}
 
-	m := NewTicketViewModel(s, resolver, defaultTheme)
+	testAgents := []config.DetectedAgent{
+		{Name: "claude-code", LogoClr: "#D97757"},
+		{Name: "opencode", LogoClr: "#808080"},
+		{Name: "codex", LogoClr: "#10A37F"},
+		{Name: "cursor", LogoClr: "#F0DB4F"},
+	}
+	m := NewTicketViewModel(s, resolver, defaultTheme, testAgents)
 	return m, s
 }
 
@@ -471,5 +478,141 @@ func TestTicketViewModelEditNonEditableField(t *testing.T) {
 			}
 			return
 		}
+	}
+}
+
+func TestTicketViewModelAgentSelectMode(t *testing.T) {
+	m, s := newTestTicketView(t)
+	ctx := context.Background()
+	m.width = 80
+	m.height = 24
+
+	ticket, _ := s.CreateTicket(ctx, store.Ticket{
+		Title:  "Agent Test",
+		Status: "backlog",
+	})
+	m = m.SetTicket(&ticket)
+
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	if m.mode != ticketAgentSelectMode {
+		t.Fatalf("mode = %v, want ticketAgentSelectMode", m.mode)
+	}
+	if m.agentCursor != 0 {
+		t.Errorf("agentCursor = %d, want 0", m.agentCursor)
+	}
+}
+
+func TestTicketViewModelAgentSelectNavigate(t *testing.T) {
+	m, s := newTestTicketView(t)
+	ctx := context.Background()
+	m.width = 80
+	m.height = 24
+
+	ticket, _ := s.CreateTicket(ctx, store.Ticket{
+		Title:  "Agent Nav",
+		Status: "backlog",
+	})
+	m = m.SetTicket(&ticket)
+
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+
+	downKey := tea.KeyMsg{Type: tea.KeyDown}
+	m, _ = m.Update(downKey)
+	if m.agentCursor != 1 {
+		t.Errorf("agentCursor = %d after down, want 1", m.agentCursor)
+	}
+
+	upKey := tea.KeyMsg{Type: tea.KeyUp}
+	m, _ = m.Update(upKey)
+	if m.agentCursor != 0 {
+		t.Errorf("agentCursor = %d after up, want 0", m.agentCursor)
+	}
+
+	for i := 0; i < 10; i++ {
+		m, _ = m.Update(upKey)
+	}
+	if m.agentCursor != 0 {
+		t.Errorf("agentCursor = %d after underflow, want 0", m.agentCursor)
+	}
+}
+
+func TestTicketViewModelAgentSelectAssign(t *testing.T) {
+	m, s := newTestTicketView(t)
+	ctx := context.Background()
+	m.width = 80
+	m.height = 24
+
+	ticket, _ := s.CreateTicket(ctx, store.Ticket{
+		Title:  "Assign Me",
+		Status: "backlog",
+	})
+	m = m.SetTicket(&ticket)
+
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if m.ticket.Agent != "claude-code" {
+		t.Errorf("agent = %q, want %q", m.ticket.Agent, "claude-code")
+	}
+	if m.mode != ticketViewMode {
+		t.Errorf("mode = %v after select, want ticketViewMode", m.mode)
+	}
+
+	loaded, _ := s.GetTicket(ctx, ticket.ID)
+	if loaded.Agent != "claude-code" {
+		t.Errorf("persisted agent = %q, want %q", loaded.Agent, "claude-code")
+	}
+}
+
+func TestTicketViewModelAgentSelectNone(t *testing.T) {
+	m, s := newTestTicketView(t)
+	ctx := context.Background()
+	m.width = 80
+	m.height = 24
+
+	ticket, _ := s.CreateTicket(ctx, store.Ticket{
+		Title:  "Unassign Me",
+		Status: "backlog",
+		Agent:  "opencode",
+	})
+	m = m.SetTicket(&ticket)
+
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if m.ticket.Agent != "" {
+		t.Errorf("agent = %q after None, want empty", m.ticket.Agent)
+	}
+
+	loaded, _ := s.GetTicket(ctx, ticket.ID)
+	if loaded.Agent != "" {
+		t.Errorf("persisted agent = %q, want empty", loaded.Agent)
+	}
+}
+
+func TestTicketViewModelAgentSelectCancel(t *testing.T) {
+	m, s := newTestTicketView(t)
+	ctx := context.Background()
+	m.width = 80
+	m.height = 24
+
+	ticket, _ := s.CreateTicket(ctx, store.Ticket{
+		Title:  "Cancel Agent",
+		Status: "backlog",
+		Agent:  "opencode",
+	})
+	m = m.SetTicket(&ticket)
+
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEscape})
+
+	if m.ticket.Agent != "opencode" {
+		t.Errorf("agent = %q after cancel, want %q", m.ticket.Agent, "opencode")
+	}
+	if m.mode != ticketViewMode {
+		t.Errorf("mode = %v after cancel, want ticketViewMode", m.mode)
 	}
 }

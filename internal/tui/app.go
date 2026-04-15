@@ -78,7 +78,7 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry) (*App, erro
 		focus:      focusBoard,
 		view:       viewBoard,
 		kanban:     kanban,
-		ticketView: NewTicketViewModel(s, resolver, t),
+		ticketView: NewTicketViewModel(s, resolver, t, agents),
 		dashboard:  NewDashboardModel(s, resolver, agents, t),
 	}
 
@@ -155,7 +155,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	action, _ := a.resolver.Resolve(key)
 
 	if key == "esc" {
-		if a.view == viewTicket && a.ticketView.mode == ticketEditMode {
+		if a.view == viewTicket && (a.ticketView.mode == ticketEditMode || a.ticketView.mode == ticketAgentSelectMode) {
 			a.ticketView, _ = a.ticketView.Update(msg)
 			return a, nil
 		}

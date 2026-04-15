@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/keybinding"
 	"github.com/ayan-de/agent-board/internal/store"
 	"github.com/ayan-de/agent-board/internal/theme"
@@ -19,6 +20,7 @@ type ticketViewModeType int
 const (
 	ticketViewMode ticketViewModeType = iota
 	ticketEditMode
+	ticketAgentSelectMode
 )
 
 var statusCycle = [4]string{"backlog", "in_progress", "review", "done"}
@@ -48,11 +50,13 @@ type TicketViewModel struct {
 	width    int
 	height   int
 
-	ticket     *store.Ticket
-	fields     []ticketField
-	cursor     int
-	mode       ticketViewModeType
-	editBuffer string
+	ticket      *store.Ticket
+	fields      []ticketField
+	cursor      int
+	mode        ticketViewModeType
+	editBuffer  string
+	agents      []config.DetectedAgent
+	agentCursor int
 
 	styles TicketViewStyles
 }
@@ -193,13 +197,14 @@ func ticketFields() []ticketField {
 	}
 }
 
-func NewTicketViewModel(s *store.Store, resolver *keybinding.Resolver, t *theme.Theme) TicketViewModel {
+func NewTicketViewModel(s *store.Store, resolver *keybinding.Resolver, t *theme.Theme, agents []config.DetectedAgent) TicketViewModel {
 	return TicketViewModel{
 		store:    s,
 		resolver: resolver,
 		styles:   NewTicketViewStyles(t),
 		fields:   ticketFields(),
 		mode:     ticketViewMode,
+		agents:   agents,
 	}
 }
 
@@ -222,6 +227,9 @@ func (m TicketViewModel) Update(msg tea.Msg) (TicketViewModel, tea.Cmd) {
 func (m TicketViewModel) handleKey(msg tea.KeyMsg) (TicketViewModel, tea.Cmd) {
 	if m.mode == ticketEditMode {
 		return m.handleEditKey(msg)
+	}
+	if m.mode == ticketAgentSelectMode {
+		return m.handleAgentSelectKey(msg)
 	}
 	return m.handleViewKey(msg)
 }
@@ -250,6 +258,11 @@ func (m TicketViewModel) handleViewKey(msg tea.KeyMsg) (TicketViewModel, tea.Cmd
 	case "s":
 		if m.ticket != nil {
 			m = m.cycleStatus()
+		}
+	case "a":
+		if m.ticket != nil {
+			m.mode = ticketAgentSelectMode
+			m.agentCursor = 0
 		}
 	}
 
@@ -283,6 +296,55 @@ func (m TicketViewModel) handleEditKey(msg tea.KeyMsg) (TicketViewModel, tea.Cmd
 
 	if msg.Type == tea.KeyRunes {
 		m.editBuffer += string(msg.Runes)
+	}
+
+	return m, nil
+}
+
+func (m TicketViewModel) handleAgentSelectKey(msg tea.KeyMsg) (TicketViewModel, tea.Cmd) {
+	total := len(m.agents) + 1
+
+	switch msg.Type {
+	case tea.KeyEscape:
+		m.mode = ticketViewMode
+		return m, nil
+	case tea.KeyEnter:
+		if m.ticket != nil {
+			if m.agentCursor == 0 {
+				m.ticket.Agent = ""
+			} else {
+				idx := m.agentCursor - 1
+				if idx < len(m.agents) {
+					m.ticket.Agent = m.agents[idx].Name
+				}
+			}
+			_, _ = m.store.UpdateTicket(context.Background(), *m.ticket)
+		}
+		m.mode = ticketViewMode
+		return m, nil
+	case tea.KeyUp:
+		if m.agentCursor > 0 {
+			m.agentCursor--
+		}
+		return m, nil
+	case tea.KeyDown:
+		if m.agentCursor < total-1 {
+			m.agentCursor++
+		}
+		return m, nil
+	}
+
+	if msg.Type == tea.KeyRunes {
+		switch string(msg.Runes) {
+		case "j":
+			if m.agentCursor < total-1 {
+				m.agentCursor++
+			}
+		case "k":
+			if m.agentCursor > 0 {
+				m.agentCursor--
+			}
+		}
 	}
 
 	return m, nil
