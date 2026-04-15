@@ -64,35 +64,6 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry) (*App, erro
 
 	agents := config.DetectAgents()
 
-	cr := NewCommandRegistry()
-	cr.Register(Command{
-		Name:        "theme",
-		Description: "Change color theme",
-		Prefix:      "/",
-		Items: func() []Item {
-			themes := reg.All()
-			items := make([]Item, len(themes))
-			for i, th := range themes {
-				items[i] = Item{
-					Label:       th.Name,
-					Description: th.Source,
-					ID:          th.Name,
-				}
-			}
-			return items
-		},
-	})
-	cr.Register(Command{
-		Name:        "quit",
-		Description: "Quit AgentBoard",
-		Prefix:      "/",
-		Items: func() []Item {
-			return []Item{
-				{Label: "quit", Description: "Exit the application", ID: "quit"},
-			}
-		},
-	})
-
 	a := &App{
 		store:      s,
 		resolver:   resolver,
@@ -105,22 +76,14 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry) (*App, erro
 		dashboard:  NewDashboardModel(s, resolver, agents, t),
 	}
 
+	cr := NewCommandRegistry()
+	ac := newAppCommands(a, reg, cfg)
+	ac.registerAll(cr)
+
 	a.palette = NewCommandPalette(cr, nil)
 	a.palette.SetTheme(t)
-	a.palette.onSelect = func(item Item) {
-		a.registry.Set(item.ID)
-		a.applyTheme()
-	}
-	a.palette.onConfirm = func(item Item) {
-		switch item.ID {
-		case "quit":
-			a.quit = true
-		default:
-			a.registry.Set(item.ID)
-			a.applyTheme()
-			config.SaveTheme(a.config.ProjectConfigPath, item.ID)
-		}
-	}
+	a.palette.onSelect = ac.onSelect
+	a.palette.onConfirm = ac.onConfirm
 
 	return a, nil
 }

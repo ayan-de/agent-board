@@ -159,14 +159,18 @@ func (p *CommandPalette) handleKey(msg tea.KeyMsg) (CommandPalette, tea.Cmd) {
 func (p *CommandPalette) filterItems() {
 	p.filtered = nil
 
-	// If input is empty, show all available commands
 	if p.input == "" {
 		for _, cmd := range p.commands.All() {
-			p.filtered = append(p.filtered, Item{
-				Label:       cmd.Name,
-				Description: cmd.Description,
-				ID:          "CMD:" + cmd.Prefix,
-			})
+			if cmd.Prefix != "" {
+				p.filtered = append(p.filtered, Item{
+					Label:       cmd.Name,
+					Description: cmd.Description,
+					ID:          "CMD:" + cmd.Prefix,
+				})
+			} else if cmd.Items != nil {
+				items := cmd.Items()
+				p.filtered = append(p.filtered, items...)
+			}
 		}
 		return
 	}
@@ -174,7 +178,6 @@ func (p *CommandPalette) filterItems() {
 	searchQuery := strings.ToLower(p.input)
 
 	for _, cmd := range p.commands.All() {
-		// 1. Prefix match -> show command items
 		if cmd.Prefix != "" && strings.HasPrefix(p.input, cmd.Prefix) {
 			query := strings.TrimPrefix(p.input, cmd.Prefix)
 			if cmd.Items != nil {
@@ -187,15 +190,20 @@ func (p *CommandPalette) filterItems() {
 			}
 		}
 
-		// 2. Name match -> show command itself as an option
-		if strings.Contains(strings.ToLower(cmd.Name), searchQuery) || strings.Contains(strings.ToLower(cmd.Prefix), searchQuery) {
-			// Avoid adding the command if it's already the active prefix and we're showing its items
-			if p.input != cmd.Prefix {
+		if strings.Contains(strings.ToLower(cmd.Name), searchQuery) || (cmd.Prefix != "" && strings.Contains(strings.ToLower(cmd.Prefix), searchQuery)) {
+			if cmd.Prefix != "" && p.input != cmd.Prefix {
 				p.filtered = append(p.filtered, Item{
 					Label:       cmd.Name,
 					Description: cmd.Description,
 					ID:          "CMD:" + cmd.Prefix,
 				})
+			} else if cmd.Prefix == "" && cmd.Items != nil {
+				items := cmd.Items()
+				for _, item := range items {
+					if strings.Contains(strings.ToLower(item.Label), searchQuery) {
+						p.filtered = append(p.filtered, item)
+					}
+				}
 			}
 		}
 	}
