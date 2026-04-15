@@ -23,9 +23,9 @@ type agentSpec struct {
 
 var agentSpecs = []agentSpec{
 	{name: "claude-code", binary: "claude", logo: " ▐▛███▜▌\n▝▜█████▛▘\n  ▘▘ ▝▝", logoClr: "#D97757"},
-	{name: "opencode", binary: "opencode", logo: " ██████\n██\n██\n ██████\n     ██\n     ██\n ██████\n", logoClr: "#7C3AED"},
-	{name: "codex", binary: "codex", logo: " ██████\n██\n██  ████\n██    ██\n ██████\n", logoClr: "#10A37F"},
-	{name: "cursor", binary: "cursor", logo: "████████\n  ██  ██\n  ██  ██\n  ██████\n  ██  ██\n  ██  ██\n████████\n", logoClr: "#F0DB4F"},
+	{name: "opencode", binary: "opencode", logo: "█▀▀█\n█__█\n▀▀▀▀", logoClr: "#808080"},
+	{name: "codex", binary: "codex", logo: " ▗▄▄▄▖\n ▐▝▞▙▌\n ▝▀▀▀▘", logoClr: "#10A37F"},
+	{name: "cursor", binary: "cursor", logo: " ▛▀▀▀▜\n ▌ ▗▖ ▐\n ▙▄▄▄▟", logoClr: "#F0DB4F"},
 }
 
 func DetectAgents() []DetectedAgent {
