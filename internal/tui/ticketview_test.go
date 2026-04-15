@@ -592,6 +592,32 @@ func TestTicketViewModelAgentSelectNone(t *testing.T) {
 	}
 }
 
+func TestTicketViewModelAgentSelectDropdownRenders(t *testing.T) {
+	m, s := newTestTicketView(t)
+	ctx := context.Background()
+	m.width = 80
+	m.height = 24
+
+	ticket, _ := s.CreateTicket(ctx, store.Ticket{
+		Title:  "Dropdown Render",
+		Status: "backlog",
+	})
+	m = m.SetTicket(&ticket)
+
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+
+	view := m.View()
+	if !strings.Contains(view, "None") {
+		t.Error("dropdown missing 'None' option")
+	}
+	if !strings.Contains(view, "claude-code") {
+		t.Error("dropdown missing 'claude-code' agent")
+	}
+	if !strings.Contains(view, "opencode") {
+		t.Error("dropdown missing 'opencode' agent")
+	}
+}
+
 func TestTicketViewModelAgentSelectCancel(t *testing.T) {
 	m, s := newTestTicketView(t)
 	ctx := context.Background()

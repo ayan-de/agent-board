@@ -430,8 +430,39 @@ func (m TicketViewModel) View() string {
 		b.WriteString("\n")
 	}
 
+	if m.mode == ticketAgentSelectMode {
+		b.WriteString("\n")
+		b.WriteString(m.styles.Label.Render("Select Agent:"))
+		b.WriteString("\n")
+
+		items := make([]string, 0, len(m.agents)+1)
+		items = append(items, "None")
+		for _, ag := range m.agents {
+			items = append(items, ag.Name)
+		}
+
+		for i, item := range items {
+			prefix := "  "
+			if i == m.agentCursor {
+				prefix = "▸ "
+			}
+
+			row := prefix + item
+			if i == m.agentCursor {
+				row = m.styles.SelectedRow.Width(innerWidth - 2).Render(row)
+			}
+			b.WriteString(row)
+			b.WriteString("\n")
+		}
+	}
+
 	b.WriteString("\n")
-	footer := "e: edit │ s: cycle status │ Esc: back"
+	var footer string
+	if m.mode == ticketAgentSelectMode {
+		footer = "↑/k: up │ ↓/j: down │ Enter: select │ Esc: cancel"
+	} else {
+		footer = "e: edit │ s: cycle status │ a: assign agent │ Esc: back"
+	}
 	b.WriteString(m.styles.Footer.Render(footer))
 
 	return m.styles.Border.Render(b.String())
