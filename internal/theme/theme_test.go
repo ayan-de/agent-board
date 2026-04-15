@@ -1,6 +1,8 @@
 package theme
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
@@ -93,5 +95,187 @@ func TestRegistryMode(t *testing.T) {
 	r := NewRegistry("light")
 	if r.Mode() != "light" {
 		t.Errorf("Mode() = %q, want %q", r.Mode(), "light")
+	}
+}
+
+func TestParseThemeJSONDirect(t *testing.T) {
+	jsonData := `{
+		"name": "Test Theme",
+		"defs": {
+			"bg": "#1a1b26",
+			"fg": "#c0caf5"
+		},
+		"theme": {
+			"primary": "#7aa2f7",
+			"secondary": "#bb9af7",
+			"accent": "#7dcfff",
+			"error": "#f7768e",
+			"warning": "#e0af68",
+			"success": "#9ece6a",
+			"info": "#7dcfff",
+			"text": { "dark": "#c0caf5", "light": "#1a1b26" },
+			"textMuted": "#565f89",
+			"background": "#1a1b26",
+			"backgroundPanel": "#16161e",
+			"backgroundElement": "#24283b",
+			"border": "#3b4261",
+			"borderActive": "#7aa2f7"
+		}
+	}`
+
+	th, err := parseThemeJSON([]byte(jsonData), "dark", "user")
+	if err != nil {
+		t.Fatalf("parseThemeJSON() error: %v", err)
+	}
+	if th.Name != "Test Theme" {
+		t.Errorf("Name = %q, want %q", th.Name, "Test Theme")
+	}
+	if th.Source != "user" {
+		t.Errorf("Source = %q, want %q", th.Source, "user")
+	}
+	if th.Primary != lipgloss.Color("#7aa2f7") {
+		t.Errorf("Primary = %q, want %q", th.Primary, "#7aa2f7")
+	}
+	if th.Text != lipgloss.Color("#c0caf5") {
+		t.Errorf("Text = %q, want %q (dark variant)", th.Text, "#c0caf5")
+	}
+}
+
+func TestParseThemeJSONDefsResolution(t *testing.T) {
+	jsonData := `{
+		"name": "Defs Test",
+		"defs": {
+			"myblue": "#0000ff",
+			"myred": "#ff0000"
+		},
+		"theme": {
+			"primary": "myblue",
+			"secondary": "myred",
+			"accent": "#00ff00",
+			"error": "#ff0000",
+			"warning": "#ffff00",
+			"success": "#00ff00",
+			"info": "#0000ff",
+			"text": "#ffffff",
+			"textMuted": "#888888",
+			"background": "#000000",
+			"backgroundPanel": "#111111",
+			"backgroundElement": "#222222",
+			"border": "#333333",
+			"borderActive": "myblue"
+		}
+	}`
+
+	th, err := parseThemeJSON([]byte(jsonData), "dark", "builtin")
+	if err != nil {
+		t.Fatalf("parseThemeJSON() error: %v", err)
+	}
+	if th.Primary != lipgloss.Color("#0000ff") {
+		t.Errorf("Primary = %q, want %q (resolved from defs)", th.Primary, "#0000ff")
+	}
+	if th.Secondary != lipgloss.Color("#ff0000") {
+		t.Errorf("Secondary = %q, want %q (resolved from defs)", th.Secondary, "#ff0000")
+	}
+	if th.BorderActive != lipgloss.Color("#0000ff") {
+		t.Errorf("BorderActive = %q, want %q (resolved from defs)", th.BorderActive, "#0000ff")
+	}
+}
+
+func TestParseThemeJSONLightVariant(t *testing.T) {
+	jsonData := `{
+		"name": "Variant Test",
+		"theme": {
+			"primary": "#7aa2f7",
+			"secondary": "#bb9af7",
+			"accent": "#7dcfff",
+			"error": "#f7768e",
+			"warning": "#e0af68",
+			"success": "#9ece6a",
+			"info": "#7dcfff",
+			"text": { "dark": "#c0caf5", "light": "#1a1b26" },
+			"textMuted": "#565f89",
+			"background": { "dark": "#1a1b26", "light": "#d5d6db" },
+			"backgroundPanel": "#16161e",
+			"backgroundElement": "#24283b",
+			"border": "#3b4261",
+			"borderActive": "#7aa2f7"
+		}
+	}`
+
+	th, err := parseThemeJSON([]byte(jsonData), "light", "user")
+	if err != nil {
+		t.Fatalf("parseThemeJSON() error: %v", err)
+	}
+	if th.Text != lipgloss.Color("#1a1b26") {
+		t.Errorf("Text = %q, want %q (light variant)", th.Text, "#1a1b26")
+	}
+	if th.Background != lipgloss.Color("#d5d6db") {
+		t.Errorf("Background = %q, want %q (light variant)", th.Background, "#d5d6db")
+	}
+}
+
+func TestParseThemeJSONMissingOptionalColors(t *testing.T) {
+	jsonData := `{
+		"name": "Minimal",
+		"theme": {
+			"primary": "#7aa2f7"
+		}
+	}`
+
+	th, err := parseThemeJSON([]byte(jsonData), "dark", "user")
+	if err != nil {
+		t.Fatalf("parseThemeJSON() error: %v", err)
+	}
+	if th.Primary != lipgloss.Color("#7aa2f7") {
+		t.Errorf("Primary = %q, want %q", th.Primary, "#7aa2f7")
+	}
+	if th.Secondary != lipgloss.Color("") {
+		t.Errorf("Secondary = %q, want empty (missing)", th.Secondary)
+	}
+}
+
+func TestLoadFromFS(t *testing.T) {
+	dir := t.TempDir()
+	themeJSON := `{
+		"name": "FS Theme",
+		"theme": {
+			"primary": "#ff0000",
+			"secondary": "#00ff00",
+			"accent": "#0000ff",
+			"error": "#ff0000",
+			"warning": "#ffff00",
+			"success": "#00ff00",
+			"info": "#0000ff",
+			"text": "#ffffff",
+			"textMuted": "#888888",
+			"background": "#000000",
+			"backgroundPanel": "#111111",
+			"backgroundElement": "#222222",
+			"border": "#333333",
+			"borderActive": "#ff0000"
+		}
+	}`
+	os.WriteFile(filepath.Join(dir, "mytheme.json"), []byte(themeJSON), 0644)
+
+	themes := loadFromFS(dir, "dark", "user")
+	if len(themes) != 1 {
+		t.Fatalf("loadFromFS returned %d themes, want 1", len(themes))
+	}
+	if themes[0].Name != "FS Theme" {
+		t.Errorf("Name = %q, want %q", themes[0].Name, "FS Theme")
+	}
+	if themes[0].Source != "user" {
+		t.Errorf("Source = %q, want %q", themes[0].Source, "user")
+	}
+}
+
+func TestLoadFromFSSkipsNonJSON(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "readme.txt"), []byte("not a theme"), 0644)
+	os.WriteFile(filepath.Join(dir, ".hidden.json"), []byte(`{"name":"hidden"}`), 0644)
+
+	themes := loadFromFS(dir, "dark", "user")
+	if len(themes) != 0 {
+		t.Errorf("loadFromFS returned %d themes, want 0 (non-json skipped)", len(themes))
 	}
 }
