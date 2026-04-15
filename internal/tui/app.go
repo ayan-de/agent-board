@@ -214,6 +214,52 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
+func (a *App) renderHeader() string {
+	t := a.registry.Active()
+	fg := lipgloss.Color("252")
+	if t != nil {
+		fg = t.Text
+	}
+	muted := lipgloss.Color("240")
+	if t != nil {
+		muted = t.TextMuted
+	}
+
+	name := a.config.ProjectName
+	if name == "" {
+		name = "AgentBoard"
+	}
+	labelStyle := lipgloss.NewStyle().Foreground(muted)
+	nameStyle := lipgloss.NewStyle().Bold(true).Foreground(fg)
+	hintStyle := lipgloss.NewStyle().Foreground(muted)
+
+	projectPart := labelStyle.Render("Project: ") + nameStyle.Render(name)
+	hintPart := hintStyle.Render("? for keybindings")
+
+	projectWidth := lipgloss.Width(projectPart)
+	hintWidth := lipgloss.Width(hintPart)
+	available := a.width - hintWidth - 1
+	if available < projectWidth {
+		available = projectWidth
+	}
+
+	leftPad := (available - projectWidth) / 2
+	if leftPad < 0 {
+		leftPad = 0
+	}
+
+	left := strings.Repeat(" ", leftPad) + projectPart
+	right := hintPart
+
+	totalLeft := lipgloss.Width(left)
+	gap := a.width - totalLeft - hintWidth
+	if gap < 1 {
+		gap = 1
+	}
+
+	return left + strings.Repeat(" ", gap) + right
+}
+
 func (a *App) View() string {
 	var mainView string
 	switch a.view {
@@ -226,7 +272,9 @@ func (a *App) View() string {
 	default:
 		mainView = a.kanban.View()
 	}
-	mainView = lipgloss.NewStyle().Height(a.height).Render(mainView)
+	header := a.renderHeader()
+	mainView = lipgloss.NewStyle().Height(a.height - 1).Render(mainView)
+	mainView = header + "\n" + mainView
 
 	if a.palette.Active() {
 		paletteView := a.palette.View()

@@ -19,10 +19,12 @@ type Config struct {
 
 	ConfigPath        string
 	ProjectConfigPath string
+	ProjectName       string
 }
 
 func LoadFromDir(baseDir, projectName string) (*Config, error) {
 	cfg := SetDefaults()
+	cfg.ProjectName = projectName
 
 	if err := EnsureDirs(baseDir, projectName); err != nil {
 		return nil, err
