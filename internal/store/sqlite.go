@@ -19,9 +19,10 @@ var (
 type Store struct {
 	db            *sql.DB
 	validStatuses []string
+	ticketPrefix  string
 }
 
-func Open(dbPath string, validStatuses []string) (*Store, error) {
+func Open(dbPath string, validStatuses []string, ticketPrefix string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
 		return nil, fmt.Errorf("store.open: creating dir: %w", err)
 	}
@@ -38,7 +39,7 @@ func Open(dbPath string, validStatuses []string) (*Store, error) {
 		return nil, fmt.Errorf("store.open: enabling foreign keys: %w", err)
 	}
 
-	s := &Store{db: db, validStatuses: validStatuses}
+	s := &Store{db: db, validStatuses: validStatuses, ticketPrefix: ticketPrefix}
 
 	if err := s.migrate(); err != nil {
 		db.Close()

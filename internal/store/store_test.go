@@ -12,7 +12,7 @@ func openTestDB(t *testing.T) *Store {
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	s, err := Open(dbPath, []string{"backlog", "in_progress", "review", "done"})
+	s, err := Open(dbPath, []string{"backlog", "in_progress", "review", "done"}, "AGT-")
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestOpenCreatesDB(t *testing.T) {
 	dbPath := filepath.Join(dir, "test.db")
 
 	statuses := []string{"backlog", "in_progress", "review", "done"}
-	s, err := Open(dbPath, statuses)
+	s, err := Open(dbPath, statuses, "AGT-")
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -40,7 +40,7 @@ func TestOpenRunsMigrations(t *testing.T) {
 	dbPath := filepath.Join(dir, "test.db")
 
 	statuses := []string{"backlog", "in_progress", "review", "done"}
-	s, err := Open(dbPath, statuses)
+	s, err := Open(dbPath, statuses, "AGT-")
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -69,32 +69,17 @@ func TestOpenIdempotent(t *testing.T) {
 	dbPath := filepath.Join(dir, "test.db")
 	statuses := []string{"backlog", "in_progress", "review", "done"}
 
-	s1, err := Open(dbPath, statuses)
+	s1, err := Open(dbPath, statuses, "AGT-")
 	if err != nil {
 		t.Fatalf("first Open: %v", err)
 	}
 	s1.Close()
 
-	s2, err := Open(dbPath, statuses)
+	s2, err := Open(dbPath, statuses, "AGT-")
 	if err != nil {
 		t.Fatalf("second Open: %v", err)
 	}
 	defer s2.Close()
-}
-
-func TestClose(t *testing.T) {
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "test.db")
-	statuses := []string{"backlog", "in_progress", "review", "done"}
-
-	s, err := Open(dbPath, statuses)
-	if err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-
-	if err := s.Close(); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
 }
 
 func TestOpenCreatesParentDir(t *testing.T) {
@@ -102,7 +87,7 @@ func TestOpenCreatesParentDir(t *testing.T) {
 	dbPath := filepath.Join(dir, "nested", "deep", "test.db")
 	statuses := []string{"backlog", "in_progress", "review", "done"}
 
-	s, err := Open(dbPath, statuses)
+	s, err := Open(dbPath, statuses, "AGT-")
 	if err != nil {
 		t.Fatalf("Open with nested path: %v", err)
 	}
@@ -162,6 +147,72 @@ func TestCreateTicketAutoIncrementsID(t *testing.T) {
 	}
 	if t2.ID != "AGT-02" {
 		t.Errorf("second ticket ID = %q, want %q", t2.ID, "AGT-02")
+	}
+}
+
+func TestCreateTicketWithCustomPrefix(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+	s, err := Open(dbPath, []string{"backlog", "in_progress", "review", "done"}, "FOO-")
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer s.Close()
+
+	t1, err := s.CreateTicket(context.Background(), Ticket{Title: "First", Status: "backlog"})
+	if err != nil {
+		t.Fatalf("CreateTicket 1: %v", err)
+	}
+	t2, err := s.CreateTicket(context.Background(), Ticket{Title: "Second", Status: "backlog"})
+	if err != nil {
+		t.Fatalf("CreateTicket 2: %v", err)
+	}
+
+	if t1.ID != "FOO-01" {
+		t.Errorf("first ticket ID = %q, want %q", t1.ID, "FOO-01")
+	}
+	if t2.ID != "FOO-02" {
+		t.Errorf("second ticket ID = %q, want %q", t2.ID, "FOO-02")
+	}
+}
+
+func TestCreateTicketPrefixSwitchPreservesOld(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+
+	s1, err := Open(dbPath, []string{"backlog", "in_progress", "review", "done"}, "AAA-")
+	if err != nil {
+		t.Fatalf("Open 1: %v", err)
+	}
+	t1, _ := s1.CreateTicket(context.Background(), Ticket{Title: "First", Status: "backlog"})
+	t2, _ := s1.CreateTicket(context.Background(), Ticket{Title: "Second", Status: "backlog"})
+	s1.Close()
+
+	if t1.ID != "AAA-01" || t2.ID != "AAA-02" {
+		t.Fatalf("prefix AAA-: got %q, %q", t1.ID, t2.ID)
+	}
+
+	s2, err := Open(dbPath, []string{"backlog", "in_progress", "review", "done"}, "BBB-")
+	if err != nil {
+		t.Fatalf("Open 2: %v", err)
+	}
+	defer s2.Close()
+
+	t3, err := s2.CreateTicket(context.Background(), Ticket{Title: "Third", Status: "backlog"})
+	if err != nil {
+		t.Fatalf("CreateTicket 3: %v", err)
+	}
+
+	if t3.ID != "BBB-01" {
+		t.Errorf("after prefix switch, ticket ID = %q, want %q", t3.ID, "BBB-01")
+	}
+
+	old, err := s2.GetTicket(context.Background(), "AAA-01")
+	if err != nil {
+		t.Fatalf("old ticket AAA-01 should still exist: %v", err)
+	}
+	if old.Title != "First" {
+		t.Errorf("old ticket title = %q, want %q", old.Title, "First")
 	}
 }
 

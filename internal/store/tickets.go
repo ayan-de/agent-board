@@ -66,8 +66,6 @@ func (r ticketRow) toTicket() (Ticket, error) {
 	}, nil
 }
 
-const ticketPrefix = "AGT-"
-
 var validPriorities = map[string]bool{
 	"low": true, "medium": true, "high": true, "critical": true,
 }
@@ -82,14 +80,17 @@ func (s *Store) isValidStatus(status string) bool {
 }
 
 func (s *Store) nextTicketID(ctx context.Context) (string, error) {
+	prefix := s.ticketPrefix
+	prefixLen := len(prefix)
 	var maxID int
 	err := s.db.QueryRowContext(ctx,
-		"SELECT COALESCE(MAX(CAST(SUBSTR(id, 5) AS INTEGER)), 0) FROM tickets",
+		"SELECT COALESCE(MAX(CAST(SUBSTR(id, ?) AS INTEGER)), 0) FROM tickets WHERE id LIKE ?",
+		prefixLen+1, prefix+"%",
 	).Scan(&maxID)
 	if err != nil {
 		return "", fmt.Errorf("store.nextTicketID: %w", err)
 	}
-	return fmt.Sprintf("%s%02d", ticketPrefix, maxID+1), nil
+	return fmt.Sprintf("%s%02d", prefix, maxID+1), nil
 }
 
 func (s *Store) CreateTicket(ctx context.Context, t Ticket) (Ticket, error) {
