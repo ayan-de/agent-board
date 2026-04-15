@@ -124,7 +124,7 @@ func (m KanbanModel) handleKey(msg tea.KeyMsg) (KanbanModel, tea.Cmd) {
 	case keybinding.ActionAddTicket:
 		_, err := m.store.CreateTicket(context.Background(), store.Ticket{
 			Title:  "New Ticket",
-			Status: "backlog",
+			Status: statusNames[m.colIndex],
 		})
 		if err != nil {
 			return m, nil
