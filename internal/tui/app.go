@@ -159,6 +159,9 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.ticketView, _ = a.ticketView.Update(msg)
 			return a, nil
 		}
+		if a.view == viewTicket {
+			a.kanban, _ = a.kanban.Reload()
+		}
 		if a.view != viewBoard {
 			a.view = viewBoard
 			a.activeTicket = nil
