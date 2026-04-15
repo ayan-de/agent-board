@@ -40,6 +40,7 @@ type App struct {
 	focus   focusArea
 	view    viewMode
 	palette CommandPalette
+	quit    bool
 
 	kanban       KanbanModel
 	ticketView   TicketViewModel
@@ -81,6 +82,16 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry) (*App, erro
 			return items
 		},
 	})
+	cr.Register(Command{
+		Name:        "quit",
+		Description: "Quit AgentBoard",
+		Prefix:      "/",
+		Items: func() []Item {
+			return []Item{
+				{Label: "quit", Description: "Exit the application", ID: "quit"},
+			}
+		},
+	})
 
 	a := &App{
 		store:      s,
@@ -101,9 +112,14 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry) (*App, erro
 		a.applyTheme()
 	}
 	a.palette.onConfirm = func(item Item) {
-		a.registry.Set(item.ID)
-		a.applyTheme()
-		config.SaveTheme(a.config.ProjectConfigPath, item.ID)
+		switch item.ID {
+		case "quit":
+			a.quit = true
+		default:
+			a.registry.Set(item.ID)
+			a.applyTheme()
+			config.SaveTheme(a.config.ProjectConfigPath, item.ID)
+		}
 	}
 
 	return a, nil
@@ -139,6 +155,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if a.palette.Active() {
 		a.palette, _ = a.palette.Update(msg)
+		if !a.palette.Active() && a.quit {
+			return a, tea.Quit
+		}
 		return a, nil
 	}
 
