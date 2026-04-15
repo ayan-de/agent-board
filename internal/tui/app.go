@@ -118,6 +118,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.kanban, _ = a.kanban.Update(msg)
 		a.ticketView, _ = a.ticketView.Update(msg)
 		a.dashboard, _ = a.dashboard.Update(msg)
+		a.palette, _ = a.palette.Update(msg)
 		a.modal.SetSize(a.width, a.height)
 		return a, nil
 	case tea.KeyMsg:
@@ -214,12 +215,6 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) View() string {
-	paletteView := a.palette.View()
-	paletteLines := 0
-	if a.palette.Active() {
-		paletteLines = a.palette.DropdownHeight() + 1
-	}
-
 	var mainView string
 	switch a.view {
 	case viewHelp:
@@ -231,14 +226,39 @@ func (a *App) View() string {
 	default:
 		mainView = a.kanban.View()
 	}
+	mainView = lipgloss.NewStyle().Height(a.height).Render(mainView)
 
-	if paletteLines > 0 {
-		mainView = lipgloss.JoinVertical(lipgloss.Bottom,
-			lipgloss.NewStyle().Height(a.height-paletteLines).Render(mainView),
-			paletteView,
-		)
-	} else {
-		mainView = lipgloss.NewStyle().Height(a.height).Render(mainView)
+	if a.palette.Active() {
+		paletteView := a.palette.View()
+		paletteLines := strings.Split(paletteView, "\n")
+		paletteHeight := len(paletteLines)
+		bgLines := strings.Split(mainView, "\n")
+
+		for len(bgLines) < a.height {
+			bgLines = append(bgLines, "")
+		}
+
+		startY := a.height - paletteHeight
+		var finalView strings.Builder
+		for i := 0; i < a.height; i++ {
+			bgLine := ""
+			if i < len(bgLines) {
+				bgLine = bgLines[i]
+			}
+
+			if i >= startY && i < a.height {
+				row := i - startY
+				paletteLine := paletteLines[row]
+				// Palette is docked at the left (x=0)
+				finalView.WriteString(overlayLine(bgLine, paletteLine, 0))
+			} else {
+				finalView.WriteString(bgLine)
+			}
+			if i < a.height-1 {
+				finalView.WriteString("\n")
+			}
+		}
+		mainView = finalView.String()
 	}
 
 	if a.modal.Active() {
