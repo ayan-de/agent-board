@@ -24,6 +24,7 @@ const (
 	ActionJumpColumn4
 	ActionShowHelp
 	ActionGoToTicket
+	ActionShowDashboard
 )
 
 func (a Action) String() string {
@@ -70,6 +71,8 @@ func (a Action) String() string {
 		return "show_help"
 	case ActionGoToTicket:
 		return "go_to_ticket"
+	case ActionShowDashboard:
+		return "show_dashboard"
 	default:
 		return "unknown"
 	}

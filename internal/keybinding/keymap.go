@@ -46,6 +46,7 @@ func DefaultKeyMap() KeyMap {
 			{Key: "4", Action: ActionJumpColumn4},
 			{Key: "?", Action: ActionShowHelp},
 			{Key: "g", Action: ActionGoToTicket, IsChord: true},
+			{Key: "i", Action: ActionShowDashboard},
 		},
 	}
 }

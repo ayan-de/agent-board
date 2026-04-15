@@ -28,6 +28,7 @@ func TestActionString(t *testing.T) {
 		{ActionJumpColumn4, "jump_col4"},
 		{ActionShowHelp, "show_help"},
 		{ActionGoToTicket, "go_to_ticket"},
+		{ActionShowDashboard, "show_dashboard"},
 		{Action(999), "unknown"},
 	}
 
