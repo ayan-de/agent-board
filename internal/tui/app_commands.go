@@ -1,10 +1,12 @@
 package tui
 
 import (
+	"os/exec"
 	"strings"
 
 	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/theme"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 type appCommands struct {
@@ -31,6 +33,16 @@ func (ac *appCommands) registerAll(cr *CommandRegistry) {
 		Items: func() []Item {
 			return []Item{
 				{Label: "quit", Description: "Exit the application", ID: "ACTION:quit"},
+			}
+		},
+	})
+	cr.Register(Command{
+		Name:        "config",
+		Description: "Edit project config",
+		Prefix:      "",
+		Items: func() []Item {
+			return []Item{
+				{Label: "config", Description: "Open config.toml in editor", ID: "ACTION:config"},
 			}
 		},
 	})
@@ -62,6 +74,11 @@ func (ac *appCommands) onConfirm(item Item) {
 	switch id {
 	case "quit":
 		ac.app.quit = true
+	case "config":
+		ac.app.runCommand = tea.ExecProcess(
+			exec.Command("nvim", ac.config.ProjectConfigPath),
+			func(err error) tea.Msg { return editorFinishedMsg{err: err} },
+		)
 	default:
 		ac.registry.Set(id)
 		ac.app.applyTheme()
