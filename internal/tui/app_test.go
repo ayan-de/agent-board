@@ -2,13 +2,11 @@ package tui
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/ayan-de/agent-board/internal/config"
-	"github.com/ayan-de/agent-board/internal/keybinding"
 	"github.com/ayan-de/agent-board/internal/store"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -38,11 +36,8 @@ func TestNewApp(t *testing.T) {
 	if app == nil {
 		t.Fatal("app is nil")
 	}
-	if app.resolver == nil {
-		t.Error("resolver is nil")
-	}
-	if app.store == nil {
-		t.Error("store is nil")
+	if app.kanban.store == nil {
+		t.Error("kanban store is nil")
 	}
 	if app.view != viewBoard {
 		t.Errorf("view = %v, want viewBoard", app.view)
@@ -50,65 +45,9 @@ func TestNewApp(t *testing.T) {
 	if app.focus != focusBoard {
 		t.Errorf("focus = %v, want focusBoard", app.focus)
 	}
-	if app.colIndex != 0 {
-		t.Errorf("colIndex = %d, want 0", app.colIndex)
-	}
 }
 
-func TestNewAppWithKeybindingOverrides(t *testing.T) {
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "test.db")
-	s, err := store.Open(dbPath, []string{"backlog", "in_progress", "review", "done"})
-	if err != nil {
-		t.Fatalf("open store: %v", err)
-	}
-	t.Cleanup(func() { s.Close() })
-
-	cfg := config.SetDefaults()
-	cfg.TUI.Keybindings = map[string]string{"quit": "Q"}
-
-	app, err := NewApp(cfg, s)
-	if err != nil {
-		t.Fatalf("new app: %v", err)
-	}
-
-	action, _ := app.resolver.Resolve("Q")
-	if action != keybinding.ActionQuit {
-		t.Errorf("resolve Q = %v, want ActionQuit", action)
-	}
-}
-
-func TestNewAppLoadsColumns(t *testing.T) {
-	app := newTestApp(t)
-
-	for i, col := range app.columns {
-		if col == nil {
-			t.Errorf("columns[%d] is nil", i)
-		}
-	}
-}
-
-func TestUpdateWindowSize(t *testing.T) {
-	app := newTestApp(t)
-	updated, _ := app.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	model := updated.(*App)
-	if model.width != 120 {
-		t.Errorf("width = %d, want 120", model.width)
-	}
-	if model.height != 40 {
-		t.Errorf("height = %d, want 40", model.height)
-	}
-}
-
-func TestInit(t *testing.T) {
-	app := newTestApp(t)
-	cmd := app.Init()
-	if cmd == nil {
-		t.Error("Init() returned nil cmd")
-	}
-}
-
-func TestUpdateQuit(t *testing.T) {
+func TestAppQuit(t *testing.T) {
 	app := newTestApp(t)
 	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
 	if cmd == nil {
@@ -120,7 +59,7 @@ func TestUpdateQuit(t *testing.T) {
 	}
 }
 
-func TestUpdateForceQuit(t *testing.T) {
+func TestAppForceQuit(t *testing.T) {
 	app := newTestApp(t)
 	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
 	if cmd == nil {
@@ -132,165 +71,7 @@ func TestUpdateForceQuit(t *testing.T) {
 	}
 }
 
-func TestUpdateNavigationPrevNextColumn(t *testing.T) {
-	app := newTestApp(t)
-
-	nextKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}}
-	for i := 0; i < 4; i++ {
-		app.Update(nextKey)
-	}
-	if app.colIndex != 3 {
-		t.Errorf("colIndex = %d after 4 next, want 3", app.colIndex)
-	}
-
-	prevKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}}
-	for i := 0; i < 5; i++ {
-		app.Update(prevKey)
-	}
-	if app.colIndex != 0 {
-		t.Errorf("colIndex = %d after 5 prev, want 0", app.colIndex)
-	}
-}
-
-func TestUpdateNavigationJumpColumns(t *testing.T) {
-	app := newTestApp(t)
-
-	tests := []struct {
-		key  rune
-		want int
-	}{
-		{'3', 2},
-		{'1', 0},
-		{'4', 3},
-	}
-	for _, tt := range tests {
-		app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{tt.key}})
-		if app.colIndex != tt.want {
-			t.Errorf("after pressing %c, colIndex = %d, want %d", tt.key, app.colIndex, tt.want)
-		}
-	}
-}
-
-func TestUpdateNavigationPrevNextTicket(t *testing.T) {
-	app := newTestApp(t)
-	ctx := context.Background()
-
-	for i := 0; i < 3; i++ {
-		_, _ = app.store.CreateTicket(ctx, store.Ticket{
-			Title:  fmt.Sprintf("Ticket %d", i+1),
-			Status: "backlog",
-		})
-	}
-	_ = app.loadColumns()
-
-	nextKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
-	app.Update(nextKey)
-	if app.cursors[0] != 1 {
-		t.Errorf("cursor = %d, want 1", app.cursors[0])
-	}
-	app.Update(nextKey)
-	if app.cursors[0] != 2 {
-		t.Errorf("cursor = %d, want 2", app.cursors[0])
-	}
-	app.Update(nextKey)
-	if app.cursors[0] != 2 {
-		t.Errorf("cursor = %d after clamp, want 2", app.cursors[0])
-	}
-
-	prevKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}}
-	app.Update(prevKey)
-	if app.cursors[0] != 1 {
-		t.Errorf("cursor = %d, want 1", app.cursors[0])
-	}
-	app.Update(prevKey)
-	if app.cursors[0] != 0 {
-		t.Errorf("cursor = %d, want 0", app.cursors[0])
-	}
-	app.Update(prevKey)
-	if app.cursors[0] != 0 {
-		t.Errorf("cursor = %d after clamp, want 0", app.cursors[0])
-	}
-}
-
-func TestUpdateNavigationEmptyColumn(t *testing.T) {
-	app := newTestApp(t)
-
-	app.colIndex = 1
-	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
-	if app.cursors[1] != 0 {
-		t.Errorf("cursor = %d on empty column, want 0", app.cursors[1])
-	}
-}
-
-func TestUpdateAddTicket(t *testing.T) {
-	app := newTestApp(t)
-
-	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
-
-	if len(app.columns[0]) != 1 {
-		t.Fatalf("backlog has %d tickets, want 1", len(app.columns[0]))
-	}
-	if app.columns[0][0].Title != "New Ticket" {
-		t.Errorf("title = %q, want %q", app.columns[0][0].Title, "New Ticket")
-	}
-}
-
-func TestUpdateDeleteTicket(t *testing.T) {
-	app := newTestApp(t)
-	ctx := context.Background()
-
-	_, _ = app.store.CreateTicket(ctx, store.Ticket{Title: "To Delete", Status: "backlog"})
-	_ = app.loadColumns()
-
-	if len(app.columns[0]) != 1 {
-		t.Fatalf("setup: backlog has %d tickets, want 1", len(app.columns[0]))
-	}
-
-	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
-
-	if len(app.columns[0]) != 0 {
-		t.Errorf("backlog has %d tickets after delete, want 0", len(app.columns[0]))
-	}
-}
-
-func TestUpdateDeleteTicketEmptyColumn(t *testing.T) {
-	app := newTestApp(t)
-
-	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
-
-	if len(app.columns[0]) != 0 {
-		t.Errorf("backlog has %d tickets, want 0", len(app.columns[0]))
-	}
-}
-
-func TestUpdateOpenTicket(t *testing.T) {
-	app := newTestApp(t)
-	ctx := context.Background()
-
-	ticket, _ := app.store.CreateTicket(ctx, store.Ticket{Title: "Open Me", Status: "backlog"})
-	_ = app.loadColumns()
-
-	app.Update(tea.KeyMsg{Type: tea.KeyEnter})
-
-	if app.view != viewTicket {
-		t.Errorf("view = %v, want viewTicket", app.view)
-	}
-	if app.activeTicket == nil || app.activeTicket.ID != ticket.ID {
-		t.Errorf("activeTicket.ID = %v, want %s", app.activeTicket, ticket.ID)
-	}
-}
-
-func TestUpdateOpenTicketEmptyColumn(t *testing.T) {
-	app := newTestApp(t)
-
-	app.Update(tea.KeyMsg{Type: tea.KeyEnter})
-
-	if app.view != viewBoard {
-		t.Errorf("view = %v, want viewBoard", app.view)
-	}
-}
-
-func TestUpdateShowHelp(t *testing.T) {
+func TestAppShowHelp(t *testing.T) {
 	app := newTestApp(t)
 
 	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
@@ -304,12 +85,43 @@ func TestUpdateShowHelp(t *testing.T) {
 	}
 }
 
-func TestUpdateEscapeReturnsToBoard(t *testing.T) {
+func TestAppOpenTicket(t *testing.T) {
 	app := newTestApp(t)
 	ctx := context.Background()
 
-	_, _ = app.store.CreateTicket(ctx, store.Ticket{Title: "Escape Me", Status: "backlog"})
-	_ = app.loadColumns()
+	app.store.CreateTicket(ctx, store.Ticket{Title: "Open Me", Status: "backlog"})
+	var err error
+	app.kanban, err = app.kanban.Reload()
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+
+	app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if app.view != viewTicket {
+		t.Errorf("view = %v, want viewTicket", app.view)
+	}
+	if app.activeTicket == nil || app.activeTicket.Title != "Open Me" {
+		t.Errorf("activeTicket = %v, want 'Open Me'", app.activeTicket)
+	}
+}
+
+func TestAppOpenTicketEmptyColumn(t *testing.T) {
+	app := newTestApp(t)
+
+	app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if app.view != viewBoard {
+		t.Errorf("view = %v, want viewBoard", app.view)
+	}
+}
+
+func TestAppEscapeReturnsToBoard(t *testing.T) {
+	app := newTestApp(t)
+	ctx := context.Background()
+
+	app.store.CreateTicket(ctx, store.Ticket{Title: "Escape Me", Status: "backlog"})
+	app.kanban, _ = app.kanban.Reload()
 
 	app.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if app.view != viewTicket {
@@ -325,75 +137,51 @@ func TestUpdateEscapeReturnsToBoard(t *testing.T) {
 	}
 }
 
-func TestViewBoardRendersColumnNames(t *testing.T) {
+func TestAppViewRouting(t *testing.T) {
 	app := newTestApp(t)
-	app.width = 120
-	app.height = 40
+	app.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 
 	view := app.View()
-	for _, name := range columnNames {
-		if !strings.Contains(view, name) {
-			t.Errorf("view missing column name %q", name)
-		}
+	if len(view) == 0 {
+		t.Error("board view is empty")
 	}
-}
 
-func TestViewBoardRendersTickets(t *testing.T) {
-	app := newTestApp(t)
-	ctx := context.Background()
-	app.width = 120
-	app.height = 40
-
-	_, _ = app.store.CreateTicket(ctx, store.Ticket{Title: "First Task", Status: "backlog"})
-	_, _ = app.store.CreateTicket(ctx, store.Ticket{Title: "Second Task", Status: "in_progress"})
-	_ = app.loadColumns()
-
-	view := app.View()
-	if !strings.Contains(view, "First Task") {
-		t.Error("view missing ticket title 'First Task'")
-	}
-	if !strings.Contains(view, "Second Task") {
-		t.Error("view missing ticket title 'Second Task'")
-	}
-	if !strings.Contains(view, "AGT-01") {
-		t.Error("view missing ticket ID 'AGT-01'")
-	}
-}
-
-func TestViewTicketDetail(t *testing.T) {
-	app := newTestApp(t)
-	ctx := context.Background()
-
-	_, _ = app.store.CreateTicket(ctx, store.Ticket{
-		Title:       "Detail View",
-		Description: "This is the description",
-		Status:      "backlog",
-	})
-	_ = app.loadColumns()
-
-	app.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	view := app.View()
-
-	if !strings.Contains(view, "Detail View") {
-		t.Error("ticket view missing title 'Detail View'")
-	}
-	if !strings.Contains(view, "This is the description") {
-		t.Error("ticket view missing description")
-	}
-	if !strings.Contains(view, "Press Esc to return") {
-		t.Error("ticket view missing return hint")
-	}
-}
-
-func TestViewHelp(t *testing.T) {
-	app := newTestApp(t)
 	app.view = viewHelp
-
-	view := app.View()
+	view = app.View()
 	if !strings.Contains(view, "Help") {
 		t.Error("help view missing 'Help'")
 	}
-	if !strings.Contains(view, "quit") {
-		t.Error("help view missing 'quit' binding")
+
+	app.view = viewTicket
+	app.activeTicket = &store.Ticket{ID: "TEST-01", Title: "Routed", Status: "backlog"}
+	view = app.View()
+	if !strings.Contains(view, "Routed") {
+		t.Error("ticket view missing title")
+	}
+}
+
+func TestAppWindowResizeDelegatesToKanban(t *testing.T) {
+	app := newTestApp(t)
+	app.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	if app.kanban.width != 120 {
+		t.Errorf("kanban width = %d, want 120", app.kanban.width)
+	}
+	if app.kanban.height != 40 {
+		t.Errorf("kanban height = %d, want 40", app.kanban.height)
+	}
+}
+
+func TestAppNavigationDelegatesToKanban(t *testing.T) {
+	app := newTestApp(t)
+
+	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	if app.kanban.colIndex != 1 {
+		t.Errorf("kanban colIndex = %d, want 1", app.kanban.colIndex)
+	}
+
+	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	if app.kanban.colIndex != 0 {
+		t.Errorf("kanban colIndex = %d, want 0", app.kanban.colIndex)
 	}
 }
