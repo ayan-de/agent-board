@@ -58,15 +58,49 @@ func TestNewApp(t *testing.T) {
 	}
 }
 
-func TestAppQuit(t *testing.T) {
+func TestAppQuitShowsConfirmation(t *testing.T) {
 	app := newTestApp(t)
+
 	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if cmd != nil {
+		t.Fatal("q should not quit directly, should open modal")
+	}
+	if !app.modal.Active() {
+		t.Fatal("modal should be active after pressing q")
+	}
+}
+
+func TestAppQuitConfirmYes(t *testing.T) {
+	app := newTestApp(t)
+
+	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if !app.modal.Active() {
+		t.Fatal("modal should be active")
+	}
+
+	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+
+	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd == nil {
-		t.Fatal("cmd is nil, expected tea.Quit")
+		t.Fatal("cmd is nil, expected tea.Quit after confirming")
 	}
 	msg := cmd()
 	if _, ok := msg.(tea.QuitMsg); !ok {
 		t.Errorf("cmd produced %T, want tea.QuitMsg", msg)
+	}
+}
+
+func TestAppQuitConfirmCancel(t *testing.T) {
+	app := newTestApp(t)
+
+	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if !app.modal.Active() {
+		t.Fatal("modal should be active")
+	}
+
+	app.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	if app.modal.Active() {
+		t.Error("modal should be closed after escape")
 	}
 }
 

@@ -44,6 +44,7 @@ type App struct {
 	focus      focusArea
 	view       viewMode
 	palette    CommandPalette
+	modal      ConfirmModal
 	quit       bool
 	runCommand tea.Cmd
 
@@ -90,6 +91,9 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry) (*App, erro
 	a.palette.onSelect = ac.onSelect
 	a.palette.onConfirm = ac.onConfirm
 
+	a.modal = ConfirmModal{}
+	a.modal.SetTheme(t)
+
 	return a, nil
 }
 
@@ -99,6 +103,7 @@ func (a *App) applyTheme() {
 	a.ticketView.styles = NewTicketViewStyles(t)
 	a.dashboard.styles = NewDashboardStyles(t)
 	a.palette.SetTheme(t)
+	a.modal.SetTheme(t)
 }
 
 func (a *App) Init() tea.Cmd {
@@ -113,6 +118,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.kanban, _ = a.kanban.Update(msg)
 		a.ticketView, _ = a.ticketView.Update(msg)
 		a.dashboard, _ = a.dashboard.Update(msg)
+		a.modal.SetSize(a.width, a.height)
 		return a, nil
 	case tea.KeyMsg:
 		return a.handleKey(msg)
@@ -123,6 +129,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if a.modal.Active() {
+		var cmd tea.Cmd
+		a.modal, cmd = a.modal.Update(msg)
+		return a, cmd
+	}
+
 	if a.palette.Active() {
 		a.palette, _ = a.palette.Update(msg)
 		if !a.palette.Active() {
@@ -164,7 +176,14 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch action {
-	case keybinding.ActionQuit, keybinding.ActionForceQuit:
+	case keybinding.ActionQuit:
+		a.modal.Open(
+			"Quit AgentBoard",
+			"Are you sure you want to quit?",
+			func() tea.Cmd { return tea.Quit },
+			nil,
+		)
+	case keybinding.ActionForceQuit:
 		return a, tea.Quit
 	case keybinding.ActionOpenTicket:
 		selected := a.kanban.SelectedTicket()
@@ -214,13 +233,22 @@ func (a *App) View() string {
 	}
 
 	if paletteLines > 0 {
-		return lipgloss.JoinVertical(lipgloss.Bottom,
+		mainView = lipgloss.JoinVertical(lipgloss.Bottom,
 			lipgloss.NewStyle().Height(a.height-paletteLines).Render(mainView),
 			paletteView,
 		)
+	} else {
+		mainView = lipgloss.NewStyle().Height(a.height).Render(mainView)
 	}
 
-	return lipgloss.NewStyle().Height(a.height).Render(mainView)
+	if a.modal.Active() {
+		return lipgloss.NewStyle().
+			Width(a.width).
+			Height(a.height).
+			Render(mainView, a.modal.View())
+	}
+
+	return mainView
 }
 
 func (a *App) renderHelp() string {
