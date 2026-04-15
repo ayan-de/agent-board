@@ -8,6 +8,7 @@ import (
 
 	"github.com/ayan-de/agent-board/internal/keybinding"
 	"github.com/ayan-de/agent-board/internal/store"
+	"github.com/ayan-de/agent-board/internal/theme"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -63,11 +64,36 @@ func DefaultKanbanStyles() KanbanStyles {
 	}
 }
 
-func NewKanbanModel(s *store.Store, resolver *keybinding.Resolver) (KanbanModel, error) {
+func NewKanbanStyles(t *theme.Theme) KanbanStyles {
+	return KanbanStyles{
+		FocusedColumn: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(t.Primary),
+		BlurredColumn: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(t.TextMuted),
+		FocusedTitle: lipgloss.NewStyle().
+			Background(t.Primary).
+			Foreground(t.Text).
+			Bold(true),
+		BlurredTitle: lipgloss.NewStyle().
+			Background(t.BackgroundPanel).
+			Foreground(t.Text),
+		SelectedTicket: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(t.Text),
+		Ticket: lipgloss.NewStyle().
+			Foreground(t.Text),
+		EmptyColumn: lipgloss.NewStyle().
+			Foreground(t.TextMuted),
+	}
+}
+
+func NewKanbanModel(s *store.Store, resolver *keybinding.Resolver, t *theme.Theme) (KanbanModel, error) {
 	m := KanbanModel{
 		store:    s,
 		resolver: resolver,
-		styles:   DefaultKanbanStyles(),
+		styles:   NewKanbanStyles(t),
 	}
 	m, err := m.loadColumns()
 	if err != nil {
@@ -225,7 +251,7 @@ func (m KanbanModel) View() string {
 		if i != m.colIndex {
 			colStyle = m.styles.BlurredColumn
 		}
-		colStyle = colStyle.Width(innerWidth + 2).Padding(0, 1)
+		colStyle = colStyle.Width(innerWidth+2).Padding(0, 1)
 
 		cols[i] = colStyle.Render(content.String())
 	}

@@ -25,6 +25,7 @@ const (
 	ActionShowHelp
 	ActionGoToTicket
 	ActionShowDashboard
+	ActionOpenPalette
 )
 
 func (a Action) String() string {
@@ -73,6 +74,8 @@ func (a Action) String() string {
 		return "go_to_ticket"
 	case ActionShowDashboard:
 		return "show_dashboard"
+	case ActionOpenPalette:
+		return "open_palette"
 	default:
 		return "unknown"
 	}

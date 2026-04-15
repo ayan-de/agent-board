@@ -8,6 +8,10 @@ import (
 //go:embed themes/*.json
 var themeFS embed.FS
 
+func (r *Registry) LoadBuiltins() {
+	registerBuiltins(r)
+}
+
 func registerBuiltins(r *Registry) {
 	entries, err := themeFS.ReadDir("themes")
 	if err != nil {

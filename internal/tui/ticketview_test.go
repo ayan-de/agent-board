@@ -8,8 +8,10 @@ import (
 
 	"github.com/ayan-de/agent-board/internal/keybinding"
 	"github.com/ayan-de/agent-board/internal/store"
+	"github.com/ayan-de/agent-board/internal/theme"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func newTestTicketView(t *testing.T) (TicketViewModel, *store.Store) {
@@ -25,7 +27,14 @@ func newTestTicketView(t *testing.T) (TicketViewModel, *store.Store) {
 	km := keybinding.DefaultKeyMap()
 	resolver := keybinding.NewResolver(km)
 
-	m := NewTicketViewModel(s, resolver)
+	defaultTheme := &theme.Theme{
+		Primary: lipgloss.Color("69"), Text: lipgloss.Color("15"),
+		TextMuted: lipgloss.Color("240"), Background: lipgloss.Color("#000"),
+		BackgroundPanel: lipgloss.Color("236"), Border: lipgloss.Color("240"),
+		Success: lipgloss.Color("42"), Accent: lipgloss.Color("213"),
+	}
+
+	m := NewTicketViewModel(s, resolver, defaultTheme)
 	return m, s
 }
 

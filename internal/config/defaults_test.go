@@ -34,8 +34,8 @@ func TestSetDefaults(t *testing.T) {
 		t.Errorf("Agent.Default = %q, want %q", cfg.Agent.Default, "opencode")
 	}
 
-	if cfg.TUI.Theme != "default" {
-		t.Errorf("TUI.Theme = %q, want %q", cfg.TUI.Theme, "default")
+	if cfg.TUI.Theme != "agentboard" {
+		t.Errorf("TUI.Theme = %q, want %q", cfg.TUI.Theme, "agentboard")
 	}
 	if cfg.TUI.Layout != "compact" {
 		t.Errorf("TUI.Layout = %q, want %q", cfg.TUI.Layout, "compact")

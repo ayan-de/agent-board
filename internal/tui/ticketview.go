@@ -8,6 +8,7 @@ import (
 
 	"github.com/ayan-de/agent-board/internal/keybinding"
 	"github.com/ayan-de/agent-board/internal/store"
+	"github.com/ayan-de/agent-board/internal/theme"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -82,6 +83,35 @@ func DefaultTicketViewStyles() TicketViewStyles {
 			Foreground(lipgloss.Color("240")),
 		Empty: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("240")),
+	}
+}
+
+func NewTicketViewStyles(t *theme.Theme) TicketViewStyles {
+	return TicketViewStyles{
+		Border: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(t.Primary).
+			Padding(1, 2),
+		Title: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(t.Primary),
+		Label: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(t.Text),
+		Value: lipgloss.NewStyle().
+			Foreground(t.Text),
+		SelectedRow: lipgloss.NewStyle().
+			Background(t.Primary).
+			Foreground(t.Text),
+		Cursor: lipgloss.NewStyle().
+			Foreground(t.Primary),
+		EditBox: lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(t.Accent),
+		Footer: lipgloss.NewStyle().
+			Foreground(t.TextMuted),
+		Empty: lipgloss.NewStyle().
+			Foreground(t.TextMuted),
 	}
 }
 
@@ -163,11 +193,11 @@ func ticketFields() []ticketField {
 	}
 }
 
-func NewTicketViewModel(s *store.Store, resolver *keybinding.Resolver) TicketViewModel {
+func NewTicketViewModel(s *store.Store, resolver *keybinding.Resolver, t *theme.Theme) TicketViewModel {
 	return TicketViewModel{
 		store:    s,
 		resolver: resolver,
-		styles:   DefaultTicketViewStyles(),
+		styles:   NewTicketViewStyles(t),
 		fields:   ticketFields(),
 		mode:     ticketViewMode,
 	}

@@ -15,7 +15,7 @@ func SetDefaults() *Config {
 			Default: "opencode",
 		},
 		TUI: TUIConfig{
-			Theme:  "default",
+			Theme:  "agentboard",
 			Layout: "compact",
 		},
 		LLM: LLMConfig{},

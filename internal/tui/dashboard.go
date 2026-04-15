@@ -7,6 +7,7 @@ import (
 	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/keybinding"
 	"github.com/ayan-de/agent-board/internal/store"
+	"github.com/ayan-de/agent-board/internal/theme"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -59,12 +60,38 @@ func DefaultDashboardStyles() DashboardStyles {
 	}
 }
 
-func NewDashboardModel(s *store.Store, resolver *keybinding.Resolver, agents []config.DetectedAgent) DashboardModel {
+func NewDashboardStyles(t *theme.Theme) DashboardStyles {
+	return DashboardStyles{
+		Title: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(t.Primary),
+		CardFound: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(t.Success).
+			Padding(0, 1).
+			Width(30),
+		CardMissing: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(t.TextMuted).
+			Padding(0, 1).
+			Width(30),
+		Label: lipgloss.NewStyle().
+			Foreground(t.Text),
+		Value: lipgloss.NewStyle().
+			Foreground(t.Text),
+		Placeholder: lipgloss.NewStyle().
+			Foreground(t.TextMuted),
+		Footer: lipgloss.NewStyle().
+			Foreground(t.TextMuted),
+	}
+}
+
+func NewDashboardModel(s *store.Store, resolver *keybinding.Resolver, agents []config.DetectedAgent, t *theme.Theme) DashboardModel {
 	return DashboardModel{
 		store:    s,
 		resolver: resolver,
 		agents:   agents,
-		styles:   DefaultDashboardStyles(),
+		styles:   NewDashboardStyles(t),
 	}
 }
 

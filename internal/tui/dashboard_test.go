@@ -8,9 +8,20 @@ import (
 	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/keybinding"
 	"github.com/ayan-de/agent-board/internal/store"
+	"github.com/ayan-de/agent-board/internal/theme"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
+
+func testDashboardTheme() *theme.Theme {
+	return &theme.Theme{
+		Primary: lipgloss.Color("69"), Text: lipgloss.Color("15"),
+		TextMuted: lipgloss.Color("240"), Background: lipgloss.Color("#000"),
+		BackgroundPanel: lipgloss.Color("236"), Border: lipgloss.Color("240"),
+		Success: lipgloss.Color("42"), Accent: lipgloss.Color("213"),
+	}
+}
 
 func newTestDashboard(t *testing.T) DashboardModel {
 	t.Helper()
@@ -31,7 +42,7 @@ func newTestDashboard(t *testing.T) DashboardModel {
 		{Name: "cursor", Binary: "cursor", Found: false},
 	}
 
-	return NewDashboardModel(s, resolver, agents)
+	return NewDashboardModel(s, resolver, agents, testDashboardTheme())
 }
 
 func TestNewDashboardModel(t *testing.T) {
@@ -114,7 +125,7 @@ func TestDashboardViewNoAgentsFound(t *testing.T) {
 		{Name: "claude-code", Binary: "claude", Found: false},
 	}
 
-	m := NewDashboardModel(s, resolver, agents)
+	m := NewDashboardModel(s, resolver, agents, testDashboardTheme())
 	m.width = 80
 	m.height = 24
 

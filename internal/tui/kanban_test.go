@@ -9,11 +9,21 @@ import (
 
 	"github.com/ayan-de/agent-board/internal/keybinding"
 	"github.com/ayan-de/agent-board/internal/store"
+	"github.com/ayan-de/agent-board/internal/theme"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/charmbracelet/lipgloss"
 )
+
+func testTheme() *theme.Theme {
+	return &theme.Theme{
+		Primary: lipgloss.Color("69"), Text: lipgloss.Color("15"),
+		TextMuted: lipgloss.Color("240"), Background: lipgloss.Color("#000"),
+		BackgroundPanel: lipgloss.Color("236"), Border: lipgloss.Color("240"),
+		Success: lipgloss.Color("42"), Accent: lipgloss.Color("213"),
+	}
+}
 
 func newTestKanban(t *testing.T) KanbanModel {
 	t.Helper()
@@ -28,7 +38,7 @@ func newTestKanban(t *testing.T) KanbanModel {
 	km := keybinding.DefaultKeyMap()
 	resolver := keybinding.NewResolver(km)
 
-	model, err := NewKanbanModel(s, resolver)
+	model, err := NewKanbanModel(s, resolver, testTheme())
 	if err != nil {
 		t.Fatalf("new kanban model: %v", err)
 	}

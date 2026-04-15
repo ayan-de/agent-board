@@ -6,6 +6,7 @@ import (
 
 	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/store"
+	"github.com/ayan-de/agent-board/internal/theme"
 	"github.com/ayan-de/agent-board/internal/tui"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -25,7 +26,14 @@ func main() {
 	}
 	defer s.Close()
 
-	app, err := tui.NewApp(cfg, s)
+	reg := theme.NewRegistry("dark")
+	reg.LoadBuiltins()
+	reg.LoadUserThemes()
+	if err := reg.Set(cfg.TUI.Theme); err != nil {
+		_ = reg.Set("agentboard")
+	}
+
+	app, err := tui.NewApp(cfg, s, reg)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error creating app: %v\n", err)
 		os.Exit(1)

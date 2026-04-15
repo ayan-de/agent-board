@@ -8,8 +8,10 @@ import (
 
 	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/store"
+	"github.com/ayan-de/agent-board/internal/theme"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func newTestApp(t *testing.T) *App {
@@ -23,7 +25,16 @@ func newTestApp(t *testing.T) *App {
 	t.Cleanup(func() { s.Close() })
 
 	cfg := config.SetDefaults()
-	app, err := NewApp(cfg, s)
+	reg := theme.NewRegistry("dark")
+	reg.Register(&theme.Theme{
+		Name: "agentboard", Source: "builtin",
+		Primary: lipgloss.Color("69"), Text: lipgloss.Color("15"),
+		TextMuted: lipgloss.Color("240"), Background: lipgloss.Color("#000"),
+		BackgroundPanel: lipgloss.Color("236"), Border: lipgloss.Color("240"),
+		Success: lipgloss.Color("42"), Accent: lipgloss.Color("213"),
+	})
+
+	app, err := NewApp(cfg, s, reg)
 	if err != nil {
 		t.Fatalf("new app: %v", err)
 	}
