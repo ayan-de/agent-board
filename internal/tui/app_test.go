@@ -18,7 +18,7 @@ func newTestApp(t *testing.T) *App {
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	s, err := store.Open(dbPath, []string{"backlog", "in_progress", "review", "done"})
+	s, err := store.Open(dbPath, []string{"backlog", "in_progress", "review", "done"}, "AGT-")
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}

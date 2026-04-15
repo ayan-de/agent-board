@@ -19,7 +19,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	s, err := store.Open(cfg.DB.Path, cfg.Board.Statuses)
+	s, err := store.Open(cfg.DB.Path, cfg.Board.Statuses, cfg.Board.Prefix)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error opening store: %v\n", err)
 		os.Exit(1)

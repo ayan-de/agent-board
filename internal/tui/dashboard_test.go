@@ -27,7 +27,7 @@ func newTestDashboard(t *testing.T) DashboardModel {
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	s, err := store.Open(dbPath, []string{"backlog", "in_progress", "review", "done"})
+	s, err := store.Open(dbPath, []string{"backlog", "in_progress", "review", "done"}, "AGT-")
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestDashboardViewHidesNotFoundAgents(t *testing.T) {
 func TestDashboardViewNoAgentsFound(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	s, err := store.Open(dbPath, []string{"backlog", "in_progress", "review", "done"})
+	s, err := store.Open(dbPath, []string{"backlog", "in_progress", "review", "done"}, "AGT-")
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
