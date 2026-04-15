@@ -227,16 +227,16 @@ func (m KanbanModel) View() string {
 				}
 
 				line := prefix + ticket.ID + " " + ticket.Title
+				if utf8.RuneCountInString(line) > innerWidth {
+					runes := []rune(line)
+					line = string(runes[:innerWidth-1]) + "…"
+				}
 				if ticket.Agent != "" {
 					color := config.AgentColor(ticket.Agent)
 					if color != "" {
 						dot := lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render("●")
 						line = line + " " + dot
 					}
-				}
-				if utf8.RuneCountInString(line) > innerWidth {
-					runes := []rune(line)
-					line = string(runes[:innerWidth-1]) + "…"
 				}
 
 				if i == m.colIndex && j == m.cursors[i] {
