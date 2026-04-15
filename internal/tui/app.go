@@ -29,6 +29,10 @@ const (
 	viewDashboard
 )
 
+type editorFinishedMsg struct {
+	err error
+}
+
 type App struct {
 	store    *store.Store
 	resolver *keybinding.Resolver
@@ -37,10 +41,11 @@ type App struct {
 	width    int
 	height   int
 
-	focus   focusArea
-	view    viewMode
-	palette CommandPalette
-	quit    bool
+	focus      focusArea
+	view       viewMode
+	palette    CommandPalette
+	quit       bool
+	runCommand tea.Cmd
 
 	kanban       KanbanModel
 	ticketView   TicketViewModel
@@ -111,6 +116,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case tea.KeyMsg:
 		return a.handleKey(msg)
+	case editorFinishedMsg:
+		return a, nil
 	}
 	return a, nil
 }
@@ -118,8 +125,15 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if a.palette.Active() {
 		a.palette, _ = a.palette.Update(msg)
-		if !a.palette.Active() && a.quit {
-			return a, tea.Quit
+		if !a.palette.Active() {
+			if a.quit {
+				return a, tea.Quit
+			}
+			if a.runCommand != nil {
+				cmd := a.runCommand
+				a.runCommand = nil
+				return a, cmd
+			}
 		}
 		return a, nil
 	}
