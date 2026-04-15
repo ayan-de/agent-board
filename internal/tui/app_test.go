@@ -186,3 +186,54 @@ func TestAppNavigationDelegatesToKanban(t *testing.T) {
 		t.Errorf("kanban colIndex = %d, want 0", app.kanban.colIndex)
 	}
 }
+
+func TestAppShowDashboard(t *testing.T) {
+	app := newTestApp(t)
+
+	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	if app.view != viewDashboard {
+		t.Errorf("view = %v, want viewDashboard", app.view)
+	}
+
+	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	if app.view != viewBoard {
+		t.Errorf("view = %v after second 'i', want viewBoard", app.view)
+	}
+}
+
+func TestAppEscapeFromDashboard(t *testing.T) {
+	app := newTestApp(t)
+
+	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	if app.view != viewDashboard {
+		t.Fatalf("view = %v, want viewDashboard", app.view)
+	}
+
+	app.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	if app.view != viewBoard {
+		t.Errorf("view = %v after esc, want viewBoard", app.view)
+	}
+}
+
+func TestAppDashboardViewRenders(t *testing.T) {
+	app := newTestApp(t)
+	app.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+
+	view := app.View()
+	if !strings.Contains(view, "claude-code") {
+		t.Error("dashboard view missing agent name")
+	}
+}
+
+func TestAppWindowResizeDelegatesToDashboard(t *testing.T) {
+	app := newTestApp(t)
+	app.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	if app.dashboard.width != 120 {
+		t.Errorf("dashboard width = %d, want 120", app.dashboard.width)
+	}
+	if app.dashboard.height != 40 {
+		t.Errorf("dashboard height = %d, want 40", app.dashboard.height)
+	}
+}

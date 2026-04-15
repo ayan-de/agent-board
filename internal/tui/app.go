@@ -25,6 +25,7 @@ const (
 	viewBoard viewMode = iota
 	viewTicket
 	viewHelp
+	viewDashboard
 )
 
 type App struct {
@@ -39,6 +40,7 @@ type App struct {
 
 	kanban       KanbanModel
 	ticketView   TicketViewModel
+	dashboard    DashboardModel
 	activeTicket *store.Ticket
 }
 
@@ -54,6 +56,7 @@ func NewApp(cfg *config.Config, s *store.Store) (*App, error) {
 		return nil, fmt.Errorf("tui.newApp: %w", err)
 	}
 
+	agents := config.DetectAgents()
 	a := &App{
 		store:      s,
 		resolver:   resolver,
@@ -62,6 +65,7 @@ func NewApp(cfg *config.Config, s *store.Store) (*App, error) {
 		view:       viewBoard,
 		kanban:     kanban,
 		ticketView: NewTicketViewModel(s, resolver),
+		dashboard:  NewDashboardModel(s, resolver, agents),
 	}
 
 	return a, nil
@@ -78,6 +82,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.height = msg.Height
 		a.kanban, _ = a.kanban.Update(msg)
 		a.ticketView, _ = a.ticketView.Update(msg)
+		a.dashboard, _ = a.dashboard.Update(msg)
 		return a, nil
 	case tea.KeyMsg:
 		return a.handleKey(msg)
@@ -101,8 +106,13 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	if a.view == viewTicket {
+	if a.view == viewTicket && action != keybinding.ActionShowDashboard {
 		a.ticketView, _ = a.ticketView.Update(msg)
+		return a, nil
+	}
+
+	if a.view == viewDashboard && action != keybinding.ActionShowDashboard {
+		a.dashboard, _ = a.dashboard.Update(msg)
 		return a, nil
 	}
 
@@ -122,6 +132,12 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		} else {
 			a.view = viewHelp
 		}
+	case keybinding.ActionShowDashboard:
+		if a.view == viewDashboard {
+			a.view = viewBoard
+		} else {
+			a.view = viewDashboard
+		}
 	default:
 		a.kanban, _ = a.kanban.Update(msg)
 	}
@@ -135,6 +151,8 @@ func (a *App) View() string {
 		return a.renderHelp()
 	case viewTicket:
 		return a.ticketView.View()
+	case viewDashboard:
+		return a.dashboard.View()
 	default:
 		return a.kanban.View()
 	}
