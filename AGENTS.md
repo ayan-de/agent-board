@@ -265,6 +265,7 @@ Agents are spawned by `internal/orchestrator/spawner.go`:
 | `Tab` | Toggle focus between board and agent pane |
 | `1-4` | Jump to column (Backlog, In Progress, Review, Done) |
 | `?` | Show help overlay |
+| `i` | Show agent dashboard overlay |
 | `q` | Quit |
 | `Ctrl+C` | Force quit |
 
