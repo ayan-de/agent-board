@@ -147,10 +147,19 @@ func (m KanbanModel) View() string {
 		return ""
 	}
 
-	colWidth := (m.width - 1) / 4
-	innerWidth := colWidth - 4
-	if innerWidth < 1 {
-		innerWidth = 1
+	colWidth := m.width / 4
+	remainder := m.width % 4
+
+	colInnerWidths := [4]int{}
+	for i := 0; i < 4; i++ {
+		w := colWidth
+		if i >= 4-remainder {
+			w++
+		}
+		colInnerWidths[i] = w - 4
+		if colInnerWidths[i] < 1 {
+			colInnerWidths[i] = 1
+		}
 	}
 
 	availableHeight := m.height - 6
@@ -160,6 +169,7 @@ func (m KanbanModel) View() string {
 
 	cols := make([]string, 4)
 	for i := 0; i < 4; i++ {
+		innerWidth := colInnerWidths[i]
 		var content strings.Builder
 
 		titleStyle := m.styles.FocusedTitle
@@ -215,7 +225,7 @@ func (m KanbanModel) View() string {
 		if i != m.colIndex {
 			colStyle = m.styles.BlurredColumn
 		}
-		colStyle = colStyle.Width(innerWidth).Padding(0, 1)
+		colStyle = colStyle.Width(innerWidth + 2).Padding(0, 1)
 
 		cols[i] = colStyle.Render(content.String())
 	}
