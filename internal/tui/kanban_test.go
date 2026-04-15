@@ -352,3 +352,43 @@ func TestKanbanViewFocusedColumn(t *testing.T) {
 		t.Error("view missing '▸' marker for focused column selected ticket")
 	}
 }
+
+func TestKanbanViewAgentDot(t *testing.T) {
+	m := newTestKanban(t)
+	ctx := context.Background()
+	m.width = 120
+	m.height = 40
+
+	_, _ = m.store.CreateTicket(ctx, store.Ticket{
+		Title:  "Agent Dot Test",
+		Status: "backlog",
+		Agent:  "claude-code",
+	})
+	m, _ = m.Reload()
+
+	view := m.View()
+	if !strings.Contains(view, "Agent Dot Test") {
+		t.Fatal("view missing ticket title")
+	}
+	if !strings.Contains(view, "●") {
+		t.Error("view missing agent dot '●' for assigned ticket")
+	}
+}
+
+func TestKanbanViewNoAgentDot(t *testing.T) {
+	m := newTestKanban(t)
+	ctx := context.Background()
+	m.width = 120
+	m.height = 40
+
+	_, _ = m.store.CreateTicket(ctx, store.Ticket{
+		Title:  "No Agent",
+		Status: "backlog",
+	})
+	m, _ = m.Reload()
+
+	view := m.View()
+	if strings.Contains(view, "●") {
+		t.Error("view should not contain agent dot '●' for unassigned ticket")
+	}
+}

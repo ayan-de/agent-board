@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/keybinding"
 	"github.com/ayan-de/agent-board/internal/store"
 	"github.com/ayan-de/agent-board/internal/theme"
@@ -226,6 +227,13 @@ func (m KanbanModel) View() string {
 				}
 
 				line := prefix + ticket.ID + " " + ticket.Title
+				if ticket.Agent != "" {
+					color := config.AgentColor(ticket.Agent)
+					if color != "" {
+						dot := lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render("●")
+						line = line + " " + dot
+					}
+				}
 				if utf8.RuneCountInString(line) > innerWidth {
 					runes := []rune(line)
 					line = string(runes[:innerWidth-1]) + "…"
