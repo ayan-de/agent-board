@@ -130,6 +130,13 @@ func (m ConfirmModal) View() string {
 		return ""
 	}
 
+	return lipgloss.Place(m.width, m.height,
+		lipgloss.Center, lipgloss.Center,
+		m.ViewBox(),
+	)
+}
+
+func (m ConfirmModal) ViewBox() string {
 	yes := "[ Yes ]"
 	no := "[ No ]"
 
@@ -147,24 +154,18 @@ func (m ConfirmModal) View() string {
 
 	buttons := fmt.Sprintf("  %s    %s", yes, no)
 
+	boxWidth := 44
+	messageStyle := m.styles.Message.Width(boxWidth - 4)
+	wrappedMessage := messageStyle.Render(m.message)
+
 	content := m.styles.Title.Render(m.title) + "\n\n" +
-		m.styles.Message.Render(m.message) + "\n\n" +
+		wrappedMessage + "\n\n" +
 		buttons
 
-	boxWidth := 44
-	content = m.styles.Border.Width(boxWidth).Render(content)
-
-	verticalPad := max((m.height-lipgloss.Height(content))/2, 0)
-	horizPad := max((m.width-boxWidth-4)/2, 0)
-
-	padded := lipgloss.NewStyle().
-		Padding(verticalPad, horizPad).
-		Render(content)
-
-	return padded
+	return m.styles.Border.Width(boxWidth).Render(content)
 }
 
-func (m ConfirmModal) SetSize(w, h int) {
+func (m *ConfirmModal) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 }

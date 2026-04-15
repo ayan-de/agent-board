@@ -242,13 +242,119 @@ func (a *App) View() string {
 	}
 
 	if a.modal.Active() {
-		return lipgloss.NewStyle().
-			Width(a.width).
-			Height(a.height).
-			Render(mainView, a.modal.View())
+		modalBox := a.modal.ViewBox()
+		modalHeight := lipgloss.Height(modalBox)
+		modalWidth := lipgloss.Width(modalBox)
+		bgLines := strings.Split(mainView, "\n")
+
+		for len(bgLines) < a.height {
+			bgLines = append(bgLines, "")
+		}
+
+		startY := (a.height - modalHeight) / 2
+		startX := (a.width - modalWidth) / 2
+
+		var finalView strings.Builder
+		modalLines := strings.Split(modalBox, "\n")
+
+		for i := 0; i < a.height; i++ {
+			bgLine := ""
+			if i < len(bgLines) {
+				bgLine = bgLines[i]
+			}
+
+			if i >= startY && i < startY+modalHeight {
+				row := i - startY
+				modalLine := modalLines[row]
+				finalView.WriteString(overlayLine(bgLine, modalLine, startX))
+			} else {
+				finalView.WriteString(bgLine)
+			}
+			if i < a.height-1 {
+				finalView.WriteString("\n")
+			}
+		}
+		return finalView.String()
 	}
 
 	return mainView
+}
+
+// overlayLine places fg over bg at the given x offset, preserving bg on both sides.
+func overlayLine(bg, fg string, x int) string {
+	bgWidth := lipgloss.Width(bg)
+	fgWidth := lipgloss.Width(fg)
+
+	if x < 0 {
+		x = 0
+	}
+	if x+fgWidth > bgWidth {
+		x = (bgWidth - fgWidth) / 2
+	}
+
+	left := ansiTruncate(bg, x)
+	right := ansiSkip(bg, x+fgWidth)
+
+	return left + fg + right
+}
+
+// ansiTruncate returns the part of the string up to the given visual width.
+func ansiTruncate(s string, limit int) string {
+	var (
+		visualPos int
+		inEscape  bool
+	)
+
+	for i, r := range s {
+		if visualPos >= limit && !inEscape {
+			return s[:i]
+		}
+
+		if r == '\x1b' {
+			inEscape = true
+			continue
+		}
+
+		if inEscape {
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+				inEscape = false
+			}
+			continue
+		}
+
+		visualPos++
+	}
+	return s
+}
+
+// ansiSkip returns the part of the string starting after the given visual width.
+func ansiSkip(s string, skip int) string {
+	var (
+		visualPos int
+		inEscape  bool
+	)
+
+	for i, r := range s {
+		if visualPos >= skip && !inEscape {
+			return s[i:]
+		}
+
+		if r == '\x1b' {
+			inEscape = true
+			continue
+		}
+
+		if inEscape {
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+				inEscape = false
+			}
+			continue
+		}
+
+		// Simplified width check (most TUI chars are width 1)
+		visualPos++
+	}
+	return ""
 }
 
 func (a *App) renderHelp() string {
