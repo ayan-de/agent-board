@@ -46,3 +46,12 @@ func DetectAgents() []DetectedAgent {
 	}
 	return agents
 }
+
+func AgentColor(name string) string {
+	for _, spec := range agentSpecs {
+		if spec.name == name {
+			return spec.logoClr
+		}
+	}
+	return ""
+}

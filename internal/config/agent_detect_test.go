@@ -58,3 +58,23 @@ func TestDetectAgentsNotFoundWhenMissing(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentColor(t *testing.T) {
+	tests := []struct {
+		name string
+		want string
+	}{
+		{"claude-code", "#D97757"},
+		{"opencode", "#808080"},
+		{"codex", "#10A37F"},
+		{"cursor", "#F0DB4F"},
+		{"unknown", ""},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		got := AgentColor(tt.name)
+		if got != tt.want {
+			t.Errorf("AgentColor(%q) = %q, want %q", tt.name, got, tt.want)
+		}
+	}
+}
