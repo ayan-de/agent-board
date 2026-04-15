@@ -113,8 +113,23 @@ func (m DashboardModel) View() string {
 	b.WriteString(title)
 	b.WriteString("\n\n")
 
-	cards := make([]string, len(m.agents))
-	for i, agent := range m.agents {
+	var found []config.DetectedAgent
+	for _, a := range m.agents {
+		if a.Found {
+			found = append(found, a)
+		}
+	}
+
+	if len(found) == 0 {
+		b.WriteString(m.styles.Placeholder.Render("No agents found on $PATH"))
+		b.WriteString("\n\n")
+		footer := m.styles.Footer.Render("r: refresh | Esc: back")
+		b.WriteString(footer)
+		return b.String()
+	}
+
+	cards := make([]string, len(found))
+	for i, agent := range found {
 		cards[i] = m.renderCard(agent)
 	}
 

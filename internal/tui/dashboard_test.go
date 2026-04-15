@@ -24,7 +24,12 @@ func newTestDashboard(t *testing.T) DashboardModel {
 
 	km := keybinding.DefaultKeyMap()
 	resolver := keybinding.NewResolver(km)
-	agents := config.DetectAgents()
+	agents := []config.DetectedAgent{
+		{Name: "claude-code", Binary: "claude", Found: true},
+		{Name: "opencode", Binary: "opencode", Found: true},
+		{Name: "codex", Binary: "codex", Found: false},
+		{Name: "cursor", Binary: "cursor", Found: false},
+	}
 
 	return NewDashboardModel(s, resolver, agents)
 }
@@ -74,10 +79,48 @@ func TestDashboardViewRendersAgentNames(t *testing.T) {
 		t.Fatal("view is empty")
 	}
 
-	for _, name := range []string{"claude-code", "opencode", "codex", "cursor"} {
+	for _, name := range []string{"claude-code", "opencode"} {
 		if !strings.Contains(view, name) {
-			t.Errorf("view missing agent name %q", name)
+			t.Errorf("view missing installed agent name %q", name)
 		}
+	}
+}
+
+func TestDashboardViewHidesNotFoundAgents(t *testing.T) {
+	m := newTestDashboard(t)
+	m.width = 120
+	m.height = 40
+
+	view := m.View()
+	for _, name := range []string{"codex", "cursor"} {
+		if strings.Contains(view, name) {
+			t.Errorf("view should not show uninstalled agent %q", name)
+		}
+	}
+}
+
+func TestDashboardViewNoAgentsFound(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+	s, err := store.Open(dbPath, []string{"backlog", "in_progress", "review", "done"})
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { s.Close() })
+
+	km := keybinding.DefaultKeyMap()
+	resolver := keybinding.NewResolver(km)
+	agents := []config.DetectedAgent{
+		{Name: "claude-code", Binary: "claude", Found: false},
+	}
+
+	m := NewDashboardModel(s, resolver, agents)
+	m.width = 80
+	m.height = 24
+
+	view := m.View()
+	if !strings.Contains(view, "No agents found") {
+		t.Errorf("should show 'No agents found' when none installed, got: %s", view)
 	}
 }
 
@@ -122,10 +165,9 @@ func TestDashboardViewRendersFooter(t *testing.T) {
 
 func TestDashboardRefresh(t *testing.T) {
 	m := newTestDashboard(t)
-	origCount := len(m.agents)
 	m = m.Refresh()
-	if len(m.agents) != origCount {
-		t.Errorf("agents count changed after refresh: %d vs %d", origCount, len(m.agents))
+	if !m.refreshed {
+		t.Error("refreshed flag not set after Refresh()")
 	}
 }
 
