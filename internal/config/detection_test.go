@@ -64,3 +64,29 @@ func TestExtractProjectName(t *testing.T) {
 		})
 	}
 }
+
+func TestDefaultPrefix(t *testing.T) {
+	tests := []struct {
+		name    string
+		project string
+		want    string
+	}{
+		{name: "agent-board", project: "agent-board", want: "AGE-"},
+		{name: "my project", project: "my-project", want: "MYP-"},
+		{name: "short", project: "ab", want: "AB-"},
+		{name: "single char", project: "x", want: "X-"},
+		{name: "with numbers", project: "app2", want: "APP-"},
+		{name: "empty falls back to AGT", project: "", want: "AGT-"},
+		{name: "special chars only", project: "---", want: "AGT-"},
+		{name: "long name truncated", project: "my-super-long-project-name", want: "MYS-"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := DefaultPrefix(tt.project)
+			if got != tt.want {
+				t.Errorf("DefaultPrefix(%q) = %q, want %q", tt.project, got, tt.want)
+			}
+		})
+	}
+}

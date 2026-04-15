@@ -105,6 +105,9 @@ theme = "dracula"
 	if cfg.Agent.Default != "opencode" {
 		t.Errorf("Agent.Default should retain default %q, got %q", "opencode", cfg.Agent.Default)
 	}
+	if cfg.Board.Prefix != "" {
+		t.Errorf("Board.Prefix should be empty when not set in config, got %q", cfg.Board.Prefix)
+	}
 }
 
 func TestLoadFromFileMissing(t *testing.T) {
@@ -397,6 +400,36 @@ func TestLoadFromDirNoConfigsExist(t *testing.T) {
 	}
 	if cfg.Agent.Default != "opencode" {
 		t.Errorf("Agent.Default = %q, want default %q", cfg.Agent.Default, "opencode")
+	}
+	if cfg.Board.Prefix != "NEW-" {
+		t.Errorf("Board.Prefix = %q, want default %q", cfg.Board.Prefix, "NEW-")
+	}
+}
+
+func TestLoadFromDirWithCustomPrefix(t *testing.T) {
+	baseDir := t.TempDir()
+	projectName := "my-app"
+
+	projDir := filepath.Join(baseDir, "projects", projectName)
+	if err := os.MkdirAll(projDir, 0755); err != nil {
+		t.Fatalf("mkdir project: %v", err)
+	}
+	projCfg := []byte(`
+[board]
+prefix = "CUSTOM-"
+`)
+	projPath := filepath.Join(projDir, "config.toml")
+	if err := os.WriteFile(projPath, projCfg, 0644); err != nil {
+		t.Fatalf("write project config: %v", err)
+	}
+
+	cfg, err := LoadFromDir(baseDir, projectName)
+	if err != nil {
+		t.Fatalf("LoadFromDir: %v", err)
+	}
+
+	if cfg.Board.Prefix != "CUSTOM-" {
+		t.Errorf("Board.Prefix = %q, want %q", cfg.Board.Prefix, "CUSTOM-")
 	}
 }
 

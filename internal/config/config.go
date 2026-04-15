@@ -44,6 +44,10 @@ func LoadFromDir(baseDir, projectName string) (*Config, error) {
 		cfg.DB.Path = filepath.Join(baseDir, "projects", projectName, "board.db")
 	}
 
+	if cfg.Board.Prefix == "" {
+		cfg.Board.Prefix = DefaultPrefix(projectName)
+	}
+
 	cfg.ConfigPath = globalPath
 	cfg.ProjectConfigPath = projPath
 

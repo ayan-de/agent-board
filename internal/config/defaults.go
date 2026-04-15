@@ -10,6 +10,7 @@ func SetDefaults() *Config {
 		},
 		Board: BoardConfig{
 			Statuses: []string{"backlog", "in_progress", "review", "done"},
+			Prefix:   "",
 		},
 		Agent: AgentConfig{
 			Default: "opencode",
