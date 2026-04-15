@@ -213,9 +213,13 @@ func (a *App) View() string {
 	}
 
 	if paletteLines > 0 {
-		return mainView + "\n" + paletteView
+		return lipgloss.JoinVertical(lipgloss.Bottom,
+			lipgloss.NewStyle().Height(a.height-paletteLines).Render(mainView),
+			paletteView,
+		)
 	}
-	return mainView
+
+	return lipgloss.NewStyle().Height(a.height).Render(mainView)
 }
 
 func (a *App) renderHelp() string {

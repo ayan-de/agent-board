@@ -52,7 +52,7 @@ func (p CommandPalette) DropdownHeight() int {
 	if h > p.maxHeight {
 		h = p.maxHeight
 	}
-	return h
+	return h + 2 // +2 for boarder top/bottom
 }
 
 func (p *CommandPalette) Open() {
@@ -83,8 +83,15 @@ func (p *CommandPalette) handleKey(msg tea.KeyMsg) (CommandPalette, tea.Cmd) {
 		return *p, nil
 	case tea.KeyEnter:
 		if len(p.filtered) > 0 && p.cursor < len(p.filtered) {
+			item := p.filtered[p.cursor]
+			if strings.HasPrefix(item.ID, "CMD:") {
+				p.input = strings.TrimPrefix(item.ID, "CMD:")
+				p.filterItems()
+				p.cursor = 0
+				return *p, nil
+			}
 			if p.onSelect != nil {
-				p.onSelect(p.filtered[p.cursor])
+				p.onSelect(item)
 			}
 		}
 		p.active = false
@@ -150,22 +157,44 @@ func (p *CommandPalette) handleKey(msg tea.KeyMsg) (CommandPalette, tea.Cmd) {
 
 func (p *CommandPalette) filterItems() {
 	p.filtered = nil
+
+	// If input is empty, show all available commands
 	if p.input == "" {
+		for _, cmd := range p.commands.All() {
+			p.filtered = append(p.filtered, Item{
+				Label:       cmd.Name,
+				Description: cmd.Description,
+				ID:          "CMD:" + cmd.Prefix,
+			})
+		}
 		return
 	}
 
+	searchQuery := strings.ToLower(p.input)
+
 	for _, cmd := range p.commands.All() {
-		if cmd.Items == nil {
-			continue
+		// 1. Prefix match -> show command items
+		if cmd.Prefix != "" && strings.HasPrefix(p.input, cmd.Prefix) {
+			query := strings.TrimPrefix(p.input, cmd.Prefix)
+			if cmd.Items != nil {
+				items := cmd.Items()
+				for _, item := range items {
+					if query == "" || strings.Contains(strings.ToLower(item.Label), strings.ToLower(query)) {
+						p.filtered = append(p.filtered, item)
+					}
+				}
+			}
 		}
-		if !strings.HasPrefix(p.input, cmd.Prefix) && cmd.Prefix != "" {
-			continue
-		}
-		items := cmd.Items()
-		query := strings.TrimPrefix(p.input, cmd.Prefix)
-		for _, item := range items {
-			if query == "" || strings.Contains(strings.ToLower(item.Label), strings.ToLower(query)) {
-				p.filtered = append(p.filtered, item)
+
+		// 2. Name match -> show command itself as an option
+		if strings.Contains(strings.ToLower(cmd.Name), searchQuery) || strings.Contains(strings.ToLower(cmd.Prefix), searchQuery) {
+			// Avoid adding the command if it's already the active prefix and we're showing its items
+			if p.input != cmd.Prefix {
+				p.filtered = append(p.filtered, Item{
+					Label:       cmd.Name,
+					Description: cmd.Description,
+					ID:          "CMD:" + cmd.Prefix,
+				})
 			}
 		}
 	}
@@ -185,7 +214,7 @@ func (p CommandPalette) View() string {
 
 	inputStyle := lipgloss.NewStyle().
 		Foreground(primary).
-		Width(p.width - 2)
+		Bold(true)
 
 	inputLine := inputStyle.Render(": " + p.input)
 
@@ -212,13 +241,27 @@ func (p CommandPalette) View() string {
 			desc = fmt.Sprintf("  %s", lipgloss.NewStyle().Foreground(borderColor).Render(item.Description))
 		}
 
-		line := prefix + label + desc
+		var line string
 		if i == p.cursor {
-			line = lipgloss.NewStyle().Foreground(primary).Bold(true).Render(prefix+label) + desc
+			line = lipgloss.NewStyle().
+				Background(primary).
+				Foreground(lipgloss.Color("15")).
+				Bold(true).
+				Render(prefix+label) + desc
+		} else {
+			line = prefix + label + desc
 		}
 		b.WriteString(line)
-		b.WriteString("\n")
+		if i < maxShow-1 {
+			b.WriteString("\n")
+		}
 	}
 
-	return b.String() + inputLine
+	dropdown := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(borderColor).
+		Padding(0, 1).
+		Render(b.String())
+
+	return dropdown + "\n" + inputLine
 }
