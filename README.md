@@ -6,7 +6,7 @@
 
 **AgentBoard** is a premium, terminal-based Kanban board designed to orchestrate and manage AI coding agents. It provides a visual development workflow for modern software engineering, bridging the gap between project management and automated code generation.
 
-![AgentBoard TUI Mockup](<img width="1888" height="663" alt="screenshot-2026-03-14_21-42-45" src="https://github.com/user-attachments/assets/9f2ae1d0-b42d-47eb-8673-80e776fd8b5a" />
+![AgentBoard TUI Mockup](<img width="1863" height="750" alt="screenshot-2026-04-16_23-12-03" src="https://github.com/user-attachments/assets/95cd3ac9-d3a4-4c49-91b6-dff6b6c4988a" />
 )
 
 ---
