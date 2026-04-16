@@ -181,7 +181,7 @@ func (c TicketCardModel) renderFooter(width int) string {
 	}
 	priorityIndicator := lipgloss.NewStyle().Foreground(priorityColor).Render(fmt.Sprintf("⬥ %s", c.ticket.Priority))
 
-	parts := []string{}
+	leftParts := []string{}
 
 	if c.ticket.AgentActive {
 		barWidth := width / 4
@@ -189,22 +189,35 @@ func (c TicketCardModel) renderFooter(width int) string {
 			barWidth = 4
 		}
 		bar := ActivityBar(c.frame, barWidth, c.theme)
-		parts = append(parts, bar)
+		leftParts = append(leftParts, bar)
 	}
 
-	parts = append(parts, priorityIndicator)
+	leftParts = append(leftParts, priorityIndicator)
+	leftSide := strings.Join(leftParts, " ")
 
-	if c.ticket.Agent != "" {
-		dot := agentDot(c.ticket.Agent, c.ticket.AgentActive)
-		agentName := agentNameStyled(c.ticket.Agent)
-		parts = append(parts, dot+agentName)
+	if c.ticket.Agent == "" {
+		if lipgloss.Width(leftSide) > width {
+			return lipgloss.NewStyle().MaxWidth(width).Render(leftSide)
+		}
+		return leftSide
 	}
 
-	footer := strings.Join(parts, " ")
+	dot := agentDot(c.ticket.Agent, c.ticket.AgentActive)
+	agentName := agentNameStyled(c.ticket.Agent)
+	rightSide := dot + agentName
+
+	leftWidth := lipgloss.Width(leftSide)
+	rightWidth := lipgloss.Width(rightSide)
+
+	spaceWidth := width - leftWidth - rightWidth
+	if spaceWidth < 1 {
+		spaceWidth = 1
+	}
+
+	footer := leftSide + strings.Repeat(" ", spaceWidth) + rightSide
 
 	if lipgloss.Width(footer) > width {
-		runes := []rune(footer)
-		footer = string(runes[:width])
+		return lipgloss.NewStyle().MaxWidth(width).Render(footer)
 	}
 
 	return footer
