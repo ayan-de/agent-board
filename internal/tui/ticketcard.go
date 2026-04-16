@@ -24,6 +24,7 @@ type TicketCardModel struct {
 type TicketCardStyles struct {
 	SelectedBorder lipgloss.Style
 	NormalBorder   lipgloss.Style
+	TicketID       lipgloss.Style
 	Title          lipgloss.Style
 	Description    lipgloss.Style
 	Metadata       lipgloss.Style
@@ -38,6 +39,7 @@ func DefaultTicketCardStyles() TicketCardStyles {
 		NormalBorder: lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("240")),
+		TicketID:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("69")),
 		Title:       lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")),
 		Description: lipgloss.NewStyle().Foreground(lipgloss.Color("252")),
 		Metadata:    lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
@@ -58,6 +60,7 @@ func NewTicketCardStyles(t *theme.Theme) TicketCardStyles {
 		NormalBorder: lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(t.Border),
+		TicketID:    lipgloss.NewStyle().Bold(true).Foreground(t.Primary),
 		Title:       lipgloss.NewStyle().Bold(true).Foreground(t.Text),
 		Description: lipgloss.NewStyle().Foreground(t.Text),
 		Metadata:    lipgloss.NewStyle().Foreground(t.TextMuted),
@@ -124,8 +127,9 @@ func (c TicketCardModel) innerWidth() int {
 func (c TicketCardModel) renderCompact() string {
 	iw := c.innerWidth()
 
-	titleText := c.ticket.ID + " " + truncateRunes(c.ticket.Title, iw-utf8.RuneCountInString(c.ticket.ID)-1)
-	titleLine := c.styles.Title.Render(titleText)
+	idText := c.styles.TicketID.Render(c.ticket.ID)
+	titleText := truncateRunes(c.ticket.Title, iw-utf8.RuneCountInString(c.ticket.ID)-1)
+	titleLine := idText + " " + c.styles.Title.Render(titleText)
 
 	descText := ""
 	if c.ticket.Description != "" {
@@ -151,7 +155,8 @@ func (c TicketCardModel) renderCompact() string {
 func (c TicketCardModel) renderExpanded() string {
 	iw := c.innerWidth()
 
-	titleLine := c.styles.Title.Render(c.ticket.ID + " " + c.ticket.Title)
+	idText := c.styles.TicketID.Render(c.ticket.ID)
+	titleLine := idText + " " + c.styles.Title.Render(c.ticket.Title)
 
 	sepLine := strings.Repeat("─", iw)
 
