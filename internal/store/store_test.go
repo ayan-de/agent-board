@@ -678,6 +678,74 @@ func TestEndSessionNotFound(t *testing.T) {
 	}
 }
 
+func TestOpenAddsAgentActiveColumn(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	var count int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('tickets') WHERE name='agent_active'").Scan(&count)
+	if err != nil {
+		t.Fatalf("pragma_table_info query failed: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("agent_active column should exist in tickets table, got count=%d", count)
+	}
+}
+
+func TestCreateTicketAgentActiveDefault(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	ticket, err := s.CreateTicket(context.Background(), Ticket{
+		Title: "Active test", Status: "backlog",
+	})
+	if err != nil {
+		t.Fatalf("CreateTicket: %v", err)
+	}
+	if ticket.AgentActive {
+		t.Error("AgentActive should default to false")
+	}
+}
+
+func TestSetAgentActive(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	ticket, _ := s.CreateTicket(context.Background(), Ticket{
+		Title: "Active test", Status: "backlog",
+	})
+
+	err := s.SetAgentActive(context.Background(), ticket.ID, true)
+	if err != nil {
+		t.Fatalf("SetAgentActive: %v", err)
+	}
+
+	got, _ := s.GetTicket(context.Background(), ticket.ID)
+	if !got.AgentActive {
+		t.Error("AgentActive should be true after SetAgentActive(true)")
+	}
+
+	err = s.SetAgentActive(context.Background(), ticket.ID, false)
+	if err != nil {
+		t.Fatalf("SetAgentActive false: %v", err)
+	}
+
+	got, _ = s.GetTicket(context.Background(), ticket.ID)
+	if got.AgentActive {
+		t.Error("AgentActive should be false after SetAgentActive(false)")
+	}
+}
+
+func TestSetAgentActiveNotFound(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	err := s.SetAgentActive(context.Background(), "AGT-99", true)
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("error = %v, want ErrNotFound", err)
+	}
+}
+
 func TestDeleteTicketCascadesSessions(t *testing.T) {
 	s := openTestDB(t)
 	defer s.Close()

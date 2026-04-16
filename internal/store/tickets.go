@@ -18,6 +18,7 @@ type Ticket struct {
 	Branch      string
 	Tags        []string
 	DependsOn   []string
+	AgentActive bool
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
@@ -39,6 +40,7 @@ type ticketRow struct {
 	Branch      string
 	Tags        string
 	DependsOn   string
+	AgentActive bool
 	CreatedAt   string
 	UpdatedAt   string
 }
@@ -63,6 +65,7 @@ func (r ticketRow) toTicket() (Ticket, error) {
 		Branch:      r.Branch,
 		Tags:        tags,
 		DependsOn:   dependsOn,
+		AgentActive: r.AgentActive,
 	}, nil
 }
 
@@ -127,9 +130,9 @@ func (s *Store) CreateTicket(ctx context.Context, t Ticket) (Ticket, error) {
 	t.UpdatedAt = now
 
 	_, err = s.db.ExecContext(ctx,
-		`INSERT INTO tickets (id, title, description, status, priority, agent, branch, tags, depends_on, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		t.ID, t.Title, t.Description, t.Status, t.Priority, t.Agent, t.Branch, string(tags), string(deps), t.CreatedAt, t.UpdatedAt,
+		`INSERT INTO tickets (id, title, description, status, priority, agent, branch, tags, depends_on, agent_active, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		t.ID, t.Title, t.Description, t.Status, t.Priority, t.Agent, t.Branch, string(tags), string(deps), t.AgentActive, t.CreatedAt, t.UpdatedAt,
 	)
 	if err != nil {
 		return Ticket{}, fmt.Errorf("store.createTicket: %w", err)
@@ -141,9 +144,9 @@ func (s *Store) CreateTicket(ctx context.Context, t Ticket) (Ticket, error) {
 func (s *Store) GetTicket(ctx context.Context, id string) (Ticket, error) {
 	var r ticketRow
 	err := s.db.QueryRowContext(ctx,
-		"SELECT id, title, description, status, priority, agent, branch, tags, depends_on, created_at, updated_at FROM tickets WHERE id = ?",
+		"SELECT id, title, description, status, priority, agent, branch, tags, depends_on, agent_active, created_at, updated_at FROM tickets WHERE id = ?",
 		id,
-	).Scan(&r.ID, &r.Title, &r.Description, &r.Status, &r.Priority, &r.Agent, &r.Branch, &r.Tags, &r.DependsOn, &r.CreatedAt, &r.UpdatedAt)
+	).Scan(&r.ID, &r.Title, &r.Description, &r.Status, &r.Priority, &r.Agent, &r.Branch, &r.Tags, &r.DependsOn, &r.AgentActive, &r.CreatedAt, &r.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return Ticket{}, fmt.Errorf("store.getTicket %s: %w", id, ErrNotFound)
 	}
@@ -160,7 +163,7 @@ func (s *Store) GetTicket(ctx context.Context, id string) (Ticket, error) {
 }
 
 func (s *Store) ListTickets(ctx context.Context, filters TicketFilters) ([]Ticket, error) {
-	query := "SELECT id, title, description, status, priority, agent, branch, tags, depends_on, created_at, updated_at FROM tickets WHERE 1=1"
+	query := "SELECT id, title, description, status, priority, agent, branch, tags, depends_on, agent_active, created_at, updated_at FROM tickets WHERE 1=1"
 	var args []interface{}
 
 	if filters.Status != "" {
@@ -191,7 +194,7 @@ func (s *Store) ListTickets(ctx context.Context, filters TicketFilters) ([]Ticke
 	var tickets []Ticket
 	for rows.Next() {
 		var r ticketRow
-		if err := rows.Scan(&r.ID, &r.Title, &r.Description, &r.Status, &r.Priority, &r.Agent, &r.Branch, &r.Tags, &r.DependsOn, &r.CreatedAt, &r.UpdatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Title, &r.Description, &r.Status, &r.Priority, &r.Agent, &r.Branch, &r.Tags, &r.DependsOn, &r.AgentActive, &r.CreatedAt, &r.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("store.listTickets: %w", err)
 		}
 		ticket, err := r.toTicket()
@@ -248,6 +251,23 @@ func (s *Store) DeleteTicket(ctx context.Context, id string) error {
 	affected, _ := result.RowsAffected()
 	if affected == 0 {
 		return fmt.Errorf("store.deleteTicket %s: %w", id, ErrNotFound)
+	}
+
+	return nil
+}
+
+func (s *Store) SetAgentActive(ctx context.Context, id string, active bool) error {
+	result, err := s.db.ExecContext(ctx,
+		"UPDATE tickets SET agent_active = ?, updated_at = ? WHERE id = ?",
+		active, time.Now(), id,
+	)
+	if err != nil {
+		return fmt.Errorf("store.setAgentActive: %w", err)
+	}
+
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return fmt.Errorf("store.setAgentActive %s: %w", id, ErrNotFound)
 	}
 
 	return nil

@@ -36,5 +36,14 @@ func (s *Store) migrate() error {
 		return err
 	}
 
+	var hasCol bool
+	err = s.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('tickets') WHERE name='agent_active'").Scan(&hasCol)
+	if err == nil && !hasCol {
+		_, err = s.db.Exec("ALTER TABLE tickets ADD COLUMN agent_active INTEGER DEFAULT 0")
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
