@@ -191,10 +191,12 @@ func (c TicketCardModel) renderFooter(width int) string {
 		}
 		bar := ActivityBar(c.frame, barWidth, c.theme)
 		dot := agentDot(c.ticket.Agent, true)
-		right = bar + " " + dot
+		agentName := agentNameStyled(c.ticket.Agent)
+		right = bar + " " + dot + agentName
 	} else if c.ticket.Agent != "" {
 		dot := agentDot(c.ticket.Agent, false)
-		right = dot + " " + c.ticket.Agent
+		agentName := agentNameStyled(c.ticket.Agent)
+		right = dot + " " + agentName
 	}
 
 	if right == "" {

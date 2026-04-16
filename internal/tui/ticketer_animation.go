@@ -69,6 +69,14 @@ func agentDot(agent string, active bool) string {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render("○")
 }
 
+func agentNameStyled(agent string) string {
+	if agent == "" {
+		return ""
+	}
+	color := config.AgentColor(agent)
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render(agent)
+}
+
 func animationTick() tea.Cmd {
 	return tea.Tick(120*time.Millisecond, func(_ time.Time) tea.Msg {
 		return tickMsg{}
