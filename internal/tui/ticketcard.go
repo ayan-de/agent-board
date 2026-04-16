@@ -181,36 +181,33 @@ func (c TicketCardModel) renderFooter(width int) string {
 	}
 	priorityIndicator := lipgloss.NewStyle().Foreground(priorityColor).Render(fmt.Sprintf("⬥ %s", c.ticket.Priority))
 
-	left := priorityIndicator
-	right := ""
+	parts := []string{}
 
 	if c.ticket.AgentActive {
-		barWidth := width / 2
+		barWidth := width / 4
 		if barWidth < 4 {
 			barWidth = 4
 		}
 		bar := ActivityBar(c.frame, barWidth, c.theme)
-		dot := agentDot(c.ticket.Agent, true)
+		parts = append(parts, bar)
+	}
+
+	parts = append(parts, priorityIndicator)
+
+	if c.ticket.Agent != "" {
+		dot := agentDot(c.ticket.Agent, c.ticket.AgentActive)
 		agentName := agentNameStyled(c.ticket.Agent)
-		right = bar + " " + dot + agentName
-	} else if c.ticket.Agent != "" {
-		dot := agentDot(c.ticket.Agent, false)
-		agentName := agentNameStyled(c.ticket.Agent)
-		right = dot + " " + agentName
+		parts = append(parts, dot+agentName)
 	}
 
-	if right == "" {
-		return left
+	footer := strings.Join(parts, " ")
+
+	if lipgloss.Width(footer) > width {
+		runes := []rune(footer)
+		footer = string(runes[:width])
 	}
 
-	leftWidth := lipgloss.Width(left)
-	rightWidth := lipgloss.Width(right)
-	gap := width - leftWidth - rightWidth
-	if gap < 1 {
-		gap = 1
-	}
-
-	return left + strings.Repeat(" ", gap) + right
+	return footer
 }
 
 func truncateRunes(s string, maxLen int) string {
