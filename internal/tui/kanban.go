@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"unicode/utf8"
 
-	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/keybinding"
 	"github.com/ayan-de/agent-board/internal/store"
 	"github.com/ayan-de/agent-board/internal/theme"
@@ -30,14 +28,16 @@ type KanbanStyles struct {
 }
 
 type KanbanModel struct {
-	store    *store.Store
-	resolver *keybinding.Resolver
-	width    int
-	height   int
-	colIndex int
-	cursors  [4]int
-	columns  [4][]store.Ticket
-	styles   KanbanStyles
+	store     *store.Store
+	resolver  *keybinding.Resolver
+	width     int
+	height    int
+	colIndex  int
+	cursors   [4]int
+	columns   [4][]store.Ticket
+	styles    KanbanStyles
+	animFrame int
+	theme     *theme.Theme
 }
 
 func DefaultKanbanStyles() KanbanStyles {
@@ -95,6 +95,7 @@ func NewKanbanModel(s *store.Store, resolver *keybinding.Resolver, t *theme.Them
 		store:    s,
 		resolver: resolver,
 		styles:   NewKanbanStyles(t),
+		theme:    t,
 	}
 	m, err := m.loadColumns()
 	if err != nil {
@@ -104,6 +105,9 @@ func NewKanbanModel(s *store.Store, resolver *keybinding.Resolver, t *theme.Them
 }
 
 func (m KanbanModel) Init() tea.Cmd {
+	if m.anyAgentActive() {
+		return animationTick()
+	}
 	return nil
 }
 
@@ -115,6 +119,12 @@ func (m KanbanModel) Update(msg tea.Msg) (KanbanModel, tea.Cmd) {
 		return m, nil
 	case tea.KeyMsg:
 		return m.handleKey(msg)
+	case tickMsg:
+		m.animFrame = (m.animFrame + 1) % AnimFrames
+		if m.anyAgentActive() {
+			return m, animationTick()
+		}
+		return m, nil
 	}
 	return m, nil
 }
@@ -210,42 +220,36 @@ func (m KanbanModel) View() string {
 		if len(tickets) == 0 {
 			content.WriteString(m.styles.EmptyColumn.Render("(empty)"))
 		} else {
-			maxShow := availableHeight
-			overflow := len(tickets) > maxShow
-			if overflow {
-				maxShow = availableHeight - 1
-				if maxShow < 0 {
-					maxShow = 0
-				}
+			cardWidth := innerWidth
+			lineHeight := 4
+			expandedIdx := -1
+			if i == m.colIndex && len(tickets) > 0 {
+				expandedIdx = m.cursors[i]
 			}
 
+			maxShow := 0
+			usedLines := 0
+			for j := 0; j < len(tickets); j++ {
+				h := lineHeight
+				if j == expandedIdx {
+					card := NewTicketCardModel(tickets[j], true, true, cardWidth, m.animFrame, m.theme)
+					h = card.ExpandedHeight() + 1
+				}
+				if usedLines+h > availableHeight {
+					break
+				}
+				usedLines += h
+				maxShow = j + 1
+			}
+
+			overflow := len(tickets) > maxShow
+
 			for j := 0; j < len(tickets) && j < maxShow; j++ {
-				ticket := tickets[j]
-				prefix := "  "
-				if i == m.colIndex && j == m.cursors[i] {
-					prefix = "▸ "
-				}
+				isSelected := i == m.colIndex && j == m.cursors[i]
+				isExpanded := j == expandedIdx
 
-				line := prefix + ticket.ID + " " + ticket.Title
-				if utf8.RuneCountInString(line) > innerWidth {
-					runes := []rune(line)
-					line = string(runes[:innerWidth-1]) + "…"
-				}
-				if ticket.Agent != "" {
-					color := config.AgentColor(ticket.Agent)
-					if color != "" {
-						dot := lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render("●")
-						line = line + " " + dot
-					}
-				}
-
-				if i == m.colIndex && j == m.cursors[i] {
-					line = m.styles.SelectedTicket.Render(line)
-				} else {
-					line = m.styles.Ticket.Render(line)
-				}
-
-				content.WriteString(line)
+				card := NewTicketCardModel(tickets[j], isSelected, isExpanded, cardWidth, m.animFrame, m.theme)
+				content.WriteString(card.Render())
 				content.WriteString("\n")
 			}
 
@@ -300,4 +304,19 @@ func (m KanbanModel) loadColumns() (KanbanModel, error) {
 		}
 	}
 	return m, nil
+}
+
+func (m KanbanModel) anyAgentActive() bool {
+	for _, col := range m.columns {
+		for _, t := range col {
+			if t.AgentActive {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (m KanbanModel) NeedsTick() bool {
+	return m.anyAgentActive()
 }

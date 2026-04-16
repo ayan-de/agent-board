@@ -328,8 +328,12 @@ func TestKanbanViewTruncation(t *testing.T) {
 	m.width = 80
 	m.height = 40
 
-	longTitle := strings.Repeat("A", 100)
-	_, _ = m.store.CreateTicket(ctx, store.Ticket{Title: longTitle, Status: "backlog"})
+	longDesc := strings.Repeat("A", 100)
+	_, _ = m.store.CreateTicket(ctx, store.Ticket{
+		Title:       "Short",
+		Description: longDesc,
+		Status:      "in_progress",
+	})
 	m, _ = m.Reload()
 
 	view := m.View()
@@ -348,8 +352,11 @@ func TestKanbanViewFocusedColumn(t *testing.T) {
 	m, _ = m.Reload()
 
 	view := m.View()
-	if !strings.Contains(view, "▸") {
-		t.Error("view missing '▸' marker for focused column selected ticket")
+	if !strings.Contains(view, "Focused") {
+		t.Error("view missing ticket title 'Focused' for selected ticket")
+	}
+	if !strings.Contains(view, "╭") {
+		t.Error("view should have bordered cards")
 	}
 }
 
@@ -360,9 +367,10 @@ func TestKanbanViewAgentDot(t *testing.T) {
 	m.height = 40
 
 	_, _ = m.store.CreateTicket(ctx, store.Ticket{
-		Title:  "Agent Dot Test",
-		Status: "backlog",
-		Agent:  "claude-code",
+		Title:       "Agent Dot Test",
+		Status:      "backlog",
+		Agent:       "claude-code",
+		AgentActive: true,
 	})
 	m, _ = m.Reload()
 
@@ -390,5 +398,8 @@ func TestKanbanViewNoAgentDot(t *testing.T) {
 	view := m.View()
 	if strings.Contains(view, "●") {
 		t.Error("view should not contain agent dot '●' for unassigned ticket")
+	}
+	if strings.Contains(view, "○") {
+		t.Error("view should not contain idle dot '○' for unassigned ticket")
 	}
 }
