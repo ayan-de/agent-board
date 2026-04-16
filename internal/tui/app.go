@@ -100,6 +100,7 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry) (*App, erro
 func (a *App) applyTheme() {
 	t := a.registry.Active()
 	a.kanban.styles = NewKanbanStyles(t)
+	a.kanban.theme = t
 	a.ticketView.styles = NewTicketViewStyles(t)
 	a.dashboard.styles = NewDashboardStyles(t)
 	a.palette.SetTheme(t)
@@ -125,6 +126,16 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.handleKey(msg)
 	case editorFinishedMsg:
 		return a, nil
+	case tickMsg:
+		if a.view == viewBoard {
+			var cmd tea.Cmd
+			a.kanban, cmd = a.kanban.Update(msg)
+			return a, cmd
+		}
+		return a, nil
+	}
+	if a.kanban.NeedsTick() && a.view == viewBoard {
+		return a, animationTick()
 	}
 	return a, nil
 }
