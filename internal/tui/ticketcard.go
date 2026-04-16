@@ -92,7 +92,7 @@ func NewTicketCardModel(ticket store.Ticket, selected bool, expanded bool, width
 }
 
 func (c TicketCardModel) CompactHeight() int {
-	return 3
+	return 2
 }
 
 func (c TicketCardModel) ExpandedHeight() int {
@@ -131,18 +131,9 @@ func (c TicketCardModel) renderCompact() string {
 	titleText := truncateRunes(c.ticket.Title, iw-utf8.RuneCountInString(c.ticket.ID)-1)
 	titleLine := idText + " " + c.styles.Title.Render(titleText)
 
-	descText := ""
-	if c.ticket.Description != "" {
-		descText = truncateRunes(c.ticket.Description, iw-1)
-		if utf8.RuneCountInString(c.ticket.Description) > iw-1 {
-			descText = descText + "…"
-		}
-	}
-	descLine := c.styles.Description.Render(descText)
-
 	footerLine := c.renderFooter(iw)
 
-	content := titleLine + "\n" + descLine + "\n" + footerLine
+	content := titleLine + "\n" + footerLine
 
 	borderStyle := c.styles.NormalBorder
 	if c.selected {

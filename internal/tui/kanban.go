@@ -221,7 +221,7 @@ func (m KanbanModel) View() string {
 			content.WriteString(m.styles.EmptyColumn.Render("(empty)"))
 		} else {
 			cardWidth := innerWidth
-			lineHeight := 4
+			compactRendered := 2 + 2 + 1
 			expandedIdx := -1
 			if i == m.colIndex && len(tickets) > 0 {
 				expandedIdx = m.cursors[i]
@@ -230,7 +230,7 @@ func (m KanbanModel) View() string {
 			maxShow := 0
 			usedLines := 0
 			for j := 0; j < len(tickets); j++ {
-				h := lineHeight
+				h := compactRendered
 				if j == expandedIdx {
 					card := NewTicketCardModel(tickets[j], true, true, cardWidth, m.animFrame, m.theme)
 					h = card.ExpandedHeight() + 1

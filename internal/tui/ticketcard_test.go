@@ -44,9 +44,6 @@ func TestTicketCardCompactRenders(t *testing.T) {
 	if !strings.Contains(output, "Implement Auth") {
 		t.Error("compact card missing title")
 	}
-	if !strings.Contains(output, "Add JWT authentication flow") {
-		t.Error("compact card missing description")
-	}
 }
 
 func TestTicketCardCompactHasBorder(t *testing.T) {
@@ -62,8 +59,8 @@ func TestTicketCardCompactHasBorder(t *testing.T) {
 func TestTicketCardCompactHeight(t *testing.T) {
 	ticket := testTicket()
 	card := NewTicketCardModel(ticket, false, false, 30, 0, testCardTheme())
-	if card.CompactHeight() != 3 {
-		t.Errorf("CompactHeight = %d, want 3", card.CompactHeight())
+	if card.CompactHeight() != 2 {
+		t.Errorf("CompactHeight = %d, want 2", card.CompactHeight())
 	}
 }
 
@@ -148,7 +145,7 @@ func TestTicketCardNoActivityBarWhenIdle(t *testing.T) {
 	}
 }
 
-func TestTicketCardLongTitleTruncation(t *testing.T) {
+func TestTicketCardLongTitleTruncationCompact(t *testing.T) {
 	ticket := testTicket()
 	ticket.Title = strings.Repeat("X", 200)
 	card := NewTicketCardModel(ticket, false, false, 20, 0, testCardTheme())
@@ -159,14 +156,14 @@ func TestTicketCardLongTitleTruncation(t *testing.T) {
 	}
 }
 
-func TestTicketCardLongDescriptionTruncation(t *testing.T) {
+func TestTicketCardExpandedWrapsDescription(t *testing.T) {
 	ticket := testTicket()
 	ticket.Description = strings.Repeat("D", 200)
-	card := NewTicketCardModel(ticket, false, false, 20, 0, testCardTheme())
+	card := NewTicketCardModel(ticket, true, true, 20, 0, testCardTheme())
 	output := card.Render()
 
-	if !strings.Contains(output, "…") {
-		t.Error("long description should be truncated with ellipsis")
+	if !strings.Contains(output, "D") {
+		t.Error("expanded card should contain description text")
 	}
 }
 

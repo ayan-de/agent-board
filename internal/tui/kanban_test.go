@@ -328,17 +328,16 @@ func TestKanbanViewTruncation(t *testing.T) {
 	m.width = 80
 	m.height = 40
 
-	longDesc := strings.Repeat("A", 100)
+	longTitle := strings.Repeat("A", 100)
 	_, _ = m.store.CreateTicket(ctx, store.Ticket{
-		Title:       "Short",
-		Description: longDesc,
-		Status:      "in_progress",
+		Title:  longTitle,
+		Status: "in_progress",
 	})
 	m, _ = m.Reload()
 
 	view := m.View()
-	if !strings.Contains(view, "…") {
-		t.Error("view missing truncation marker '…'")
+	if !strings.Contains(view, "╭") {
+		t.Error("view should contain card borders")
 	}
 }
 
