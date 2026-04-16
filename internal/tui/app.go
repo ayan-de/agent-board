@@ -127,14 +127,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case editorFinishedMsg:
 		return a, nil
 	case tickMsg:
-		if a.view == viewBoard {
-			var cmd tea.Cmd
-			a.kanban, cmd = a.kanban.Update(msg)
-			return a, cmd
-		}
-		return a, nil
+		var cmd tea.Cmd
+		a.kanban, cmd = a.kanban.Update(msg)
+		return a, cmd
 	}
-	if a.kanban.NeedsTick() && a.view == viewBoard {
+
+	if a.kanban.NeedsTick() {
 		return a, animationTick()
 	}
 	return a, nil
