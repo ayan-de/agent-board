@@ -120,6 +120,7 @@ There is no orchestrator in the runtime path yet.
 - Command palette
 - Help view
 - Theme switching
+- Non-blocking auto-dismissing notification stack at the bottom-right for short workflow feedback
 
 ### Persistence
 
