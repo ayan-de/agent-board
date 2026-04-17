@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/keybinding"
@@ -41,12 +42,13 @@ type App struct {
 	width    int
 	height   int
 
-	focus      focusArea
-	view       viewMode
-	palette    CommandPalette
-	modal      ConfirmModal
-	quit       bool
-	runCommand tea.Cmd
+	focus        focusArea
+	view         viewMode
+	palette      CommandPalette
+	modal        ConfirmModal
+	notification NotificationStack
+	quit         bool
+	runCommand   tea.Cmd
 
 	kanban       KanbanModel
 	ticketView   TicketViewModel
@@ -93,6 +95,8 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry) (*App, erro
 
 	a.modal = ConfirmModal{}
 	a.modal.SetTheme(t)
+	a.notification = NotificationStack{}
+	a.notification.SetTheme(t)
 
 	return a, nil
 }
@@ -105,6 +109,7 @@ func (a *App) applyTheme() {
 	a.dashboard.styles = NewDashboardStyles(t)
 	a.palette.SetTheme(t)
 	a.modal.SetTheme(t)
+	a.notification.SetTheme(t)
 }
 
 func (a *App) Init() tea.Cmd {
@@ -121,6 +126,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.dashboard, _ = a.dashboard.Update(msg)
 		a.palette, _ = a.palette.Update(msg)
 		a.modal.SetSize(a.width, a.height)
+		a.notification.SetSize(a.width, a.height)
 		return a, nil
 	case tea.KeyMsg:
 		return a.handleKey(msg)
@@ -130,6 +136,25 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		a.kanban, cmd = a.kanban.Update(msg)
 		return a, cmd
+	case notificationDismissMsg:
+		a.notification = a.notification.HandleDismiss(msg)
+		return a, nil
+	case ticketCreatedMsg:
+		return a, a.showNotification(
+			"Ticket created",
+			fmt.Sprintf("%s: %s", msg.id, msg.title),
+			NotificationSuccess,
+		)
+	case agentAssignedMsg:
+		message := fmt.Sprintf("%s cleared on %s", "Agent", msg.ticketID)
+		if msg.agent != "" {
+			message = fmt.Sprintf("%s assigned to %s", msg.agent, msg.ticketID)
+		}
+		return a, a.showNotification(
+			"Agent assignment updated",
+			message,
+			NotificationSuccess,
+		)
 	}
 
 	if a.kanban.NeedsTick() {
@@ -165,8 +190,9 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	if key == "esc" {
 		if a.view == viewTicket && (a.ticketView.mode == ticketEditMode || a.ticketView.mode == ticketAgentSelectMode) {
-			a.ticketView, _ = a.ticketView.Update(msg)
-			return a, nil
+			var cmd tea.Cmd
+			a.ticketView, cmd = a.ticketView.Update(msg)
+			return a, cmd
 		}
 		if a.view == viewTicket {
 			a.kanban, _ = a.kanban.Reload()
@@ -179,13 +205,15 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if a.view == viewTicket && a.ticketView.mode == ticketEditMode {
-		a.ticketView, _ = a.ticketView.Update(msg)
-		return a, nil
+		var cmd tea.Cmd
+		a.ticketView, cmd = a.ticketView.Update(msg)
+		return a, cmd
 	}
 
 	if a.view == viewTicket && action != keybinding.ActionShowDashboard {
-		a.ticketView, _ = a.ticketView.Update(msg)
-		return a, nil
+		var cmd tea.Cmd
+		a.ticketView, cmd = a.ticketView.Update(msg)
+		return a, cmd
 	}
 
 	if a.view == viewDashboard && action != keybinding.ActionShowDashboard {
@@ -225,10 +253,16 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case keybinding.ActionOpenPalette:
 		a.palette.Open()
 	default:
-		a.kanban, _ = a.kanban.Update(msg)
+		var cmd tea.Cmd
+		a.kanban, cmd = a.kanban.Update(msg)
+		return a, cmd
 	}
 
 	return a, nil
+}
+
+func (a *App) showNotification(title, message string, variant NotificationVariant) tea.Cmd {
+	return a.notification.Show(title, message, variant, 2*time.Second)
 }
 
 func (a *App) renderHeader() string {
@@ -352,6 +386,48 @@ func (a *App) View() string {
 				row := i - startY
 				modalLine := modalLines[row]
 				finalView.WriteString(overlayLine(bgLine, modalLine, startX))
+			} else {
+				finalView.WriteString(bgLine)
+			}
+			if i < a.height-1 {
+				finalView.WriteString("\n")
+			}
+		}
+		return finalView.String()
+	}
+
+	if a.notification.Active() {
+		notificationStack := a.notification.View()
+		notificationHeight := lipgloss.Height(notificationStack)
+		notificationWidth := lipgloss.Width(notificationStack)
+		bgLines := strings.Split(mainView, "\n")
+
+		for len(bgLines) < a.height {
+			bgLines = append(bgLines, "")
+		}
+
+		startY := a.height - notificationHeight - 1
+		if startY < 1 {
+			startY = 1
+		}
+		startX := a.width - notificationWidth - 2
+		if startX < 0 {
+			startX = 0
+		}
+
+		var finalView strings.Builder
+		notificationLines := strings.Split(notificationStack, "\n")
+
+		for i := 0; i < a.height; i++ {
+			bgLine := ""
+			if i < len(bgLines) {
+				bgLine = bgLines[i]
+			}
+
+			if i >= startY && i < startY+notificationHeight {
+				row := i - startY
+				notificationLine := notificationLines[row]
+				finalView.WriteString(overlayLine(bgLine, notificationLine, startX))
 			} else {
 				finalView.WriteString(bgLine)
 			}
