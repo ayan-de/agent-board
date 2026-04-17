@@ -322,6 +322,12 @@ func (m TicketViewModel) handleAgentSelectKey(msg tea.KeyMsg) (TicketViewModel, 
 				}
 			}
 			_, _ = m.store.UpdateTicket(context.Background(), *m.ticket)
+			agent := m.ticket.Agent
+			ticketID := m.ticket.ID
+			m.mode = ticketViewMode
+			return m, func() tea.Msg {
+				return agentAssignedMsg{ticketID: ticketID, agent: agent}
+			}
 		}
 		m.mode = ticketViewMode
 		return m, nil

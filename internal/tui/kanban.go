@@ -159,7 +159,7 @@ func (m KanbanModel) handleKey(msg tea.KeyMsg) (KanbanModel, tea.Cmd) {
 	case keybinding.ActionJumpColumn4:
 		m.colIndex = 3
 	case keybinding.ActionAddTicket:
-		_, err := m.store.CreateTicket(context.Background(), store.Ticket{
+		ticket, err := m.store.CreateTicket(context.Background(), store.Ticket{
 			Title:  "New Ticket",
 			Status: statusNames[m.colIndex],
 		})
@@ -167,6 +167,9 @@ func (m KanbanModel) handleKey(msg tea.KeyMsg) (KanbanModel, tea.Cmd) {
 			return m, nil
 		}
 		m, _ = m.loadColumns()
+		return m, func() tea.Msg {
+			return ticketCreatedMsg{id: ticket.ID, title: ticket.Title}
+		}
 	case keybinding.ActionDeleteTicket:
 		col := m.columns[m.colIndex]
 		if len(col) > 0 {
