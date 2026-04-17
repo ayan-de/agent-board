@@ -1,293 +1,342 @@
-# AGENT.md — AgentBoard
+# AGENTS.md — AgentBoard
 
 ## Project Overview
 
-AgentBoard is a terminal-based Kanban board that orchestrates AI coding agents. It manages development tickets, spawns AI agents (Claude Code, OpenCode, Cursor) as tmux panes or custom in-Go PTY panes, decomposes projects into tickets via LLM APIs, and exposes a local HTTP/WebSocket API for a future Next.js frontend.
+AgentBoard is currently a terminal-based Kanban board for managing AI-oriented development tickets.
 
-### Architecture Summary
+The implemented product today is the TUI foundation:
+- Bubble Tea application shell
+- Kanban board and ticket detail views
+- Ticket persistence in SQLite
+- Config loading and project-scoped config scaffolding
+- Agent detection from `$PATH`
+- Theme registry with builtin and user JSON themes
+- Configurable keybindings and command palette
+- Agent dashboard based on local detection state
 
-```
-┌─────────────────────────────────────────────────────┐
-│                      TUI (bubbletea)                │
-│  Kanban View │ Ticket Detail │ Agent Panes │ Help    │
-├─────────────────────────────────────────────────────┤
-│                   Orchestrator                       │
-│  tmux Session Manager │ Agent Spawner │ PTY Capture  │
-├─────────────────────────────────────────────────────┤
-│  Decomposition │ MCP Client │ API Server │ Storage   │
-│  (LLM tickets) │ (ContextCarry, │ (chi + WS) │ (SQLite)│
-│                │  SessionCarry) │             │         │
-├─────────────────────────────────────────────────────────┤
-│  API Types     │ MCP Client  │                            │
-│  (DTOs)        │ (reusable)  │                            │
-├─────────────────────────────────────────────────────┤
-│                    Config                            │
-│  env vars │ ~/.agentboard/config.toml │ agent detect │
-└─────────────────────────────────────────────────────┘
-```
+The long-term product direction is still AI agent orchestration:
+- tmux and embedded PTY agent execution
+- session and process lifecycle management
+- MCP integrations
+- HTTP/WebSocket API
+- LLM-based decomposition and assignment
 
-Data flows down: TUI renders state from the orchestrator, which coordinates agents, storage, and MCP connections. The API server mirrors TUI actions for remote control.
+Those orchestration features are planned, but are not implemented yet.
 
 ---
 
-## Folder Structure
+## Status Snapshot
 
+### Implemented
+
+- `cmd/agentboard/main.go` starts the TUI
+- `internal/tui` contains the working Bubble Tea application
+- `internal/store` contains the SQLite-backed ticket and session persistence layer
+- `internal/config` handles defaults, TOML loading, env overlay, project naming, config scaffolding, and agent detection
+- `internal/theme` handles builtin theme embedding, user theme loading, parsing, and runtime selection
+- `internal/keybinding` handles keymap definitions, config overrides, and action resolution
+
+### Partially Implemented
+
+- `internal/store/sessions.go` exists and persists session records, but there is no orchestrator using it yet
+- `internal/tui/dashboard.go` shows detected agents, but it is not connected to live agent processes
+- ticket assignment and status updates exist in the TUI, but agent execution does not
+
+### Placeholder / Not Yet Implemented
+
+- `internal/orchestrator`
+- `internal/mcp`
+- `internal/api`
+- `internal/decomposition`
+- `internal/apitypes`
+- `internal/mcpclient`
+- `internal/tui/pane.go` as a real embedded agent terminal
+
+When touching one of those packages, assume the architecture is still open unless another section here says otherwise.
+
+---
+
+## Current Architecture
+
+### Runtime Flow Today
+
+```text
+cmd/agentboard/main.go
+  -> config.Load()
+  -> store.Open()
+  -> theme.Registry setup
+  -> tui.NewApp()
+  -> bubbletea.Program.Run()
 ```
+
+### Package Responsibilities
+
+```text
 agent-board/
-├── cmd/agentboard/         # Entrypoint
-│   └── main.go             # Wire dependencies, start TUI or API mode
+├── cmd/agentboard/
+│   └── main.go             # TUI entrypoint only
 ├── internal/
-│   ├── tui/                # Bubble Tea TUI layer
-│   │   ├── app.go          # Root bubbletea.Model, window management
-│   │   ├── kanban.go       # Kanban board rendering and columns
-│   │   ├── keybindings.go  # Key mapping and handler dispatch
-│   │   ├── ticketview.go   # Ticket detail/edit panel
-│   │   └── pane.go         # Embedded agent pane (PTY-in-a-widget)
-│   ├── orchestrator/       # Session and agent lifecycle
-│   │   ├── session.go      # tmux session creation, layout management
-│   │   ├── agent.go        # Agent representation and state tracking
-│   │   ├── spawner.go      # Agent process spawning (tmux pane or PTY)
-│   │   └── pty.go          # PTY allocation and I/O capture
-│   ├── mcp/                # MCP server integrations
-│   │   ├── client.go       # Shared MCP client bootstrap and registry
-│   │   ├── contextcarry.go # ContextCarry MCP server integration
-│   │   └── sessioncarry.go # SessionCarry MCP server integration
-│   ├── api/                # HTTP + WebSocket API server
-│   │   ├── server.go       # chi router setup, server lifecycle
-│   │   ├── handlers.go     # REST handlers (tickets, sessions, agents)
-│   │   ├── websocket.go    # WebSocket hub and real-time event streaming
-│   │   └── middleware.go   # CORS, logging, recovery middleware
-│   ├── store/              # SQLite persistence
-│   │   ├── sqlite.go       # DB connection, initialization, migrations
-│   │   ├── tickets.go      # Ticket CRUD operations
-│   │   ├── sessions.go     # Session and agent state persistence
-│   │   └── migrations.go   # Schema migration definitions
-│   ├── decomposition/      # LLM-powered project breakdown
-│   │   ├── decomposer.go   # Project → tickets decomposition engine
-│   │   ├── assigner.go     # Auto-assign tickets to agents with reasoning
-│   │   └── prompts.go      # Prompt templates for decomposition and assignment
-│   ├── apitypes/           # Shared API types (DTOs)
-│   │   ├── ticket.go       # Ticket DTOs
-│   │   ├── session.go      # Session DTOs
-│   │   └── agent.go        # Agent DTOs and status enums
-│   ├── mcpclient/          # Reusable MCP client wrapper
-│   │   └── client.go       # Generic MCP client for future external consumers
-│   └── config/             # Configuration and environment
-│       ├── config.go       # Config struct, TOML loading, env var overlay
-│       ├── detection.go    # Auto-detect available agents on $PATH
-│       └── defaults.go     # Default values and config scaffolding
-├── go.mod
-├── go.sum
-└── AGENT.md                # This file — project memory
+│   ├── tui/                # Working Bubble Tea app and views
+│   ├── store/              # Working SQLite persistence
+│   ├── config/             # Working config loading, defaults, detection
+│   ├── theme/              # Working theme registry and JSON theme loading
+│   ├── keybinding/         # Working keymap model and config overrides
+│   ├── orchestrator/       # Planned agent lifecycle layer
+│   ├── mcp/                # Planned MCP integrations
+│   ├── api/                # Planned HTTP/WebSocket API
+│   ├── decomposition/      # Planned LLM-driven project decomposition
+│   ├── apitypes/           # Planned shared DTOs
+│   └── mcpclient/          # Planned reusable MCP wrapper
+├── docs/                   # Design notes, plans, and roadmap
+└── AGENTS.md               # Operational project memory
 ```
+
+### Data Flow Today
+
+The actual flow today is simpler than the long-term vision:
+
+```text
+TUI <-> Store
+TUI <-> Config
+TUI <-> Theme Registry
+TUI <-> Agent Detection
+```
+
+There is no orchestrator in the runtime path yet.
 
 ---
 
-## Key Design Decisions
+## Working Features
 
-| Decision | Rationale |
-|----------|-----------|
-| **internal/ for all private packages** | Enforces encapsulation; no external consumer can depend on internals. |
-| **Everything in internal/ until needed externally** | `apitypes` and `mcpclient` stay in `internal/` — will graduate to `pkg/` when the Next.js frontend becomes a real external consumer. No premature abstraction. |
-| **Interfaces defined where used** | `orchestrator` defines `AgentSpawner`; `internal/tui` defines `Renderer`. Implementations live in their own package. Prevents circular imports. |
-| **modernc.org/sqlite over CGO sqlite** | Pure Go, compiles on Termux (Android ARM64) without a C toolchain. |
-| **chi over stdlib mux** | Lightweight, idiomatic, compatible with `net/http` handlers. Easy middleware stacking. |
-| **bubbletea + custom pane over pure tmux** | Toggle between tmux-managed panes (for existing tmux users) and embedded PTY panes (for standalone usage). User chooses at startup. |
-| **TOML config + env vars** | TOML for persistent user preferences; env vars for CI/overrides. Env vars take precedence. |
-| **Error wrapping with `fmt.Errorf("context: %w", err)`** | Consistent error chain for debugging. Every package wraps errors at boundary points. |
-| **TDD — tests first, always** | Every feature starts with a failing test. No implementation code without a corresponding `_test.go`. This is non-negotiable. |
-| **AGENT.md as project memory** | Single source of truth for architecture, conventions, and onboarding. Updated as the project evolves. |
-| **MCP via mark3labs/mcp-go** | Type-safe Go MCP client. Used to connect to ContextCarry and SessionCarry npm servers via stdio transport. |
+### TUI
+
+- Kanban board with four status columns
+- Ticket detail view
+- Ticket create and delete from the board
+- Ticket editing from the ticket view
+- Ticket status cycling from the ticket view
+- Ticket agent assignment from the ticket view
+- Agent dashboard view
+- Command palette
+- Help view
+- Theme switching
+
+### Persistence
+
+- SQLite database creation and migrations
+- ticket CRUD
+- ticket filtering
+- session CRUD primitives
+- ticket ID generation from configurable project prefix
+
+### Config
+
+- default config generation under `~/.agentboard`
+- global and project config files
+- env var overlay for several runtime fields
+- project name derived from git remote or working directory
+- agent detection for local CLIs on `$PATH`
+
+### Themes
+
+- builtin embedded themes
+- JSON theme parsing
+- user theme loading from filesystem
+- runtime theme switching
+- persistence of selected theme into project config
+
+---
+
+## Current Keybindings
+
+These are the current default bindings implemented in code.
+
+### Global / Board
+
+| Key | Action |
+|-----|--------|
+| `h/l` or `←/→` | Move between Kanban columns |
+| `j/k` or `↑/↓` | Move between tickets |
+| `Enter` | Open ticket detail view |
+| `a` | Add a new ticket in the active column |
+| `d` | Delete the selected ticket |
+| `1-4` | Jump to a specific column |
+| `?` | Toggle help view |
+| `i` | Toggle agent dashboard |
+| `:` | Open command palette |
+| `q` | Quit with confirmation |
+| `Ctrl+C` | Force quit |
+| `Esc` | Return to board from other views |
+
+### Ticket View
+
+| Key | Action |
+|-----|--------|
+| `j/k` or `↑/↓` | Move between fields |
+| `e` | Edit the selected editable field |
+| `s` | Cycle ticket status |
+| `a` | Open agent selection |
+| `Enter` | Save edits / confirm selection |
+| `Esc` | Cancel edit or return to board |
+
+### Dashboard
+
+| Key | Action |
+|-----|--------|
+| `r` | Re-run agent detection |
+| `Esc` | Return to board |
+
+Some keybinding actions already exist in the keybinding package but are reserved for future orchestration behavior, such as start/stop agent, focus switching, and go-to-ticket chord support.
+
+---
+
+## Current Data Model
+
+### Ticket
+
+Current stored fields:
+
+```text
+id            TEXT PRIMARY KEY
+title         TEXT NOT NULL
+description   TEXT
+status        TEXT
+priority      TEXT
+agent         TEXT
+branch        TEXT
+tags          TEXT JSON array
+depends_on    TEXT JSON array
+agent_active  INTEGER
+created_at    DATETIME
+updated_at    DATETIME
+```
+
+Notes:
+- `tags` and `depends_on` are stored as JSON arrays, not comma-separated strings
+- `agent_active` exists in the store schema already, even though there is no running orchestrator yet
+
+### Session
+
+Current stored fields:
+
+```text
+id           TEXT PRIMARY KEY
+ticket_id    TEXT FK -> tickets.id
+agent        TEXT
+started_at   DATETIME
+ended_at     DATETIME
+status       TEXT
+context_key  TEXT
+```
+
+Notes:
+- session persistence exists before live process orchestration
+- this is acceptable, but the runtime does not use sessions yet
 
 ---
 
 ## Build and Run
 
+### Commands That Work Today
+
 ```bash
 # Build
 go build -o agentboard ./cmd/agentboard
 
-# Run (TUI mode, default)
+# Run TUI
 ./agentboard
-
-# Run (API-only mode, for Next.js frontend)
-./agentboard --api --addr :8080
-
-# Initialize config
-./agentboard init
 
 # Run tests
 go test ./...
 
-# Run with verbose logging
-AGENTBOARD_LOG=debug ./agentboard
+# Run vet
+go vet ./...
 ```
 
-### Dependencies
+### Notes
 
-```bash
-go get github.com/charmbracelet/bubbletea
-go get github.com/charmbracelet/lipgloss
-go get github.com/charmbracelet/bubbles
-go get github.com/go-chi/chi/v5
-go get github.com/mark3labs/mcp-go
-go get modernc.org/sqlite
-go get github.com/BurntSushi/toml
-```
-
----
-
-## Core Data Model
-
-### Ticket
-
-```
-id          TEXT PRIMARY KEY  (e.g. AGT-03)
-title       TEXT
-description TEXT
-status      TEXT  (backlog | in_progress | review | done)
-agent       TEXT  (claude-code | opencode | cursor | null)
-branch      TEXT
-created_at  DATETIME
-updated_at  DATETIME
-depends_on  TEXT  (comma-separated ticket ids)
-```
-
-### Session
-
-```
-id          TEXT PRIMARY KEY
-ticket_id   TEXT FK → tickets.id
-agent       TEXT
-started_at  DATETIME
-ended_at    DATETIME
-status      TEXT  (running | completed | failed | cancelled)
-context_key TEXT  (ContextCarry reference)
-```
-
----
-
-## tmux Session Layout
-
-When running in tmux mode, AgentBoard creates a session named `agentboard`:
-
-```
-┌──────────────────────────────────────────────────┐
-│  AgentBoard TUI (bubbletea)                      │
-│  ┌─────────┬──────────┬──────────┬──────────┐    │
-│  │ Backlog │  In Prog │  Review  │   Done   │    │
-│  │ ─────── │ ──────── │ ──────── │ ──────── │    │
-│  │ AUTH-1  │ API-3    │ UI-7     │ INIT-1   │    │
-│  │ DB-2    │          │          │ INIT-2   │    │
-│  └─────────┴──────────┴──────────┴──────────┘    │
-├──────────────────────────────────────────────────┤
-│  Agent: claude-code (API-3)                      │
-│  $ claude --agent ...                            │
-│  > Processing ticket API-3...                    │
-├──────────────────────────────────────────────────┤
-│  Agent: opencode (UI-7)                          │
-│  $ opencode                                      │
-│  > Working on UI-7...                            │
-└──────────────────────────────────────────────────┘
-```
-
-- **Top pane**: AgentBoard TUI (kanban view)
-- **Bottom panes**: One per active agent, auto-created when an agent starts a ticket
-- Pane layout managed by `internal/orchestrator/session.go` using tmux commands
-- Agent panes are destroyed when their ticket moves to Done or is cancelled
-- Pane split: horizontal splits for agents, top pane takes 60% height
-
----
-
-## Agent Spawning
-
-Agents are spawned by `internal/orchestrator/spawner.go`:
-
-1. **Detection** (`internal/config/detection.go`): At startup, scan `$PATH` for `claude`, `opencode`, `cursor`. Store available agents.
-2. **Spawning**: When a ticket is assigned to an agent:
-   - **tmux mode**: Create a new pane via `tmux split-window`, run the agent CLI with appropriate flags
-   - **Embedded mode**: Allocate a PTY, start the agent process, render output in a bubbletea component (`internal/tui/pane.go`)
-3. **Monitoring**: Capture agent stdout/stderr. Parse status signals. Update ticket state when agent reports completion.
-4. **Lifecycle**: Agents are started, paused (via SIGTSTP), resumed (SIGCONT), or killed. State persisted in SQLite.
-
-### Agent CLI Commands
-
-| Agent | Spawn Command |
-|-------|---------------|
-| Claude Code | `claude "ticket context here"` |
-| OpenCode | `opencode` then `tmux send-keys -t {pane} "ticket context here" Enter` |
-| Cursor | Connected via MCP (no direct CLI spawn) |
-
-**Note**: OpenCode is interactive-first — it has no prompt flag. Spawn the process, then inject context via `tmux send-keys` (tmux mode) or PTY write (embedded mode).
-
----
-
-## MCP Integration
-
-### ContextCarry
-
-- **Package**: `contextcarry` npm package
-- **Purpose**: Persists AI session context across conversations. AgentBoard uses it to restore agent memory when reassigning tickets.
-- **Integration**: `internal/mcp/contextcarry.go` starts ContextCarry as a stdio subprocess, connects via mcp-go client.
-- **Usage**: Before spawning an agent on a ticket, load prior context from ContextCarry. After agent finishes, save context.
-
-### SessionCarry
-
-- **Package**: `sessioncarry` npm package
-- **Purpose**: Manages session state across multiple AI agent instances.
-- **Integration**: `internal/mcp/sessioncarry.go` mirrors ContextCarry pattern.
-- **Usage**: Track which agent worked on which ticket, store cross-session learnings.
-
-### MCP Client Lifecycle
-
-```
-1. Detect npm + node on $PATH
-2. npx contextcarry serve (stdio transport)
-3. Connect mcp-go client
-4. Call tools: save_context, load_context, list_sessions
-5. Graceful shutdown on exit
-```
-
----
-
-## Keybinding Reference
-
-| Key | Action |
-|-----|--------|
-| `h/l` or `←/→` | Move between Kanban columns |
-| `j/k` or `↑/↓` | Move between tickets in column |
-| `Enter` | Open ticket detail view |
-| `a` | Add new ticket |
-| `d` | Delete ticket (with confirmation) |
-| `s` | Start agent on selected ticket |
-| `x` | Stop running agent |
-| `r` | Refresh board state |
-| `Tab` | Toggle focus between board and agent pane |
-| `1-4` | Jump to column (Backlog, In Progress, Review, Done) |
-| `?` | Show help overlay |
-| `i` | Show agent dashboard overlay |
-| `q` | Quit |
-| `Ctrl+C` | Force quit |
+- the entrypoint currently launches TUI mode only
+- there is no implemented `--api` mode yet
+- there is no implemented `init` subcommand yet
+- in restricted sandboxes, `go test ./...` may require a writable `GOCACHE`
 
 ---
 
 ## Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `AGENTBOARD_CONFIG` | `~/.agentboard/config.toml` | Path to config file |
-| `AGENTBOARD_DB` | `~/.agentboard/board.db` | SQLite database path |
-| `AGENTBOARD_LOG` | `info` | Log level: `debug`, `info`, `warn`, `error` |
-| `AGENTBOARD_ADDR` | `:8080` | API server bind address |
-| `AGENTBOARD_MODE` | `tui` | Startup mode: `tui`, `api`, `both` |
-| `AGENTBOARD_TMUX` | `auto` | tmux usage: `auto`, `always`, `never` |
-| `AGENTBOARD_LLM_PROVIDER` | — | LLM provider for decomposition: `openai`, `anthropic`, `ollama` |
-| `AGENTBOARD_LLM_MODEL` | — | Model name (e.g., `gpt-4o`, `claude-sonnet-4-20250514`) |
-| `AGENTBOARD_LLM_API_KEY` | — | API key for LLM provider |
-| `AGENTBOARD_LLM_BASE_URL` | — | Custom API base URL (for Ollama, etc.) |
-| `AGENTBOARD_NPM_PATH` | `npm` | Path to npm binary (for MCP servers) |
-| `AGENTBOARD_NODE_PATH` | `node` | Path to node binary (for MCP servers) |
-| `NO_COLOR` | — | Disable colored output (respects standard env var) |
+### Implemented
+
+| Variable | Description |
+|----------|-------------|
+| `AGENTBOARD_LOG` | overrides `general.log` |
+| `AGENTBOARD_ADDR` | overrides `general.addr` |
+| `AGENTBOARD_MODE` | overrides `general.mode` |
+| `AGENTBOARD_TMUX` | overrides `general.tmux` |
+| `AGENTBOARD_DB` | overrides `db.path` |
+| `AGENTBOARD_LLM_PROVIDER` | overrides `llm.provider` |
+| `AGENTBOARD_LLM_MODEL` | overrides `llm.model` |
+| `AGENTBOARD_LLM_API_KEY` | overrides `llm.api_key` |
+| `AGENTBOARD_LLM_BASE_URL` | overrides `llm.base_url` |
+| `AGENTBOARD_NPM_PATH` | overrides `mcp.npm_path` |
+| `AGENTBOARD_NODE_PATH` | overrides `mcp.node_path` |
+
+### Not Implemented Yet
+
+- `AGENTBOARD_CONFIG` is documented elsewhere but is not currently honored by `config.Load()`
+
+---
+
+## Design Decisions
+
+| Decision | Current Assessment |
+|----------|--------------------|
+| **internal/ for all private packages** | Good. This keeps the surface small while the architecture is still moving. |
+| **Everything internal until proven external** | Good. `apitypes` and `mcpclient` should stay internal until there is a real external consumer. |
+| **Config/store/TUI split** | Good. These boundaries are clear and are the strongest part of the codebase today. |
+| **modernc.org/sqlite** | Good choice for pure-Go portability, especially Termux. |
+| **Bubble Tea + Lip Gloss** | Good fit for the product. |
+| **TDD-first discipline** | Good rule. It is followed well in the implemented packages and should continue for orchestration work. |
+| **Orchestrator as a separate layer** | Good direction, but it must become the single owner of process lifecycle once implemented. Do not let TUI start owning process logic. |
+
+---
+
+## Architecture Guidance
+
+### What Is Good
+
+- package boundaries are simple and readable
+- the TUI depends on stable services like config, store, theme, and keybinding rather than global state
+- persistence is isolated behind the store package
+- theme and keybinding systems are independent, testable modules
+- the repo has useful tests in the implemented areas
+
+### Main Risks
+
+- placeholder packages can create false confidence if docs or future code assume they already define stable contracts
+- `internal/tui` currently owns some workflow logic directly; if that expands into orchestration behavior, the UI layer will become too heavy
+- `store` currently mixes durable domain state with some future runtime state like `agent_active`; keep a clear distinction once live agents exist
+- `config` is doing several jobs today: defaults, path resolution, env overlay, project naming, and agent detection. This is still manageable, but avoid turning it into a catch-all package
+
+### Guidance For Upcoming Orchestration Work
+
+- make `internal/orchestrator` the only package that starts, stops, and observes agent processes
+- keep Bubble Tea as a presentation layer that issues intents and renders state
+- introduce interfaces at the consumer boundary when real orchestration dependencies arrive
+- do not let `api` call process code separately from TUI; both TUI and API should talk to the same orchestration/service layer
+- treat MCP and tmux integrations as adapters behind small interfaces
+- keep session persistence and live runtime state separate in the model
+
+---
+
+## Suggested Next Build Order
+
+1. Define the orchestrator domain model and interfaces before wiring tmux or PTY process execution.
+2. Implement a minimal in-process orchestrator service for start, stop, list, and observe agent sessions.
+3. Hook the TUI to that orchestrator for one agent flow end to end.
+4. Add persistence for orchestration events and session transitions where needed.
+5. Add tmux and PTY adapters behind the orchestrator.
+6. Add API handlers only after the orchestrator API is stable enough for both TUI and HTTP consumers.
+7. Add MCP and decomposition after the local orchestration loop is solid.
 
 ---
 
@@ -296,38 +345,24 @@ Agents are spawned by `internal/orchestrator/spawner.go`:
 ### Workflow
 
 1. Create a feature branch from `main`
-2. **Write the test first** — every feature, bugfix, or refactor starts with a failing test in the relevant `_test.go` file
-3. Make the test pass with minimal implementation
-4. Refactor if needed, keeping tests green
+2. Write the test first
+3. Make the test pass with the smallest correct implementation
+4. Refactor while keeping tests green
 5. Run `go test ./...` and `go vet ./...`
-6. Update AGENT.md if architecture changes
-7. Submit PR with description linking to relevant ticket
-
-### TDD Discipline
-
-- **Red → Green → Refactor**. No implementation code without a test.
-- Each `internal/` package has a `_test.go` file. Table-driven tests preferred.
-- Tests must be independent and repeatable — no test ordering assumptions.
-- Use interfaces and dependency injection to make packages testable in isolation.
-- Mock external dependencies (tmux, MCP servers, LLM APIs) with test doubles.
+6. Update `AGENTS.md` when architecture, runtime behavior, or developer contracts change
+7. Submit a PR linked to the relevant ticket
 
 ### Code Conventions
 
-- **Error wrapping**: Always wrap with `fmt.Errorf("package.context: %w", err)`
-- **No circular imports**: `internal/` packages must not import each other circularly. Use interfaces defined at the consumer side.
-- **No global state**: Pass dependencies explicitly. Use dependency injection in `cmd/agentboard/main.go`.
-- **No comments unless asked**: Code should be self-documenting through naming.
-- **Tests**: Each `internal/` package has a `_test.go` file. Table-driven tests preferred.
-- **Go vet clean**: All code must pass `go vet`.
+- wrap errors with `fmt.Errorf("context: %w", err)`
+- avoid circular imports
+- avoid global mutable state
+- keep comments sparse and high-signal
+- prefer table-driven tests
+- keep the UI layer thin as orchestration arrives
 
 ### Platform Support
 
-- **Linux (x86_64, ARM64)**: Primary target
-- **Termux (Android ARM64)**: Supported. No CGO dependencies. All pure Go.
-- **macOS**: Best-effort. tmux integration works; PTY may differ.
-
-### Git Conventions
-
-- Conventional commits: `feat(tui): add kanban column reordering`
-- Squash merge PRs
-- Keep main green
+- Linux: primary target
+- Termux / Android ARM64: supported target, avoid CGO
+- macOS: best effort
