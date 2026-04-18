@@ -1,12 +1,14 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/keybinding"
+	"github.com/ayan-de/agent-board/internal/orchestrator"
 	"github.com/ayan-de/agent-board/internal/store"
 	"github.com/ayan-de/agent-board/internal/theme"
 
@@ -34,13 +36,34 @@ type editorFinishedMsg struct {
 	err error
 }
 
+type statusChangedMsg struct {
+	ticketID  string
+	newStatus string
+}
+
+type proposalCreatedMsg struct {
+	proposal store.Proposal
+}
+
+type Orchestrator interface {
+	CreateProposal(ctx context.Context, input orchestrator.CreateProposalInput) (store.Proposal, error)
+	ApproveProposal(ctx context.Context, proposalID string) error
+	StartApprovedRun(ctx context.Context, proposalID string) (store.Session, error)
+	FinishRun(ctx context.Context, input orchestrator.FinishRunInput) error
+}
+
+type AppDeps struct {
+	Orchestrator Orchestrator
+}
+
 type App struct {
-	store    *store.Store
-	resolver *keybinding.Resolver
-	config   *config.Config
-	registry *theme.Registry
-	width    int
-	height   int
+	store        *store.Store
+	orchestrator Orchestrator
+	resolver     *keybinding.Resolver
+	config       *config.Config
+	registry     *theme.Registry
+	width        int
+	height       int
 
 	focus        focusArea
 	view         viewMode
@@ -56,7 +79,7 @@ type App struct {
 	activeTicket *store.Ticket
 }
 
-func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry) (*App, error) {
+func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry, deps AppDeps) (*App, error) {
 	km := keybinding.DefaultKeyMap()
 	if len(cfg.TUI.Keybindings) > 0 {
 		keybinding.ApplyConfig(&km, cfg.TUI.Keybindings)
@@ -73,16 +96,18 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry) (*App, erro
 	agents := config.DetectAgents()
 
 	a := &App{
-		store:      s,
-		resolver:   resolver,
-		config:     cfg,
-		registry:   reg,
-		focus:      focusBoard,
-		view:       viewBoard,
-		kanban:     kanban,
-		ticketView: NewTicketViewModel(s, resolver, t, agents),
-		dashboard:  NewDashboardModel(s, resolver, agents, t),
+		store:        s,
+		orchestrator: deps.Orchestrator,
+		resolver:     resolver,
+		config:       cfg,
+		registry:     reg,
+		focus:        focusBoard,
+		view:         viewBoard,
+		kanban:       kanban,
+		ticketView:   NewTicketViewModel(s, resolver, t, agents),
+		dashboard:    NewDashboardModel(s, resolver, agents, t),
 	}
+
 
 	cr := NewCommandRegistry()
 	ac := newAppCommands(a, reg, cfg)
@@ -155,6 +180,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			message,
 			NotificationSuccess,
 		)
+	case statusChangedMsg:
+		return a.handleStatusChanged(msg)
+	case proposalCreatedMsg:
+		return a, a.showNotification(
+			"Proposal created",
+			fmt.Sprintf("AI proposed work for %s", msg.proposal.TicketID),
+			NotificationInfo,
+		)
 	}
 
 	if a.kanban.NeedsTick() {
@@ -162,6 +195,45 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	return a, nil
 }
+
+func (a *App) handleStatusChanged(msg statusChangedMsg) (tea.Model, tea.Cmd) {
+	// First update the store
+	err := a.store.MoveStatus(context.Background(), msg.ticketID, msg.newStatus)
+	if err != nil {
+		return a, a.showNotification("Error", err.Error(), NotificationError)
+	}
+
+	// Update local state if it's the active ticket
+	if a.activeTicket != nil && a.activeTicket.ID == msg.ticketID {
+		a.activeTicket.Status = msg.newStatus
+		a.ticketView = a.ticketView.SetTicket(a.activeTicket)
+	}
+
+	var cmds []tea.Cmd
+	cmds = append(cmds, a.showNotification("Status updated", fmt.Sprintf("%s moved to %s", msg.ticketID, msg.newStatus), NotificationSuccess))
+
+	// If moved to in_progress, trigger orchestration
+	if msg.newStatus == "in_progress" {
+		cmds = append(cmds, a.createProposalCmd(msg.ticketID))
+	}
+
+	return a, tea.Batch(cmds...)
+}
+
+func (a *App) createProposalCmd(ticketID string) tea.Cmd {
+	return func() tea.Msg {
+		proposal, err := a.orchestrator.CreateProposal(context.Background(), orchestrator.CreateProposalInput{
+			TicketID: ticketID,
+		})
+		if err != nil {
+			// We skip error notification here to avoid cluttering if it's a known non-retryable state
+			// but in a real app we might want to show it.
+			return nil
+		}
+		return proposalCreatedMsg{proposal: proposal}
+	}
+}
+
 
 func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if a.modal.Active() {
