@@ -3,6 +3,8 @@ package tui
 import (
 	"context"
 	"fmt"
+	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -15,6 +17,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+var debugLog = log.New(os.Stderr, "[agentboard] ", log.Ltime)
 
 type focusArea int
 
@@ -51,6 +55,15 @@ type proposalApprovedMsg struct {
 
 type runStartedMsg struct {
 	proposalID string
+}
+
+type runCompletedMsg struct {
+	ticketID string
+}
+
+type proposalFailedMsg struct {
+	ticketID string
+	err      error
 }
 
 type proposalLoadedMsg struct {
@@ -96,6 +109,8 @@ type App struct {
 	ticketView   TicketViewModel
 	dashboard    DashboardModel
 	activeTicket *store.Ticket
+
+	generatingProposals map[string]bool
 }
 
 func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry, deps AppDeps) (*App, error) {
@@ -125,6 +140,7 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry, deps AppDep
 		kanban:       kanban,
 		ticketView:   NewTicketViewModel(s, resolver, t, agents),
 		dashboard:    NewDashboardModel(s, resolver, agents, t),
+		generatingProposals: make(map[string]bool),
 	}
 
 	cr := NewCommandRegistry()
@@ -210,6 +226,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.loadProposalCmd(msg.proposal.TicketID),
 		)
 	case proposalLoadedMsg:
+		delete(a.generatingProposals, msg.TicketID)
 		if a.activeTicket != nil && a.activeTicket.ID == msg.TicketID {
 			a.ticketView = a.ticketView.SetProposal(msg.proposal)
 		}
@@ -217,7 +234,19 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case proposalApprovedMsg:
 		return a, a.approveProposalCmd(msg.proposalID)
 	case runStartedMsg:
-		return a, a.startRunCmd(msg.proposalID)
+		return a, tea.Batch(
+			a.showNotification("Run started", "Agent is working...", NotificationInfo),
+			a.startRunCmd(msg.proposalID),
+		)
+	case runCompletedMsg:
+		a.kanban, _ = a.kanban.Reload()
+		return a, a.showNotification("Run completed", fmt.Sprintf("Agent finished working on %s", msg.ticketID), NotificationSuccess)
+	case proposalFailedMsg:
+		delete(a.generatingProposals, msg.ticketID)
+		if a.activeTicket != nil && a.activeTicket.ID == msg.ticketID {
+			a.ticketView = a.ticketView.SetLoading(false)
+		}
+		return a, a.showNotification("Proposal failed", msg.err.Error(), NotificationError)
 	case notificationMsg:
 		return a, a.showNotification(msg.title, msg.message, msg.variant)
 	}
@@ -240,7 +269,10 @@ func (a *App) loadProposalCmd(ticketID string) tea.Cmd {
 
 func (a *App) approveProposalCmd(proposalID string) tea.Cmd {
 	return func() tea.Msg {
-		err := a.orchestrator.ApproveProposal(context.Background(), proposalID)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+
+		err := a.orchestrator.ApproveProposal(ctx, proposalID)
 		if err != nil {
 			return notificationMsg{title: "Error", message: err.Error(), variant: NotificationError}
 		}
@@ -252,11 +284,14 @@ func (a *App) approveProposalCmd(proposalID string) tea.Cmd {
 
 func (a *App) startRunCmd(proposalID string) tea.Cmd {
 	return func() tea.Msg {
-		session, err := a.orchestrator.StartApprovedRun(context.Background(), proposalID)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute) // Runs can take longer
+		defer cancel()
+
+		session, err := a.orchestrator.StartApprovedRun(ctx, proposalID)
 		if err != nil {
 			return notificationMsg{title: "Error", message: err.Error(), variant: NotificationError}
 		}
-		return a.showNotification("Run started", fmt.Sprintf("Agent started working on %s", session.TicketID), NotificationSuccess)()
+		return runCompletedMsg{ticketID: session.TicketID}
 	}
 }
 
@@ -275,10 +310,16 @@ func (a *App) handleStatusChanged(msg statusChangedMsg) (tea.Model, tea.Cmd) {
 
 	var cmds []tea.Cmd
 	cmds = append(cmds, a.showNotification("Status updated", fmt.Sprintf("%s moved to %s", msg.ticketID, msg.newStatus), NotificationSuccess))
+	if a.activeTicket != nil && a.activeTicket.ID == msg.ticketID {
+		a.ticketView = a.ticketView.SetLoading(msg.newStatus == "in_progress")
+	}
 
 	// If moved to in_progress, trigger orchestration
 	if msg.newStatus == "in_progress" {
+		a.generatingProposals[msg.ticketID] = true
 		cmds = append(cmds, a.createProposalCmd(msg.ticketID))
+	} else {
+		delete(a.generatingProposals, msg.ticketID)
 	}
 
 	return a, tea.Batch(cmds...)
@@ -286,12 +327,18 @@ func (a *App) handleStatusChanged(msg statusChangedMsg) (tea.Model, tea.Cmd) {
 
 func (a *App) createProposalCmd(ticketID string) tea.Cmd {
 	return func() tea.Msg {
-		proposal, err := a.orchestrator.CreateProposal(context.Background(), orchestrator.CreateProposalInput{
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+
+		debugLog.Printf("createProposal: ticket=%s", ticketID)
+		proposal, err := a.orchestrator.CreateProposal(ctx, orchestrator.CreateProposalInput{
 			TicketID: ticketID,
 		})
 		if err != nil {
-			return notificationMsg{title: "Proposal failed", message: err.Error(), variant: NotificationError}
+			debugLog.Printf("createProposal FAILED: %v", err)
+			return proposalFailedMsg{ticketID: ticketID, err: err}
 		}
+		debugLog.Printf("createProposal OK: id=%s", proposal.ID)
 		return proposalCreatedMsg{proposal: proposal}
 	}
 }
@@ -370,6 +417,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.activeTicket = selected
 			a.ticketView = a.ticketView.SetTicket(selected)
 			a.view = viewTicket
+			a.ticketView = a.ticketView.SetLoading(a.generatingProposals[selected.ID])
 			p, _ := a.store.GetActiveProposalForTicket(context.Background(), selected.ID)
 			if p.ID != "" {
 				a.ticketView = a.ticketView.SetProposal(&p)
@@ -386,6 +434,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if a.view == viewDashboard {
 			a.view = viewBoard
 		} else {
+			a.dashboard = a.dashboard.Refresh()
 			a.view = viewDashboard
 		}
 	case keybinding.ActionOpenPalette:
@@ -400,7 +449,11 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) showNotification(title, message string, variant NotificationVariant) tea.Cmd {
-	return a.notification.Show(title, message, variant, 2*time.Second)
+	dur := 2 * time.Second
+	if variant == NotificationError {
+		dur = 5 * time.Second
+	}
+	return a.notification.Show(title, message, variant, dur)
 }
 
 func (a *App) renderHeader() string {

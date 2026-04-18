@@ -61,6 +61,7 @@ type TicketViewModel struct {
 	styles TicketViewStyles
 
 	activeProposal *store.Proposal
+	loading        bool
 }
 
 func DefaultTicketViewStyles() TicketViewStyles {
@@ -405,6 +406,12 @@ func (m TicketViewModel) SetTicket(t *store.Ticket) TicketViewModel {
 
 func (m TicketViewModel) SetProposal(p *store.Proposal) TicketViewModel {
 	m.activeProposal = p
+	m.loading = false
+	return m
+}
+
+func (m TicketViewModel) SetLoading(loading bool) TicketViewModel {
+	m.loading = loading
 	return m
 }
 
@@ -503,23 +510,32 @@ func (m TicketViewModel) View() string {
 	}
 	b.WriteString(m.styles.Footer.Render(footer))
 
-	if m.activeProposal != nil {
+	if m.loading || m.activeProposal != nil || m.ticket.Status == "in_progress" {
 		b.WriteString("\n\n")
 		b.WriteString(m.styles.Title.Render("── Active Proposal ───────────────────────"))
 		b.WriteString("\n")
-		statusColor := "240"
-		if m.activeProposal.Status == "pending" {
-			statusColor = "213"
-		} else if m.activeProposal.Status == "approved" {
-			statusColor = "42"
+
+		if m.loading {
+			b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("208")).Render("Status: generating... (please wait)"))
+			b.WriteString("\n")
+		} else if m.activeProposal != nil {
+			statusColor := "240"
+			if m.activeProposal.Status == "pending" {
+				statusColor = "213"
+			} else if m.activeProposal.Status == "approved" {
+				statusColor = "42"
+			}
+			b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(statusColor)).Render("Status: " + m.activeProposal.Status))
+			b.WriteString("\n\n")
+			prompt := m.activeProposal.Prompt
+			if len(prompt) > innerWidth*3 {
+				prompt = prompt[:innerWidth*3] + "..."
+			}
+			b.WriteString(m.styles.Value.Width(innerWidth).Render(prompt))
+		} else { // m.ticket.Status == "in_progress"
+			b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render("No active proposal found for this ticket."))
+			b.WriteString("\n")
 		}
-		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(statusColor)).Render("Status: " + m.activeProposal.Status))
-		b.WriteString("\n\n")
-		prompt := m.activeProposal.Prompt
-		if len(prompt) > innerWidth*3 {
-			prompt = prompt[:innerWidth*3] + "..."
-		}
-		b.WriteString(m.styles.Value.Width(innerWidth).Render(prompt))
 	}
 
 	return m.styles.Border.Render(b.String())
