@@ -1,0 +1,99 @@
+package orchestrator_test
+
+import (
+	"context"
+	"time"
+
+	"github.com/ayan-de/agent-board/internal/llm"
+	"github.com/ayan-de/agent-board/internal/orchestrator"
+	"github.com/ayan-de/agent-board/internal/store"
+)
+
+type fakeStore struct {
+	ticket        store.Ticket
+	proposal      store.Proposal
+	contextCarry  store.ContextCarry
+	activeSession bool
+
+	lastProposal     store.Proposal
+	lastMoveStatus   string
+	lastAgentActive  bool
+	lastContextCarry store.ContextCarry
+	lastSession      store.Session
+	lastEvent        store.Event
+}
+
+func (f *fakeStore) GetTicket(_ context.Context, _ string) (store.Ticket, error) {
+	return f.ticket, nil
+}
+func (f *fakeStore) CreateProposal(_ context.Context, p store.Proposal) (store.Proposal, error) {
+	p.ID = "PRO-01"
+	p.CreatedAt = time.Now()
+	p.UpdatedAt = time.Now()
+	f.lastProposal = p
+	return p, nil
+}
+func (f *fakeStore) GetProposal(_ context.Context, _ string) (store.Proposal, error) {
+	return f.proposal, nil
+}
+func (f *fakeStore) UpdateProposalStatus(_ context.Context, id, status string) error {
+	f.proposal.Status = status
+	return nil
+}
+func (f *fakeStore) GetContextCarry(_ context.Context, _ string) (store.ContextCarry, error) {
+	return f.contextCarry, nil
+}
+func (f *fakeStore) UpsertContextCarry(_ context.Context, cc store.ContextCarry) error {
+	f.lastContextCarry = cc
+	return nil
+}
+func (f *fakeStore) CreateSession(_ context.Context, s store.Session) (store.Session, error) {
+	if s.ID == "" {
+		s.ID = "SES-01"
+	}
+	f.lastSession = s
+	return s, nil
+}
+func (f *fakeStore) EndSession(_ context.Context, _, _ string) error { return nil }
+func (f *fakeStore) HasActiveSession(_ context.Context, _ string) bool {
+	return f.activeSession
+}
+func (f *fakeStore) SetAgentActive(_ context.Context, _ string, active bool) error {
+	f.lastAgentActive = active
+	return nil
+}
+func (f *fakeStore) MoveStatus(_ context.Context, _, status string) error {
+	f.lastMoveStatus = status
+	return nil
+}
+func (f *fakeStore) CreateEvent(_ context.Context, e store.Event) (store.Event, error) {
+	f.lastEvent = e
+	return e, nil
+}
+
+type fakeLLMClient struct {
+	proposal     llm.ProposalDraft
+	summary      string
+	lastProposal llm.ProposalPrompt
+}
+
+func (f *fakeLLMClient) GenerateProposal(_ context.Context, in llm.ProposalPrompt) (llm.ProposalDraft, error) {
+	f.lastProposal = in
+	return f.proposal, nil
+}
+func (f *fakeLLMClient) SummarizeContext(_ context.Context, _ llm.SummaryInput) (string, error) {
+	return f.summary, nil
+}
+
+type fakeRunner struct {
+	handle RunHandle
+}
+
+type RunHandle struct {
+	Outcome string
+	Summary string
+}
+
+func (f fakeRunner) Start(_ context.Context, _ orchestrator.RunRequest) (orchestrator.RunHandle, error) {
+	return orchestrator.RunHandle{Outcome: f.handle.Outcome, Summary: f.handle.Summary}, nil
+}
