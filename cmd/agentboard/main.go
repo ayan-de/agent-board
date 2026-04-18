@@ -5,6 +5,8 @@ import (
 	"os"
 
 	"github.com/ayan-de/agent-board/internal/config"
+	"github.com/ayan-de/agent-board/internal/llm"
+	"github.com/ayan-de/agent-board/internal/orchestrator"
 	"github.com/ayan-de/agent-board/internal/store"
 	"github.com/ayan-de/agent-board/internal/theme"
 	"github.com/ayan-de/agent-board/internal/tui"
@@ -26,6 +28,15 @@ func main() {
 	}
 	defer s.Close()
 
+	llmClient, err := llm.NewFromConfig(cfg.LLM)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error creating llm client: %v\n", err)
+		os.Exit(1)
+	}
+
+	runner := orchestrator.NewExecRunner()
+	orch := orchestrator.NewService(s, llmClient, runner)
+
 	reg := theme.NewRegistry("dark")
 	reg.LoadBuiltins()
 	reg.LoadUserThemes()
@@ -33,7 +44,9 @@ func main() {
 		_ = reg.Set("agentboard")
 	}
 
-	app, err := tui.NewApp(cfg, s, reg)
+	app, err := tui.NewApp(cfg, s, reg, tui.AppDeps{
+		Orchestrator: orch,
+	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error creating app: %v\n", err)
 		os.Exit(1)
