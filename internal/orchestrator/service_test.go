@@ -36,3 +36,27 @@ func TestStartApprovedRunRejectsExistingActiveSession(t *testing.T) {
 		t.Fatal("expected duplicate active session error")
 	}
 }
+
+func TestFinishRunPersistsContextCarry(t *testing.T) {
+	fs := &fakeStore{
+		ticket: store.Ticket{
+			ID:     "AGE-01",
+			Status: "in_progress",
+		},
+	}
+	fllm := &fakeLLMClient{summary: "short handoff summary"}
+	svc := orchestrator.NewService(fs, fllm, nil)
+
+	err := svc.FinishRun(context.Background(), orchestrator.FinishRunInput{
+		TicketID:  "AGE-01",
+		SessionID: "SES-01",
+		Outcome:   "completed",
+		Summary:   "raw worker summary",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fs.lastContextCarry.Summary != "short handoff summary" {
+		t.Fatalf("Summary = %q, want short handoff summary", fs.lastContextCarry.Summary)
+	}
+}
