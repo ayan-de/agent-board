@@ -29,6 +29,35 @@ func (s *Store) migrate() error {
 	CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
 	CREATE INDEX IF NOT EXISTS idx_sessions_ticket ON sessions(ticket_id);
 	CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
+
+	CREATE TABLE IF NOT EXISTS proposals (
+		id TEXT PRIMARY KEY,
+		ticket_id TEXT NOT NULL,
+		agent TEXT NOT NULL,
+		status TEXT NOT NULL,
+		prompt TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	);
+
+	CREATE TABLE IF NOT EXISTS orchestration_events (
+		id TEXT PRIMARY KEY,
+		ticket_id TEXT NOT NULL,
+		session_id TEXT,
+		kind TEXT NOT NULL,
+		payload TEXT NOT NULL,
+		created_at DATETIME NOT NULL
+	);
+
+	CREATE TABLE IF NOT EXISTS context_carry (
+		ticket_id TEXT PRIMARY KEY,
+		summary TEXT NOT NULL,
+		updated_at DATETIME NOT NULL
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_proposals_ticket ON proposals(ticket_id);
+	CREATE INDEX IF NOT EXISTS idx_proposals_status ON proposals(status);
+	CREATE INDEX IF NOT EXISTS idx_events_ticket ON orchestration_events(ticket_id);
 	`
 
 	_, err := s.db.Exec(schema)
