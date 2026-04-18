@@ -937,3 +937,136 @@ func TestHasActiveSessionFalseAfterEnd(t *testing.T) {
 		t.Fatal("should have no active session after end")
 	}
 }
+
+func TestListActiveSessions(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	sessions, err := s.ListActiveSessions(context.Background())
+	if err != nil {
+		t.Fatalf("ListActiveSessions on empty: %v", err)
+	}
+	if len(sessions) != 0 {
+		t.Fatalf("expected 0 active sessions, got %d", len(sessions))
+	}
+
+	t1, _ := s.CreateTicket(context.Background(), Ticket{Title: "T1", Status: "in_progress"})
+	t2, _ := s.CreateTicket(context.Background(), Ticket{Title: "T2", Status: "in_progress"})
+
+	s1, _ := s.CreateSession(context.Background(), Session{
+		TicketID: t1.ID,
+		Agent:    "opencode",
+		Status:   "running",
+	})
+	s2, _ := s.CreateSession(context.Background(), Session{
+		TicketID: t2.ID,
+		Agent:    "claude",
+		Status:   "running",
+	})
+
+	sessions, err = s.ListActiveSessions(context.Background())
+	if err != nil {
+		t.Fatalf("ListActiveSessions: %v", err)
+	}
+	if len(sessions) != 2 {
+		t.Fatalf("expected 2 active sessions, got %d", len(sessions))
+	}
+
+	got := map[string]string{}
+	for _, sess := range sessions {
+		got[sess.ID] = sess.Agent
+	}
+	if got[s1.ID] != "opencode" {
+		t.Errorf("session %s agent = %q, want opencode", s1.ID, got[s1.ID])
+	}
+	if got[s2.ID] != "claude" {
+		t.Errorf("session %s agent = %q, want claude", s2.ID, got[s2.ID])
+	}
+
+	s.EndSession(context.Background(), s1.ID, "completed")
+
+	sessions, _ = s.ListActiveSessions(context.Background())
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 active session after ending one, got %d", len(sessions))
+	}
+	if sessions[0].ID != s2.ID {
+		t.Errorf("remaining session = %s, want %s", sessions[0].ID, s2.ID)
+	}
+}
+
+func TestDeleteTicketCascadesProposals(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	ticket, err := s.CreateTicket(context.Background(), Ticket{Title: "With proposal", Status: "in_progress"})
+	if err != nil {
+		t.Fatalf("CreateTicket: %v", err)
+	}
+
+	proposal, err := s.CreateProposal(context.Background(), Proposal{
+		TicketID: ticket.ID,
+		Agent:    "opencode",
+		Status:   "pending",
+		Prompt:   "do the work",
+	})
+	if err != nil {
+		t.Fatalf("CreateProposal: %v", err)
+	}
+
+	err = s.DeleteTicket(context.Background(), ticket.ID)
+	if err != nil {
+		t.Fatalf("DeleteTicket: %v", err)
+	}
+
+	_, err = s.GetProposal(context.Background(), proposal.ID)
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("proposal should be deleted with ticket, error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestDeleteTicketCascadesEvents(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	ticket, err := s.CreateTicket(context.Background(), Ticket{Title: "With event", Status: "in_progress"})
+	if err != nil {
+		t.Fatalf("CreateTicket: %v", err)
+	}
+
+	_, err = s.CreateEvent(context.Background(), Event{
+		TicketID: ticket.ID,
+		Kind:     "test",
+		Payload:  "data",
+	})
+	if err != nil {
+		t.Fatalf("CreateEvent: %v", err)
+	}
+
+	err = s.DeleteTicket(context.Background(), ticket.ID)
+	if err != nil {
+		t.Fatalf("DeleteTicket: %v", err)
+	}
+
+	var count int
+	s.db.QueryRow("SELECT COUNT(*) FROM orchestration_events WHERE ticket_id = ?", ticket.ID).Scan(&count)
+	if count != 0 {
+		t.Errorf("events should be deleted with ticket, found %d", count)
+	}
+}
+
+func TestTicketIDDoesNotReuseAfterDelete(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	t1, _ := s.CreateTicket(context.Background(), Ticket{Title: "First", Status: "backlog"})
+	s.DeleteTicket(context.Background(), t1.ID)
+
+	t2, _ := s.CreateTicket(context.Background(), Ticket{Title: "Second", Status: "backlog"})
+
+	if t2.ID == t1.ID {
+		t.Errorf("new ticket ID %q reused deleted ID %q", t2.ID, t1.ID)
+	}
+	if t2.ID != "AGT-02" {
+		t.Errorf("new ticket ID = %q, want AGT-02", t2.ID)
+	}
+}

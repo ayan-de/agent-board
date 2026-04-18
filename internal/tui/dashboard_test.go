@@ -1,9 +1,11 @@
 package tui
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/keybinding"
@@ -199,4 +201,142 @@ func TestDashboardViewNoWidth(t *testing.T) {
 	if view != "" {
 		t.Errorf("view should be empty with zero width, got: %q", view)
 	}
+}
+
+func TestDashboardShowsRunningWhenActiveSession(t *testing.T) {
+	m := newTestDashboard(t)
+
+	ctx := context.Background()
+	ticket, err := m.store.CreateTicket(ctx, store.Ticket{Title: "Test task", Status: "in_progress"})
+	if err != nil {
+		t.Fatalf("create ticket: %v", err)
+	}
+
+	_, err = m.store.CreateSession(ctx, store.Session{
+		TicketID: ticket.ID,
+		Agent:    "opencode",
+		Status:   "running",
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	m.width = 120
+	m.height = 40
+	view := m.View()
+	plain := stripAnsi(view)
+
+	if !strings.Contains(plain, "Running: yes") {
+		t.Errorf("view should show 'Running: yes' for agent with active session, got:\n%s", plain)
+	}
+	if !strings.Contains(plain, ticket.ID) {
+		t.Errorf("view should show ticket ID %q for running agent", ticket.ID)
+	}
+}
+
+func TestDashboardShowsNotRunningWhenNoSession(t *testing.T) {
+	m := newTestDashboard(t)
+	m.width = 120
+	m.height = 40
+
+	view := m.View()
+	plain := stripAnsi(view)
+	if !strings.Contains(plain, "Running: no") {
+		t.Errorf("view should show 'Running: no' for agents without active session, got:\n%s", plain)
+	}
+}
+
+func TestDashboardShowsNotRunningAfterSessionEnds(t *testing.T) {
+	m := newTestDashboard(t)
+
+	ctx := context.Background()
+	ticket, err := m.store.CreateTicket(ctx, store.Ticket{Title: "Done task", Status: "review"})
+	if err != nil {
+		t.Fatalf("create ticket: %v", err)
+	}
+
+	sess, err := m.store.CreateSession(ctx, store.Session{
+		TicketID: ticket.ID,
+		Agent:    "opencode",
+		Status:   "running",
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	err = m.store.EndSession(ctx, sess.ID, "completed")
+	if err != nil {
+		t.Fatalf("end session: %v", err)
+	}
+
+	m.width = 120
+	m.height = 40
+	view := m.View()
+	plain := stripAnsi(view)
+
+	if !strings.Contains(plain, "Running: no") {
+		t.Errorf("view should show 'Running: no' after session ends, got:\n%s", plain)
+	}
+}
+
+func TestDashboardRefreshLoadsActiveSessions(t *testing.T) {
+	m := newTestDashboard(t)
+
+	ctx := context.Background()
+	ticket, err := m.store.CreateTicket(ctx, store.Ticket{Title: "Active task", Status: "in_progress"})
+	if err != nil {
+		t.Fatalf("create ticket: %v", err)
+	}
+
+	_, err = m.store.CreateSession(ctx, store.Session{
+		TicketID: ticket.ID,
+		Agent:    "claude",
+		Status:   "running",
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	m = m.Refresh()
+	m.width = 120
+	m.height = 40
+	view := m.View()
+	plain := stripAnsi(view)
+
+	if !strings.Contains(plain, "Running: yes") {
+		t.Errorf("view should show running after Refresh(), got:\n%s", plain)
+	}
+	if !strings.Contains(plain, ticket.ID) {
+		t.Errorf("view should show ticket ID %q after Refresh()", ticket.ID)
+	}
+}
+
+func TestFormatUptime(t *testing.T) {
+	tests := []struct {
+		name string
+		age  string
+		want string
+	}{
+		{"30s", "30s", "30s"},
+		{"90s", "90s", "1m 30s"},
+		{"3700s", "3700s", "1h 1m"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			since := parseDuration(t, tt.age)
+			got := formatUptime(since)
+			if got != tt.want {
+				t.Errorf("formatUptime(%s) = %q, want %q", tt.age, got, tt.want)
+			}
+		})
+	}
+}
+
+func parseDuration(t *testing.T, s string) time.Time {
+	t.Helper()
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		t.Fatalf("parse duration %q: %v", s, err)
+	}
+	return time.Now().Add(-d)
 }

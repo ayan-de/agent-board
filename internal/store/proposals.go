@@ -20,14 +20,20 @@ type Proposal struct {
 const proposalPrefix = "PRO-"
 
 func (s *Store) nextProposalID(ctx context.Context) (string, error) {
-	var maxID int
-	err := s.db.QueryRowContext(ctx,
-		"SELECT COALESCE(MAX(CAST(SUBSTR(id, 5) AS INTEGER)), 0) FROM proposals",
-	).Scan(&maxID)
+	s.db.ExecContext(ctx, "INSERT OR IGNORE INTO id_counters (prefix, next_id) VALUES (?, 1)", proposalPrefix)
+
+	var nextID int
+	err := s.db.QueryRowContext(ctx, "SELECT next_id FROM id_counters WHERE prefix = ?", proposalPrefix).Scan(&nextID)
 	if err != nil {
 		return "", fmt.Errorf("store.nextProposalID: %w", err)
 	}
-	return fmt.Sprintf("%s%02d", proposalPrefix, maxID+1), nil
+
+	_, err = s.db.ExecContext(ctx, "UPDATE id_counters SET next_id = next_id + 1 WHERE prefix = ?", proposalPrefix)
+	if err != nil {
+		return "", fmt.Errorf("store.nextProposalID: %w", err)
+	}
+
+	return fmt.Sprintf("%s%02d", proposalPrefix, nextID), nil
 }
 
 func (s *Store) CreateProposal(ctx context.Context, p Proposal) (Proposal, error) {

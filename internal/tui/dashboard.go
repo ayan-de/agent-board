@@ -1,8 +1,10 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/keybinding"
@@ -25,13 +27,14 @@ type DashboardStyles struct {
 }
 
 type DashboardModel struct {
-	store     *store.Store
-	resolver  *keybinding.Resolver
-	agents    []config.DetectedAgent
-	width     int
-	height    int
-	refreshed bool
-	styles    DashboardStyles
+	store          *store.Store
+	resolver       *keybinding.Resolver
+	agents         []config.DetectedAgent
+	activeSessions map[string]store.Session
+	width          int
+	height         int
+	refreshed      bool
+	styles         DashboardStyles
 }
 
 func DefaultDashboardStyles() DashboardStyles {
@@ -123,8 +126,23 @@ func (m DashboardModel) handleKey(msg tea.KeyMsg) (DashboardModel, tea.Cmd) {
 	return m, nil
 }
 
+func (m *DashboardModel) loadActiveSessions() {
+	if m.store == nil {
+		return
+	}
+	sessions, err := m.store.ListActiveSessions(context.Background())
+	if err != nil {
+		return
+	}
+	m.activeSessions = make(map[string]store.Session, len(sessions))
+	for _, s := range sessions {
+		m.activeSessions[s.Agent] = s
+	}
+}
+
 func (m DashboardModel) Refresh() DashboardModel {
 	m.agents = config.DetectAgents()
+	m.loadActiveSessions()
 	m.refreshed = true
 	return m
 }
@@ -133,6 +151,8 @@ func (m DashboardModel) View() string {
 	if m.width == 0 {
 		return ""
 	}
+
+	m.loadActiveSessions()
 
 	var b strings.Builder
 
@@ -184,6 +204,18 @@ func (m DashboardModel) View() string {
 	return b.String()
 }
 
+func formatUptime(since time.Time) string {
+	d := time.Since(since)
+	d = d.Round(time.Second)
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	}
+	if d < time.Hour {
+		return fmt.Sprintf("%dm %ds", int(d.Minutes()), int(d.Seconds())%60)
+	}
+	return fmt.Sprintf("%dh %dm", int(d.Hours()), int(d.Minutes())%60)
+}
+
 func (m DashboardModel) renderCard(agent config.DetectedAgent) string {
 	logoColor := lipgloss.Color(agent.LogoClr)
 	if !agent.Found {
@@ -205,14 +237,24 @@ func (m DashboardModel) renderCard(agent config.DetectedAgent) string {
 		statusVal = "installed"
 	}
 
+	runningVal := "no"
+	ticketVal := "—"
+	uptimeVal := "—"
+
+	if sess, ok := m.activeSessions[agent.Binary]; ok {
+		runningVal = "yes"
+		ticketVal = sess.TicketID
+		uptimeVal = formatUptime(sess.StartedAt)
+	}
+
 	fields := []struct {
 		label string
 		value string
 	}{
 		{"Status:", statusVal},
-		{"Running:", "no"},
-		{"Ticket:", "—"},
-		{"Uptime:", "—"},
+		{"Running:", runningVal},
+		{"Ticket:", ticketVal},
+		{"Uptime:", uptimeVal},
 		{"Subagents:", "—"},
 		{"Tokens:", "—"},
 	}

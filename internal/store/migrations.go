@@ -58,6 +58,11 @@ func (s *Store) migrate() error {
 	CREATE INDEX IF NOT EXISTS idx_proposals_ticket ON proposals(ticket_id);
 	CREATE INDEX IF NOT EXISTS idx_proposals_status ON proposals(status);
 	CREATE INDEX IF NOT EXISTS idx_events_ticket ON orchestration_events(ticket_id);
+
+	CREATE TABLE IF NOT EXISTS id_counters (
+		prefix TEXT PRIMARY KEY,
+		next_id INTEGER NOT NULL DEFAULT 1
+	);
 	`
 
 	_, err := s.db.Exec(schema)

@@ -84,16 +84,21 @@ func (s *Store) isValidStatus(status string) bool {
 
 func (s *Store) nextTicketID(ctx context.Context) (string, error) {
 	prefix := s.ticketPrefix
-	prefixLen := len(prefix)
-	var maxID int
-	err := s.db.QueryRowContext(ctx,
-		"SELECT COALESCE(MAX(CAST(SUBSTR(id, ?) AS INTEGER)), 0) FROM tickets WHERE id LIKE ?",
-		prefixLen+1, prefix+"%",
-	).Scan(&maxID)
+
+	s.db.ExecContext(ctx, "INSERT OR IGNORE INTO id_counters (prefix, next_id) VALUES (?, 1)", prefix)
+
+	var nextID int
+	err := s.db.QueryRowContext(ctx, "SELECT next_id FROM id_counters WHERE prefix = ?", prefix).Scan(&nextID)
 	if err != nil {
 		return "", fmt.Errorf("store.nextTicketID: %w", err)
 	}
-	return fmt.Sprintf("%s%02d", prefix, maxID+1), nil
+
+	_, err = s.db.ExecContext(ctx, "UPDATE id_counters SET next_id = next_id + 1 WHERE prefix = ?", prefix)
+	if err != nil {
+		return "", fmt.Errorf("store.nextTicketID: %w", err)
+	}
+
+	return fmt.Sprintf("%s%02d", prefix, nextID), nil
 }
 
 func (s *Store) CreateTicket(ctx context.Context, t Ticket) (Ticket, error) {
@@ -243,6 +248,26 @@ func (s *Store) UpdateTicket(ctx context.Context, t Ticket) (Ticket, error) {
 }
 
 func (s *Store) DeleteTicket(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, "DELETE FROM context_carry WHERE ticket_id = ?", id)
+	if err != nil {
+		return fmt.Errorf("store.deleteTicket: context_carry: %w", err)
+	}
+
+	_, err = s.db.ExecContext(ctx, "DELETE FROM orchestration_events WHERE ticket_id = ?", id)
+	if err != nil {
+		return fmt.Errorf("store.deleteTicket: events: %w", err)
+	}
+
+	_, err = s.db.ExecContext(ctx, "DELETE FROM proposals WHERE ticket_id = ?", id)
+	if err != nil {
+		return fmt.Errorf("store.deleteTicket: proposals: %w", err)
+	}
+
+	_, err = s.db.ExecContext(ctx, "DELETE FROM sessions WHERE ticket_id = ?", id)
+	if err != nil {
+		return fmt.Errorf("store.deleteTicket: sessions: %w", err)
+	}
+
 	result, err := s.db.ExecContext(ctx, "DELETE FROM tickets WHERE id = ?", id)
 	if err != nil {
 		return fmt.Errorf("store.deleteTicket: %w", err)

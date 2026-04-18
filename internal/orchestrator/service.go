@@ -114,6 +114,12 @@ func (s Service) StartApprovedRun(ctx context.Context, proposalID string) (store
 		Payload:   handle.Outcome,
 	})
 
+	_ = s.FinishRun(ctx, FinishRunInput{
+		TicketID:  proposal.TicketID,
+		SessionID: session.ID,
+		Outcome:   handle.Outcome,
+		Summary:   handle.Summary,
+	})
+
 	return session, nil
 }
-

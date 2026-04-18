@@ -20,14 +20,20 @@ type Session struct {
 const sessionPrefix = "SES-"
 
 func (s *Store) nextSessionID(ctx context.Context) (string, error) {
-	var maxID int
-	err := s.db.QueryRowContext(ctx,
-		"SELECT COALESCE(MAX(CAST(SUBSTR(id, 5) AS INTEGER)), 0) FROM sessions",
-	).Scan(&maxID)
+	s.db.ExecContext(ctx, "INSERT OR IGNORE INTO id_counters (prefix, next_id) VALUES (?, 1)", sessionPrefix)
+
+	var nextID int
+	err := s.db.QueryRowContext(ctx, "SELECT next_id FROM id_counters WHERE prefix = ?", sessionPrefix).Scan(&nextID)
 	if err != nil {
 		return "", fmt.Errorf("store.nextSessionID: %w", err)
 	}
-	return fmt.Sprintf("%s%02d", sessionPrefix, maxID+1), nil
+
+	_, err = s.db.ExecContext(ctx, "UPDATE id_counters SET next_id = next_id + 1 WHERE prefix = ?", sessionPrefix)
+	if err != nil {
+		return "", fmt.Errorf("store.nextSessionID: %w", err)
+	}
+
+	return fmt.Sprintf("%s%02d", sessionPrefix, nextID), nil
 }
 
 func (s *Store) CreateSession(ctx context.Context, sess Session) (Session, error) {
@@ -116,6 +122,31 @@ func (s *Store) EndSession(ctx context.Context, id string, status string) error 
 	}
 
 	return nil
+}
+
+func (s *Store) ListActiveSessions(ctx context.Context) ([]Session, error) {
+	rows, err := s.db.QueryContext(ctx,
+		"SELECT id, ticket_id, agent, started_at, ended_at, status, context_key FROM sessions WHERE ended_at IS NULL ORDER BY started_at ASC",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("store.listActiveSessions: %w", err)
+	}
+	defer rows.Close()
+
+	var sessions []Session
+	for rows.Next() {
+		var sess Session
+		var endedAt sql.NullTime
+		if err := rows.Scan(&sess.ID, &sess.TicketID, &sess.Agent, &sess.StartedAt, &endedAt, &sess.Status, &sess.ContextKey); err != nil {
+			return nil, fmt.Errorf("store.listActiveSessions: %w", err)
+		}
+		if endedAt.Valid {
+			sess.EndedAt = &endedAt.Time
+		}
+		sessions = append(sessions, sess)
+	}
+
+	return sessions, nil
 }
 
 func (s *Store) HasActiveSession(ctx context.Context, ticketID string) bool {
