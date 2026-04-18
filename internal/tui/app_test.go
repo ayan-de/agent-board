@@ -5,8 +5,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ayan-de/agent-board/internal/config"
+	"github.com/ayan-de/agent-board/internal/orchestrator"
 	"github.com/ayan-de/agent-board/internal/store"
 	"github.com/ayan-de/agent-board/internal/theme"
 
@@ -14,7 +16,28 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-func newTestApp(t *testing.T) *App {
+type fakeOrchestrator struct {
+	lastCreateProposalTicketID string
+}
+
+func (f *fakeOrchestrator) CreateProposal(ctx context.Context, input orchestrator.CreateProposalInput) (store.Proposal, error) {
+	f.lastCreateProposalTicketID = input.TicketID
+	return store.Proposal{ID: "PRO-01", TicketID: input.TicketID}, nil
+}
+
+func (f *fakeOrchestrator) ApproveProposal(ctx context.Context, proposalID string) error {
+	return nil
+}
+
+func (f *fakeOrchestrator) StartApprovedRun(ctx context.Context, proposalID string) (store.Session, error) {
+	return store.Session{}, nil
+}
+
+func (f *fakeOrchestrator) FinishRun(ctx context.Context, input orchestrator.FinishRunInput) error {
+	return nil
+}
+
+func newTestApp(t *testing.T) (*App, *fakeOrchestrator) {
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
@@ -34,15 +57,18 @@ func newTestApp(t *testing.T) *App {
 		Success: lipgloss.Color("42"), Accent: lipgloss.Color("213"),
 	})
 
-	app, err := NewApp(cfg, s, reg)
+	fo := &fakeOrchestrator{}
+	app, err := NewApp(cfg, s, reg, AppDeps{
+		Orchestrator: fo,
+	})
 	if err != nil {
 		t.Fatalf("new app: %v", err)
 	}
-	return app
+	return app, fo
 }
 
 func TestNewApp(t *testing.T) {
-	app := newTestApp(t)
+	app, _ := newTestApp(t)
 
 	if app == nil {
 		t.Fatal("app is nil")
@@ -58,8 +84,59 @@ func TestNewApp(t *testing.T) {
 	}
 }
 
+func TestMoveToInProgressCreatesProposalRequest(t *testing.T) {
+	app, fo := newTestApp(t)
+	ctx := context.Background()
+
+	ticket, _ := app.store.CreateTicket(ctx, store.Ticket{Status: "backlog", Agent: "opencode", Title: "Test Ticket"})
+
+	// Directly send statusChangedMsg to Update
+	_, cmd := app.Update(statusChangedMsg{
+		ticketID:  ticket.ID,
+		newStatus: "in_progress",
+	})
+
+	if cmd == nil {
+		t.Fatal("expected command for proposal creation")
+	}
+
+	runCmd(cmd)
+
+	if fo.lastCreateProposalTicketID != ticket.ID {
+		t.Fatalf("ticketID = %q, want %q", fo.lastCreateProposalTicketID, ticket.ID)
+	}
+}
+
+
+func runCmd(cmd tea.Cmd) {
+	if cmd == nil {
+		return
+	}
+	// We run the command in a goroutine with a short timeout.
+	// This allows immediate commands (like our mock orchestrator) to finish
+	// while skipping long-running ones (like notification timers).
+	done := make(chan tea.Msg, 1)
+	go func() {
+		done <- cmd()
+	}()
+
+	select {
+	case msg := <-done:
+		if batch, ok := msg.(tea.BatchMsg); ok {
+			for _, c := range batch {
+				runCmd(c)
+			}
+		}
+	case <-time.After(20 * time.Millisecond):
+		// Likely a timer/infinite wait, skip it
+	}
+}
+
+
+
+
 func TestAppQuitShowsConfirmation(t *testing.T) {
-	app := newTestApp(t)
+	app, _ := newTestApp(t)
 
 	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
 	if cmd != nil {
@@ -71,7 +148,7 @@ func TestAppQuitShowsConfirmation(t *testing.T) {
 }
 
 func TestAppQuitConfirmYes(t *testing.T) {
-	app := newTestApp(t)
+	app, _ := newTestApp(t)
 
 	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
 	if !app.modal.Active() {
@@ -91,7 +168,7 @@ func TestAppQuitConfirmYes(t *testing.T) {
 }
 
 func TestAppQuitConfirmCancel(t *testing.T) {
-	app := newTestApp(t)
+	app, _ := newTestApp(t)
 
 	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
 	if !app.modal.Active() {
@@ -105,7 +182,7 @@ func TestAppQuitConfirmCancel(t *testing.T) {
 }
 
 func TestAppForceQuit(t *testing.T) {
-	app := newTestApp(t)
+	app, _ := newTestApp(t)
 	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
 	if cmd == nil {
 		t.Fatal("cmd is nil, expected tea.Quit")
@@ -117,7 +194,7 @@ func TestAppForceQuit(t *testing.T) {
 }
 
 func TestAppShowHelp(t *testing.T) {
-	app := newTestApp(t)
+	app, _ := newTestApp(t)
 
 	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
 	if app.view != viewHelp {
@@ -131,7 +208,7 @@ func TestAppShowHelp(t *testing.T) {
 }
 
 func TestAppOpenTicket(t *testing.T) {
-	app := newTestApp(t)
+	app, _ := newTestApp(t)
 	ctx := context.Background()
 
 	app.store.CreateTicket(ctx, store.Ticket{Title: "Open Me", Status: "backlog"})
@@ -152,7 +229,7 @@ func TestAppOpenTicket(t *testing.T) {
 }
 
 func TestAppOpenTicketEmptyColumn(t *testing.T) {
-	app := newTestApp(t)
+	app, _ := newTestApp(t)
 
 	app.Update(tea.KeyMsg{Type: tea.KeyEnter})
 
@@ -162,7 +239,7 @@ func TestAppOpenTicketEmptyColumn(t *testing.T) {
 }
 
 func TestAppEscapeReturnsToBoard(t *testing.T) {
-	app := newTestApp(t)
+	app, _ := newTestApp(t)
 	ctx := context.Background()
 
 	app.store.CreateTicket(ctx, store.Ticket{Title: "Escape Me", Status: "backlog"})
@@ -183,7 +260,7 @@ func TestAppEscapeReturnsToBoard(t *testing.T) {
 }
 
 func TestAppViewRouting(t *testing.T) {
-	app := newTestApp(t)
+	app, _ := newTestApp(t)
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 
 	view := app.View()
@@ -207,7 +284,7 @@ func TestAppViewRouting(t *testing.T) {
 }
 
 func TestAppWindowResizeDelegatesToKanban(t *testing.T) {
-	app := newTestApp(t)
+	app, _ := newTestApp(t)
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 
 	if app.kanban.width != 120 {
@@ -219,7 +296,7 @@ func TestAppWindowResizeDelegatesToKanban(t *testing.T) {
 }
 
 func TestAppNavigationDelegatesToKanban(t *testing.T) {
-	app := newTestApp(t)
+	app, _ := newTestApp(t)
 
 	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
 	if app.kanban.colIndex != 1 {
@@ -233,7 +310,7 @@ func TestAppNavigationDelegatesToKanban(t *testing.T) {
 }
 
 func TestAppShowDashboard(t *testing.T) {
-	app := newTestApp(t)
+	app, _ := newTestApp(t)
 
 	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
 	if app.view != viewDashboard {
@@ -247,7 +324,7 @@ func TestAppShowDashboard(t *testing.T) {
 }
 
 func TestAppEscapeFromDashboard(t *testing.T) {
-	app := newTestApp(t)
+	app, _ := newTestApp(t)
 
 	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
 	if app.view != viewDashboard {
@@ -261,7 +338,7 @@ func TestAppEscapeFromDashboard(t *testing.T) {
 }
 
 func TestAppDashboardViewRenders(t *testing.T) {
-	app := newTestApp(t)
+	app, _ := newTestApp(t)
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
 
@@ -272,7 +349,7 @@ func TestAppDashboardViewRenders(t *testing.T) {
 }
 
 func TestAppWindowResizeDelegatesToDashboard(t *testing.T) {
-	app := newTestApp(t)
+	app, _ := newTestApp(t)
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 
 	if app.dashboard.width != 120 {

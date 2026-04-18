@@ -10,7 +10,7 @@ import (
 )
 
 func TestAppTicketCreateShowsNotification(t *testing.T) {
-	app := newTestApp(t)
+	app, _ := newTestApp(t)
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 
 	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
@@ -37,7 +37,7 @@ func TestAppTicketCreateShowsNotification(t *testing.T) {
 }
 
 func TestAppTicketCreateNotificationDoesNotBlockNavigation(t *testing.T) {
-	app := newTestApp(t)
+	app, _ := newTestApp(t)
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 
 	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
@@ -56,7 +56,7 @@ func TestAppTicketCreateNotificationDoesNotBlockNavigation(t *testing.T) {
 }
 
 func TestAppNotificationDismissIgnoresStaleMessage(t *testing.T) {
-	app := newTestApp(t)
+	app, _ := newTestApp(t)
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 
 	_, firstCmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
@@ -90,7 +90,7 @@ func TestAppNotificationDismissIgnoresStaleMessage(t *testing.T) {
 }
 
 func TestAppAgentAssignShowsNotification(t *testing.T) {
-	app := newTestApp(t)
+	app, _ := newTestApp(t)
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	ctx := context.Background()
 
@@ -128,7 +128,7 @@ func TestAppAgentAssignShowsNotification(t *testing.T) {
 }
 
 func TestAppNotificationsStackInsteadOfReplacing(t *testing.T) {
-	app := newTestApp(t)
+	app, _ := newTestApp(t)
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 
 	_, firstCmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})

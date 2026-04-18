@@ -201,15 +201,18 @@ func TestTicketViewModelCycleStatus(t *testing.T) {
 	})
 	m = m.SetTicket(&ticket)
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
 
-	if m.ticket.Status != "in_progress" {
-		t.Errorf("status = %q after one cycle, want %q", m.ticket.Status, "in_progress")
+	if cmd == nil {
+		t.Fatal("expected command from cycleStatus")
 	}
-
-	view := m.View()
-	if !strings.Contains(view, "in_progress") {
-		t.Error("view does not show updated status")
+	msg := cmd()
+	sc, ok := msg.(statusChangedMsg)
+	if !ok {
+		t.Fatalf("expected statusChangedMsg, got %T", msg)
+	}
+	if sc.newStatus != "in_progress" {
+		t.Errorf("sc.newStatus = %q, want %q", sc.newStatus, "in_progress")
 	}
 }
 
@@ -223,13 +226,21 @@ func TestTicketViewModelCycleStatusWraps(t *testing.T) {
 	})
 	m = m.SetTicket(&ticket)
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
-	if m.ticket.Status != "backlog" {
-		t.Errorf("status = %q after wrap, want %q", m.ticket.Status, "backlog")
+	m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	if cmd == nil {
+		t.Fatal("expected command from cycleStatus")
+	}
+	msg := cmd()
+	sc, ok := msg.(statusChangedMsg)
+	if !ok {
+		t.Fatalf("expected statusChangedMsg, got %T", msg)
+	}
+	if sc.newStatus != "backlog" {
+		t.Errorf("sc.newStatus = %q after wrap, want %q", sc.newStatus, "backlog")
 	}
 }
 
-func TestTicketViewModelCycleStatusPersists(t *testing.T) {
+func TestTicketViewModelCycleStatusReturnsCmd(t *testing.T) {
 	m, s := newTestTicketView(t)
 	ctx := context.Background()
 
@@ -239,16 +250,16 @@ func TestTicketViewModelCycleStatusPersists(t *testing.T) {
 	})
 	m = m.SetTicket(&ticket)
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
-
-	loaded, err := s.GetTicket(ctx, ticket.ID)
-	if err != nil {
-		t.Fatalf("GetTicket: %v", err)
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	if cmd == nil {
+		t.Fatal("expected command")
 	}
-	if loaded.Status != "in_progress" {
-		t.Errorf("persisted status = %q, want %q", loaded.Status, "in_progress")
+	msg := cmd()
+	if _, ok := msg.(statusChangedMsg); !ok {
+		t.Errorf("got %T, want statusChangedMsg", msg)
 	}
 }
+
 
 func TestTicketViewModelEditTitle(t *testing.T) {
 	m, s := newTestTicketView(t)
