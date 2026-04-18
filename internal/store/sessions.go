@@ -117,3 +117,15 @@ func (s *Store) EndSession(ctx context.Context, id string, status string) error 
 
 	return nil
 }
+
+func (s *Store) HasActiveSession(ctx context.Context, ticketID string) bool {
+	var count int
+	err := s.db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM sessions WHERE ticket_id = ? AND ended_at IS NULL",
+		ticketID,
+	).Scan(&count)
+	if err != nil {
+		return false
+	}
+	return count > 0
+}
