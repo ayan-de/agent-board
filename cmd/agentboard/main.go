@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 
 	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/llm"
@@ -35,7 +36,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	runner := orchestrator.NewExecRunner()
+	var runner orchestrator.Runner = orchestrator.NewExecRunner()
+	if _, err := exec.LookPath("tmux"); err == nil {
+		runner = orchestrator.NewTmuxRunner()
+	}
 	mcpManager := mcp.NewManager(cfg.MCP)
 	ctxCarry := mcp.NewContextCarryAdapter(mcpManager, cfg.ProjectName)
 	orch := orchestrator.NewService(s, llmClient, runner, ctxCarry)
