@@ -6,6 +6,7 @@ import (
 
 	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/llm"
+	"github.com/ayan-de/agent-board/internal/mcp"
 	"github.com/ayan-de/agent-board/internal/orchestrator"
 	"github.com/ayan-de/agent-board/internal/store"
 	"github.com/ayan-de/agent-board/internal/theme"
@@ -35,7 +36,9 @@ func main() {
 	}
 
 	runner := orchestrator.NewExecRunner()
-	orch := orchestrator.NewService(s, llmClient, runner)
+	mcpManager := mcp.NewManager(cfg.MCP)
+	ctxCarry := mcp.NewContextCarryAdapter(mcpManager, cfg.ProjectName)
+	orch := orchestrator.NewService(s, llmClient, runner, ctxCarry)
 
 	reg := theme.NewRegistry("dark")
 	reg.LoadBuiltins()
