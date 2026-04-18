@@ -31,8 +31,8 @@ type DashboardModel struct {
 	store          *store.Store
 	orchestrator   Orchestrator
 	resolver       *keybinding.Resolver
-	agents         []config.DetectedAgent
-	activeSessions map[string]store.Session
+	Agents         []config.DetectedAgent
+	ActiveSessions map[string]store.Session
 	width          int
 	height         int
 	refreshed      bool
@@ -94,7 +94,7 @@ func NewDashboardStyles(t *theme.Theme) DashboardStyles {
 	}
 }
 
-func NewDashboardModel(s *store.Store, orch Orchestrator, resolver *keybinding.Resolver, agents []config.DetectedAgent, t *theme.Theme) DashboardModel {
+func NewDashboardModel(s *store.Store, orch Orchestrator, resolver *keybinding.Resolver, Agents []config.DetectedAgent, t *theme.Theme) DashboardModel {
 	ti := textinput.New()
 	ti.Placeholder = "Type command/answer..."
 	ti.CharLimit = 156
@@ -104,10 +104,17 @@ func NewDashboardModel(s *store.Store, orch Orchestrator, resolver *keybinding.R
 		store:        s,
 		orchestrator: orch,
 		resolver:     resolver,
-		agents:       agents,
+		Agents:       Agents,
 		styles:       NewDashboardStyles(t),
 		input:        ti,
 	}
+}
+
+func (m DashboardModel) SelectedAgent() config.DetectedAgent {
+	if m.cursor >= 0 && m.cursor < len(m.Agents) {
+		return m.Agents[m.cursor]
+	}
+	return config.DetectedAgent{}
 }
 
 func (m DashboardModel) Init() tea.Cmd {
@@ -122,8 +129,8 @@ func (m DashboardModel) Update(msg tea.Msg) (DashboardModel, tea.Cmd) {
 			if key.String() == "enter" {
 				val := m.input.Value()
 				if val != "" {
-					agent := m.agents[m.cursor]
-					if sess, running := m.activeSessions[agent.Binary]; running {
+					agent := m.Agents[m.cursor]
+					if sess, running := m.ActiveSessions[agent.Binary]; running {
 						_ = m.orchestrator.SendInput(sess.ID, val)
 					}
 					m.input.SetValue("")
@@ -158,17 +165,17 @@ func (m DashboardModel) handleKey(msg tea.KeyMsg) (DashboardModel, tea.Cmd) {
 		m = m.Refresh()
 	case keybinding.ActionNextTicket:
 		m.cursor++
-		if m.cursor >= len(m.agents) {
+		if m.cursor >= len(m.Agents) {
 			m.cursor = 0
 		}
 	case keybinding.ActionPrevTicket:
 		m.cursor--
 		if m.cursor < 0 {
-			m.cursor = len(m.agents) - 1
+			m.cursor = len(m.Agents) - 1
 		}
 	case keybinding.ActionInteract:
-		agent := m.agents[m.cursor]
-		if _, running := m.activeSessions[agent.Binary]; running {
+		agent := m.Agents[m.cursor]
+		if _, running := m.ActiveSessions[agent.Binary]; running {
 			m.isInput = true
 			return m, m.input.Focus()
 		}
@@ -185,14 +192,14 @@ func (m *DashboardModel) loadActiveSessions() {
 	if err != nil {
 		return
 	}
-	m.activeSessions = make(map[string]store.Session, len(sessions))
+	m.ActiveSessions = make(map[string]store.Session, len(sessions))
 	for _, s := range sessions {
-		m.activeSessions[s.Agent] = s
+		m.ActiveSessions[s.Agent] = s
 	}
 }
 
 func (m DashboardModel) Refresh() DashboardModel {
-	m.agents = config.DetectAgents()
+	m.Agents = config.DetectAgents()
 	m.loadActiveSessions()
 	m.refreshed = true
 	return m
@@ -223,9 +230,9 @@ func (m DashboardModel) View() string {
 	b.WriteString(split)
 	b.WriteString("\n\n")
 	footerStr := "j/k: select │ r: refresh │ Esc: back"
-	if m.cursor >= 0 && m.cursor < len(m.agents) {
-		agent := m.agents[m.cursor]
-		if _, running := m.activeSessions[agent.Binary]; running {
+	if m.cursor >= 0 && m.cursor < len(m.Agents) {
+		agent := m.Agents[m.cursor]
+		if _, running := m.ActiveSessions[agent.Binary]; running {
 			footerStr += " │ e: interact"
 		}
 	}
@@ -237,7 +244,7 @@ func (m DashboardModel) View() string {
 
 func (m DashboardModel) renderSidebar(width int) string {
 	var b strings.Builder
-	for i, agent := range m.agents {
+	for i, agent := range m.Agents {
 		prefix := "  "
 		style := m.styles.Label
 		if i == m.cursor {
@@ -249,7 +256,7 @@ func (m DashboardModel) renderSidebar(width int) string {
 		statusColor := "240"
 		if agent.Found {
 			statusColor = "42"
-			if _, running := m.activeSessions[agent.Binary]; running {
+			if _, running := m.ActiveSessions[agent.Binary]; running {
 				statusColor = "213"
 			}
 		}
@@ -269,11 +276,11 @@ func (m DashboardModel) renderSidebar(width int) string {
 }
 
 func (m DashboardModel) renderContent(width int) string {
-	if m.cursor < 0 || m.cursor >= len(m.agents) {
+	if m.cursor < 0 || m.cursor >= len(m.Agents) {
 		return m.styles.Placeholder.Width(width).Render("No agent selected")
 	}
 
-	agent := m.agents[m.cursor]
+	agent := m.Agents[m.cursor]
 	var b strings.Builder
 
 	logoColor := lipgloss.Color(agent.LogoClr)
@@ -294,7 +301,7 @@ func (m DashboardModel) renderContent(width int) string {
 		statusVal = "READY"
 	}
 
-	sess, running := m.activeSessions[agent.Binary]
+	sess, running := m.ActiveSessions[agent.Binary]
 	if running {
 		statusVal = "RUNNING"
 	}
@@ -399,7 +406,7 @@ func (m DashboardModel) renderCard(agent config.DetectedAgent) string {
 	ticketVal := "—"
 	uptimeVal := "—"
 
-	if sess, ok := m.activeSessions[agent.Binary]; ok {
+	if sess, ok := m.ActiveSessions[agent.Binary]; ok {
 		runningVal = "yes"
 		ticketVal = sess.TicketID
 		uptimeVal = formatUptime(sess.StartedAt)
@@ -413,7 +420,7 @@ func (m DashboardModel) renderCard(agent config.DetectedAgent) string {
 		{"Running:", runningVal},
 		{"Ticket:", ticketVal},
 		{"Uptime:", uptimeVal},
-		{"Subagents:", "—"},
+		{"SubAgents:", "—"},
 		{"Tokens:", "—"},
 	}
 

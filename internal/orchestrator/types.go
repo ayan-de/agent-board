@@ -31,6 +31,7 @@ type RunRequest struct {
 	Prompt    string
 	Reporter  func(string)
 	InputChan chan io.Writer
+	Target    string
 }
 
 

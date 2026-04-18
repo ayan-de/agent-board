@@ -41,15 +41,17 @@ func (r TmuxRunner) Start(ctx context.Context, req RunRequest) (RunHandle, error
 	_ = os.MkdirAll(logDir, 0755)
 	logFile := filepath.Join(logDir, fmt.Sprintf("%s.log", req.SessionID))
 	
-	// Command to run inside tmux: run the agent and tee to log file
-	// We use --format json to ensure we can parse the outcome.
-	innerCmd := fmt.Sprintf("%s run --format json %q | tee %s", agentPath, req.Prompt, logFile)
+	// Command to run inside tmux: run the agent directly in TUI mode.
+	innerCmd := fmt.Sprintf("%s run %q", agentPath, req.Prompt)
 	
 	// Create detached session
 	cmd := exec.Command(tmuxPath, "new-session", "-d", "-s", sessionName, innerCmd)
 	if err := cmd.Run(); err != nil {
 		return RunHandle{}, fmt.Errorf("tmuxRunner.start: failed to create tmux session: %w", err)
 	}
+
+	// Use pipe-pane to capture output for parsing without interfering with the PTY
+	_ = exec.Command(tmuxPath, "pipe-pane", "-t", sessionName, fmt.Sprintf("cat > %s", logFile)).Run()
 
 	if req.Reporter != nil {
 		req.Reporter(fmt.Sprintf("Tmux session %s created. Run 'tmux attach -t %s' to watch live.", sessionName, sessionName))

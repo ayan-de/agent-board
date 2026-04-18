@@ -13,6 +13,7 @@ import (
 	"github.com/ayan-de/agent-board/internal/orchestrator"
 	"github.com/ayan-de/agent-board/internal/store"
 	"github.com/ayan-de/agent-board/internal/theme"
+	"github.com/ayan-de/agent-board/internal/tmux"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -113,6 +114,9 @@ type App struct {
 	activeTicket *store.Ticket
 
 	generatingProposals map[string]bool
+	dashboardPaneID     string
+	lastSelectedAgent   string
+	lastSelectedSession string
 }
 
 func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry, deps AppDeps) (*App, error) {
@@ -197,6 +201,26 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		a.kanban, cmd = a.kanban.Update(msg)
 		a.dashboard, _ = a.dashboard.Update(msg)
+
+		if a.view == viewDashboard {
+			hasRunning := len(a.dashboard.ActiveSessions) > 0
+			if hasRunning && a.dashboardPaneID == "" && tmux.IsInTmux() && a.config.General.Tmux != "false" {
+				// Start split
+				id, err := tmux.SplitVertical(70, "")
+				if err == nil {
+					a.dashboardPaneID = id
+				}
+			} else if !hasRunning && a.dashboardPaneID != "" {
+				// Kill split
+				_ = tmux.KillPane(a.dashboardPaneID)
+				a.dashboardPaneID = ""
+			}
+
+			if a.dashboardPaneID != "" {
+				a.syncDashboardPane()
+			}
+		}
+
 		return a, cmd
 	case notificationDismissMsg:
 		a.notification = a.notification.HandleDismiss(msg)
@@ -296,6 +320,36 @@ func (a *App) startRunCmd(proposalID string) tea.Cmd {
 		}
 		return runCompletedMsg{ticketID: session.TicketID}
 	}
+}
+
+func (a *App) syncDashboardPane() {
+	agent := a.dashboard.SelectedAgent()
+	sess, running := a.dashboard.ActiveSessions[agent.Binary]
+	
+	// Create a stable key for comparison
+	sessID := ""
+	if running {
+		sessID = sess.ID
+	}
+
+	if agent.Binary == a.lastSelectedAgent && sessID == a.lastSelectedSession {
+		return
+	}
+
+	a.lastSelectedAgent = agent.Binary
+	a.lastSelectedSession = sessID
+
+	var cmd string
+	if running {
+		// Use -d to detach from other clients if needed, and sh -c to handle errors gracefully
+		cmd = fmt.Sprintf("sh -c \"tmux attach-session -d -t agentboard-%s || (echo 'Could not attach to session agentboard-%s' && sleep 5)\"", sess.TicketID, sess.TicketID)
+	} else if agent.Found {
+		cmd = fmt.Sprintf("echo 'Agent %s is idle. Assign it to a ticket to begin.'", agent.Name)
+	} else {
+		cmd = fmt.Sprintf("echo 'Agent %s not found in PATH.'", agent.Binary)
+	}
+
+	_ = tmux.RespawnPane(a.dashboardPaneID, cmd)
 }
 
 func (a *App) handleStatusChanged(msg statusChangedMsg) (tea.Model, tea.Cmd) {
@@ -436,9 +490,19 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case keybinding.ActionShowDashboard:
 		if a.view == viewDashboard {
 			a.view = viewBoard
+			if a.dashboardPaneID != "" {
+				_ = tmux.KillPane(a.dashboardPaneID)
+				a.dashboardPaneID = ""
+			}
 		} else {
 			a.dashboard = a.dashboard.Refresh()
 			a.view = viewDashboard
+			if tmux.IsInTmux() && a.config.General.Tmux != "false" && len(a.dashboard.ActiveSessions) > 0 {
+				id, err := tmux.SplitVertical(70, "")
+				if err == nil {
+					a.dashboardPaneID = id
+				}
+			}
 		}
 	case keybinding.ActionOpenPalette:
 		a.palette.Open()

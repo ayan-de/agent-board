@@ -119,7 +119,7 @@ func parseOpencodeOutput(r io.Reader) (RunHandle, error) {
 
 	summary := strings.Join(texts, "\n")
 	if summary == "" {
-		summary = "agent completed with no text output"
+		summary = "Agent finished its task (UI mode)."
 	}
 
 	outcome := "completed"
