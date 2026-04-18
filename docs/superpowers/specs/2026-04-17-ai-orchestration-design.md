@@ -121,7 +121,7 @@ Responsibilities:
 - choose an execution target and shape the child-agent prompt
 - return a proposal that the user can approve or reject
 
-The coordinator should depend on an internal `LLMClient` interface rather than a framework dependency such as LangChain in the first slice. A thin local interface is a better fit for the existing Go codebase and keeps provider integration under AgentBoard control.
+The coordinator depends on an internal `LLMClient` interface defined in `internal/llm`. The concrete implementation uses LangChain Go (`github.com/tmc/langchaingo`) for provider construction and model calls, but LangChain symbols are confined to the `internal/llm` package. The orchestrator and TUI depend only on the `llm.Client` interface, keeping provider integration isolated and testable.
 
 ### Approval Service
 
@@ -286,13 +286,17 @@ This package should hold:
 - runner defaults
 - approval policy defaults if needed later
 
+### `internal/llm`
+
+This package isolates LangChain Go (`github.com/tmc/langchaingo`) behind an AgentBoard-owned `Client` interface. The orchestrator and other consumers depend on `llm.Client`, not on LangChain types directly. The package handles provider construction (openai, ollama, etc.) and exposes two methods: `GenerateProposal` for coordinator calls and `SummarizeContext` for summarizer calls.
+
 ### `internal/decomposition`
 
 This package may later help shape prompts or task decomposition, but it should not own execution, session lifecycle, or board mutations.
 
 ## Configuration Strategy
 
-The first slice should reuse the existing `LLMConfig` shape where possible, expanding it only as needed. The user can provide a model API key through configuration, and AgentBoard uses that key for the coordinator only. Child agent CLIs remain local tools discovered on the host.
+The first slice should reuse the existing `LLMConfig` shape where possible, expanding it only as needed. The `LLMConfig` struct gains coordinator-specific fields (`coordinator_provider`, `coordinator_model`, `coordinator_api_key`, `coordinator_base_url`) and summarizer-specific fields (`summarizer_provider`, `summarizer_model`, `summarizer_api_key`, `summarizer_base_url`) plus a `require_approval` toggle. When coordinator fields are not set, they fall back to the base `provider`/`model`/`api_key`/`base_url` fields. When summarizer fields are not set, they fall back to the coordinator fields. The user can provide a model API key through configuration, and AgentBoard uses that key for the coordinator only. Child agent CLIs remain local tools discovered on the host.
 
 For the first implementation, storing the API key in config is acceptable if it follows the existing config storage conventions. If secret management becomes broader later, configuration can evolve to support environment references or external secret stores without changing orchestrator contracts.
 
