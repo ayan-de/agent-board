@@ -28,7 +28,7 @@ func TestCreateProposalUsesTicketAndContextCarry(t *testing.T) {
 			Prompt: "work with prior run summary",
 		},
 	}
-	svc := orchestrator.NewService(fs, fllm, nil)
+	svc := orchestrator.NewService(fs, fllm, nil, fakeCtx{})
 
 	proposal, err := svc.CreateProposal(context.Background(), orchestrator.CreateProposalInput{
 		TicketID: "AGT-01",
@@ -71,7 +71,7 @@ func TestCreateProposalRecordsEvent(t *testing.T) {
 	fllm := &fakeLLMClient{
 		proposal: llm.ProposalDraft{Prompt: "do work"},
 	}
-	svc := orchestrator.NewService(fs, fllm, nil)
+	svc := orchestrator.NewService(fs, fllm, nil, fakeCtx{})
 
 	_, err := svc.CreateProposal(context.Background(), orchestrator.CreateProposalInput{
 		TicketID: "AGT-01",
@@ -96,7 +96,7 @@ func TestCreateProposalRejectsUnassignedTicket(t *testing.T) {
 			Agent: "",
 		},
 	}
-	svc := orchestrator.NewService(fs, nil, nil)
+	svc := orchestrator.NewService(fs, nil, nil, fakeCtx{})
 
 	_, err := svc.CreateProposal(context.Background(), orchestrator.CreateProposalInput{
 		TicketID: "AGT-01",

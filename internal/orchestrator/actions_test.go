@@ -17,7 +17,7 @@ func TestApplyRunOutcomeMovesTicketToReview(t *testing.T) {
 			AgentActive: true,
 		},
 	}
-	svc := orchestrator.NewService(fs, nil, nil)
+	svc := orchestrator.NewService(fs, nil, nil, fakeCtx{})
 
 	err := svc.ApplyRunOutcome(context.Background(), orchestrator.ApplyRunOutcomeInput{
 		TicketID: "AGE-01",

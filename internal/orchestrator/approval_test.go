@@ -22,7 +22,7 @@ func TestApproveProposalSucceeds(t *testing.T) {
 			CreatedAt: time.Unix(20, 0),
 		},
 	}
-	svc := orchestrator.NewService(fs, nil, nil)
+	svc := orchestrator.NewService(fs, nil, nil, fakeCtx{})
 
 	err := svc.ApproveProposal(context.Background(), "PRO-01")
 	if err != nil {
@@ -46,7 +46,7 @@ func TestApproveProposalRejectsStaleTicketState(t *testing.T) {
 			CreatedAt: time.Unix(10, 0),
 		},
 	}
-	svc := orchestrator.NewService(fs, nil, nil)
+	svc := orchestrator.NewService(fs, nil, nil, fakeCtx{})
 
 	err := svc.ApproveProposal(context.Background(), "PRO-01")
 	if err == nil {
@@ -67,7 +67,7 @@ func TestApproveProposalRejectsNonPending(t *testing.T) {
 			CreatedAt: time.Unix(20, 0),
 		},
 	}
-	svc := orchestrator.NewService(fs, nil, nil)
+	svc := orchestrator.NewService(fs, nil, nil, fakeCtx{})
 
 	err := svc.ApproveProposal(context.Background(), "PRO-01")
 	if err == nil {

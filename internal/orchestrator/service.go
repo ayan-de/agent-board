@@ -12,10 +12,11 @@ type Service struct {
 	store  Store
 	llm    LLMClient
 	runner Runner
+	ctx    ContextCarryProvider
 }
 
-func NewService(store Store, llm LLMClient, runner Runner) *Service {
-	return &Service{store: store, llm: llm, runner: runner}
+func NewService(store Store, llm LLMClient, runner Runner, ctx ContextCarryProvider) *Service {
+	return &Service{store: store, llm: llm, runner: runner, ctx: ctx}
 }
 
 func (s Service) CreateProposal(ctx context.Context, input CreateProposalInput) (store.Proposal, error) {
@@ -31,14 +32,21 @@ func (s Service) CreateProposal(ctx context.Context, input CreateProposalInput) 
 	}
 
 	cc, _ := s.store.GetContextCarry(ctx, input.TicketID)
+	externalCtx, _ := s.ctx.LoadContext(ctx, input.TicketID)
+
+	carrySummary := cc.Summary
+	if externalCtx != "" {
+		carrySummary = fmt.Sprintf("%s\n\nExternal context:\n%s", carrySummary, externalCtx)
+	}
 
 	draft, err := s.llm.GenerateProposal(ctx, llm.ProposalPrompt{
 		TicketID:      ticket.ID,
 		Title:         ticket.Title,
 		Description:   ticket.Description,
 		AssignedAgent: ticket.Agent,
-		ContextCarry:  cc.Summary,
+		ContextCarry:  carrySummary,
 	})
+
 	if err != nil {
 		return store.Proposal{}, fmt.Errorf("orchestrator.createProposal: %w", err)
 	}
@@ -108,3 +116,4 @@ func (s Service) StartApprovedRun(ctx context.Context, proposalID string) (store
 
 	return session, nil
 }
+

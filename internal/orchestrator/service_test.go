@@ -29,7 +29,7 @@ func TestStartApprovedRunRejectsExistingActiveSession(t *testing.T) {
 			Prompt:   "do work",
 		},
 	}
-	svc := orchestrator.NewService(fs, nil, fakeRunner{})
+	svc := orchestrator.NewService(fs, nil, nil, fakeCtx{})
 
 	_, err := svc.StartApprovedRun(context.Background(), "PRO-01")
 	if err == nil {
@@ -45,7 +45,7 @@ func TestFinishRunPersistsContextCarry(t *testing.T) {
 		},
 	}
 	fllm := &fakeLLMClient{summary: "short handoff summary"}
-	svc := orchestrator.NewService(fs, fllm, nil)
+	svc := orchestrator.NewService(fs, fllm, nil, fakeCtx{})
 
 	err := svc.FinishRun(context.Background(), orchestrator.FinishRunInput{
 		TicketID:  "AGE-01",

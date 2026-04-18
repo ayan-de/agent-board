@@ -86,14 +86,16 @@ func (f *fakeLLMClient) SummarizeContext(_ context.Context, _ llm.SummaryInput) 
 }
 
 type fakeRunner struct {
-	handle RunHandle
-}
-
-type RunHandle struct {
-	Outcome string
-	Summary string
+	outcome string
+	summary string
 }
 
 func (f fakeRunner) Start(_ context.Context, _ orchestrator.RunRequest) (orchestrator.RunHandle, error) {
-	return orchestrator.RunHandle{Outcome: f.handle.Outcome, Summary: f.handle.Summary}, nil
+	return orchestrator.RunHandle{Outcome: f.outcome, Summary: f.summary}, nil
 }
+
+type fakeCtx struct{}
+
+func (f fakeCtx) LoadContext(ctx context.Context, ticketID string) (string, error) { return "", nil }
+func (f fakeCtx) SaveContext(ctx context.Context, ticketID, outcome string) error  { return nil }
+

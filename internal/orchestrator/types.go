@@ -30,6 +30,7 @@ type RunRequest struct {
 	Prompt    string
 }
 
+
 type RunHandle struct {
 	Outcome string
 	Summary string
@@ -57,4 +58,8 @@ type Store interface {
 	SetAgentActive(ctx context.Context, id string, active bool) error
 	MoveStatus(ctx context.Context, id, status string) error
 	CreateEvent(ctx context.Context, e store.Event) (store.Event, error)
+}
+type ContextCarryProvider interface {
+	LoadContext(ctx context.Context, ticketID string) (string, error)
+	SaveContext(ctx context.Context, ticketID, outcome string) error
 }
