@@ -73,10 +73,13 @@ layout = "compact"
 default = "opencode"
 
 [llm]
-# provider = "openai"
-# model = "gpt-4o"
+# provider = "openai"    # openai, ollama, claude, zai
+# model = "gpt-4o-mini"
 # api_key = ""
 # base_url = ""
+# coordinator_model = "" # defaults to model if empty
+# summarizer_model = ""  # defaults to model if empty
+# require_approval = true
 
 [mcp]
 npm_path = "npm"

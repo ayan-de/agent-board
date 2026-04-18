@@ -468,6 +468,66 @@ prev_column = "H"
 	}
 }
 
+func TestSetDefaultsRequireApprovalTrue(t *testing.T) {
+	cfg := SetDefaults()
+	if !cfg.LLM.RequireApproval {
+		t.Fatal("LLM.RequireApproval should default to true")
+	}
+}
+
+func TestLoadFromDirReadsOrchestrationFields(t *testing.T) {
+	baseDir := t.TempDir()
+	projectDir := filepath.Join(baseDir, "projects", "agent-board")
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(projectDir, "config.toml")
+	if err := os.WriteFile(configPath, []byte(`
+[llm]
+provider = "ollama"
+model = "qwen2.5-coder"
+base_url = "http://127.0.0.1:11434"
+coordinator_model = "qwen2.5-coder"
+summarizer_model = "qwen2.5:7b"
+require_approval = true
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := LoadFromDir(baseDir, "agent-board")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if cfg.LLM.Provider != "ollama" {
+		t.Fatalf("Provider = %q, want ollama", cfg.LLM.Provider)
+	}
+	if cfg.LLM.CoordinatorModel != "qwen2.5-coder" {
+		t.Fatalf("CoordinatorModel = %q, want qwen2.5-coder", cfg.LLM.CoordinatorModel)
+	}
+	if cfg.LLM.SummarizerModel != "qwen2.5:7b" {
+		t.Fatalf("SummarizerModel = %q, want qwen2.5:7b", cfg.LLM.SummarizerModel)
+	}
+	if !cfg.LLM.RequireApproval {
+		t.Fatal("RequireApproval should be true")
+	}
+}
+
+func TestApplyEnvVarsCoordinatorModel(t *testing.T) {
+	t.Setenv("AGENTBOARD_LLM_COORDINATOR_MODEL", "gpt-4o")
+	t.Setenv("AGENTBOARD_LLM_SUMMARIZER_MODEL", "gpt-4o-mini")
+
+	cfg := SetDefaults()
+	applyEnvVars(cfg)
+
+	if cfg.LLM.CoordinatorModel != "gpt-4o" {
+		t.Errorf("CoordinatorModel = %q, want gpt-4o", cfg.LLM.CoordinatorModel)
+	}
+	if cfg.LLM.SummarizerModel != "gpt-4o-mini" {
+		t.Errorf("SummarizerModel = %q, want gpt-4o-mini", cfg.LLM.SummarizerModel)
+	}
+}
+
 func TestGetGitRemote(t *testing.T) {
 	remote := getGitRemote()
 	_ = remote

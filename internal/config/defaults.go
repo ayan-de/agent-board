@@ -19,8 +19,10 @@ func SetDefaults() *Config {
 			Theme:  "agentboard",
 			Layout: "compact",
 		},
-		LLM: LLMConfig{},
-		DB:  DBConfig{},
+		LLM: LLMConfig{
+			RequireApproval: true,
+		},
+		DB: DBConfig{},
 		MCP: MCPConfig{
 			NPMPath:  "npm",
 			NodePath: "node",

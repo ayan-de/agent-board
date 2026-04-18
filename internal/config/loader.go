@@ -89,6 +89,12 @@ func applyEnvVars(cfg *Config) {
 	if v := os.Getenv("AGENTBOARD_LLM_BASE_URL"); v != "" {
 		cfg.LLM.BaseURL = v
 	}
+	if v := os.Getenv("AGENTBOARD_LLM_COORDINATOR_MODEL"); v != "" {
+		cfg.LLM.CoordinatorModel = v
+	}
+	if v := os.Getenv("AGENTBOARD_LLM_SUMMARIZER_MODEL"); v != "" {
+		cfg.LLM.SummarizerModel = v
+	}
 	if v := os.Getenv("AGENTBOARD_NPM_PATH"); v != "" {
 		cfg.MCP.NPMPath = v
 	}
