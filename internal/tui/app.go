@@ -82,6 +82,8 @@ type Orchestrator interface {
 	ApproveProposal(ctx context.Context, proposalID string) error
 	StartApprovedRun(ctx context.Context, proposalID string) (store.Session, error)
 	FinishRun(ctx context.Context, input orchestrator.FinishRunInput) error
+	GetLogs(sessionID string) []string
+	SendInput(sessionID, input string) error
 }
 
 type AppDeps struct {
@@ -139,7 +141,7 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry, deps AppDep
 		view:         viewBoard,
 		kanban:       kanban,
 		ticketView:   NewTicketViewModel(s, resolver, t, agents),
-		dashboard:    NewDashboardModel(s, resolver, agents, t),
+		dashboard:    NewDashboardModel(s, deps.Orchestrator, resolver, agents, t),
 		generatingProposals: make(map[string]bool),
 	}
 
@@ -194,6 +196,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		var cmd tea.Cmd
 		a.kanban, cmd = a.kanban.Update(msg)
+		a.dashboard, _ = a.dashboard.Update(msg)
 		return a, cmd
 	case notificationDismissMsg:
 		a.notification = a.notification.HandleDismiss(msg)

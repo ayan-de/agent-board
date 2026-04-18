@@ -10,6 +10,7 @@ import (
 	"github.com/ayan-de/agent-board/internal/keybinding"
 	"github.com/ayan-de/agent-board/internal/store"
 	"github.com/ayan-de/agent-board/internal/theme"
+	"github.com/charmbracelet/bubbles/textinput"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -28,6 +29,7 @@ type DashboardStyles struct {
 
 type DashboardModel struct {
 	store          *store.Store
+	orchestrator   Orchestrator
 	resolver       *keybinding.Resolver
 	agents         []config.DetectedAgent
 	activeSessions map[string]store.Session
@@ -35,6 +37,9 @@ type DashboardModel struct {
 	height         int
 	refreshed      bool
 	styles         DashboardStyles
+	cursor         int
+	input          textinput.Model
+	isInput        bool
 }
 
 func DefaultDashboardStyles() DashboardStyles {
@@ -89,12 +94,19 @@ func NewDashboardStyles(t *theme.Theme) DashboardStyles {
 	}
 }
 
-func NewDashboardModel(s *store.Store, resolver *keybinding.Resolver, agents []config.DetectedAgent, t *theme.Theme) DashboardModel {
+func NewDashboardModel(s *store.Store, orch Orchestrator, resolver *keybinding.Resolver, agents []config.DetectedAgent, t *theme.Theme) DashboardModel {
+	ti := textinput.New()
+	ti.Placeholder = "Type command/answer..."
+	ti.CharLimit = 156
+	ti.Width = 40
+
 	return DashboardModel{
-		store:    s,
-		resolver: resolver,
-		agents:   agents,
-		styles:   NewDashboardStyles(t),
+		store:        s,
+		orchestrator: orch,
+		resolver:     resolver,
+		agents:       agents,
+		styles:       NewDashboardStyles(t),
+		input:        ti,
 	}
 }
 
@@ -103,6 +115,29 @@ func (m DashboardModel) Init() tea.Cmd {
 }
 
 func (m DashboardModel) Update(msg tea.Msg) (DashboardModel, tea.Cmd) {
+	if m.isInput {
+		var cmd tea.Cmd
+		m.input, cmd = m.input.Update(msg)
+		if key, ok := msg.(tea.KeyMsg); ok {
+			if key.String() == "enter" {
+				val := m.input.Value()
+				if val != "" {
+					agent := m.agents[m.cursor]
+					if sess, running := m.activeSessions[agent.Binary]; running {
+						_ = m.orchestrator.SendInput(sess.ID, val)
+					}
+					m.input.SetValue("")
+				}
+				m.isInput = false
+				m.input.Blur()
+			} else if key.String() == "esc" {
+				m.isInput = false
+				m.input.Blur()
+			}
+		}
+		return m, cmd
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -121,6 +156,22 @@ func (m DashboardModel) handleKey(msg tea.KeyMsg) (DashboardModel, tea.Cmd) {
 	switch action {
 	case keybinding.ActionRefresh:
 		m = m.Refresh()
+	case keybinding.ActionNextTicket:
+		m.cursor++
+		if m.cursor >= len(m.agents) {
+			m.cursor = 0
+		}
+	case keybinding.ActionPrevTicket:
+		m.cursor--
+		if m.cursor < 0 {
+			m.cursor = len(m.agents) - 1
+		}
+	case keybinding.ActionInteract:
+		agent := m.agents[m.cursor]
+		if _, running := m.activeSessions[agent.Binary]; running {
+			m.isInput = true
+			return m, m.input.Focus()
+		}
 	}
 
 	return m, nil
@@ -154,54 +205,161 @@ func (m DashboardModel) View() string {
 
 	m.loadActiveSessions()
 
-	var b strings.Builder
+	sidebarWidth := 30
+	contentWidth := m.width - sidebarWidth - 2
+	if contentWidth < 20 {
+		contentWidth = 20
+	}
 
+	sidebar := m.renderSidebar(sidebarWidth)
+	content := m.renderContent(contentWidth)
+
+	split := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, content)
+
+	var b strings.Builder
 	title := m.styles.Title.Render("Agent Dashboard")
 	b.WriteString(title)
 	b.WriteString("\n\n")
-
-	var found []config.DetectedAgent
-	for _, a := range m.agents {
-		if a.Found {
-			found = append(found, a)
+	b.WriteString(split)
+	b.WriteString("\n\n")
+	footerStr := "j/k: select │ r: refresh │ Esc: back"
+	if m.cursor >= 0 && m.cursor < len(m.agents) {
+		agent := m.agents[m.cursor]
+		if _, running := m.activeSessions[agent.Binary]; running {
+			footerStr += " │ e: interact"
 		}
 	}
-
-	if len(found) == 0 {
-		b.WriteString(m.styles.Placeholder.Render("No agents found on $PATH"))
-		b.WriteString("\n\n")
-		footer := m.styles.Footer.Render("r: refresh | Esc: back")
-		b.WriteString(footer)
-		return b.String()
-	}
-
-	cards := make([]string, len(found))
-	for i, agent := range found {
-		cards[i] = m.renderCard(agent)
-	}
-
-	innerWidth := m.width - 4
-	cardWidth := 42
-	cardsPerRow := innerWidth / cardWidth
-	if cardsPerRow < 1 {
-		cardsPerRow = 1
-	}
-
-	for rowStart := 0; rowStart < len(cards); rowStart += cardsPerRow {
-		rowEnd := rowStart + cardsPerRow
-		if rowEnd > len(cards) {
-			rowEnd = len(cards)
-		}
-		row := lipgloss.JoinHorizontal(lipgloss.Top, cards[rowStart:rowEnd]...)
-		b.WriteString(row)
-		b.WriteString("\n")
-	}
-
-	b.WriteString("\n")
-	footer := m.styles.Footer.Render("r: refresh | Esc: back")
+	footer := m.styles.Footer.Render(footerStr)
 	b.WriteString(footer)
 
 	return b.String()
+}
+
+func (m DashboardModel) renderSidebar(width int) string {
+	var b strings.Builder
+	for i, agent := range m.agents {
+		prefix := "  "
+		style := m.styles.Label
+		if i == m.cursor {
+			prefix = "▸ "
+			style = m.styles.Title
+		}
+
+		statusDot := " ●"
+		statusColor := "240"
+		if agent.Found {
+			statusColor = "42"
+			if _, running := m.activeSessions[agent.Binary]; running {
+				statusColor = "213"
+			}
+		}
+		dot := lipgloss.NewStyle().Foreground(lipgloss.Color(statusColor)).Render(statusDot)
+
+		row := prefix + agent.Name + dot
+		b.WriteString(style.Width(width).Render(row))
+		b.WriteString("\n")
+	}
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder(), false, true, false, false).
+		BorderForeground(lipgloss.Color("240")).
+		Height(m.height - 8).
+		Width(width).
+		Render(b.String())
+}
+
+func (m DashboardModel) renderContent(width int) string {
+	if m.cursor < 0 || m.cursor >= len(m.agents) {
+		return m.styles.Placeholder.Width(width).Render("No agent selected")
+	}
+
+	agent := m.agents[m.cursor]
+	var b strings.Builder
+
+	logoColor := lipgloss.Color(agent.LogoClr)
+	if !agent.Found {
+		logoColor = lipgloss.Color("240")
+	}
+	logoStyle := lipgloss.NewStyle().Foreground(logoColor)
+	b.WriteString(logoStyle.Render(agent.Logo))
+	b.WriteString("\n\n")
+
+	b.WriteString(m.styles.Title.Render(agent.Name))
+	b.WriteString("\n")
+	b.WriteString(strings.Repeat("─", width))
+	b.WriteString("\n\n")
+
+	statusVal := "NOT INSTALLED"
+	if agent.Found {
+		statusVal = "READY"
+	}
+
+	sess, running := m.activeSessions[agent.Binary]
+	if running {
+		statusVal = "RUNNING"
+	}
+
+	fields := []struct {
+		label string
+		value string
+	}{
+		{"Status:", statusVal},
+		{"Binary:", agent.Binary},
+	}
+
+	if running {
+		fields = append(fields, []struct {
+			label string
+			value string
+		}{
+			{"Ticket:", sess.TicketID},
+			{"Uptime:", formatUptime(sess.StartedAt)},
+		}...)
+	}
+
+	for _, f := range fields {
+		b.WriteString(m.styles.Label.Render(fmt.Sprintf("%-12s", f.label)))
+		b.WriteString(m.styles.Value.Render(f.value))
+		b.WriteString("\n")
+	}
+
+	if running {
+		b.WriteString("\n")
+		b.WriteString(m.styles.Title.Render("Live Output"))
+		b.WriteString("\n")
+		logs := m.orchestrator.GetLogs(sess.ID)
+		if len(logs) == 0 {
+			b.WriteString(m.styles.Placeholder.Render("  (Waiting for output...)"))
+		} else {
+			start := 0
+			if len(logs) > 20 {
+				start = len(logs) - 20
+			}
+			for _, line := range logs[start:] {
+				// Truncate line if too long
+				displayLine := line
+				if len(displayLine) > width-4 {
+					displayLine = displayLine[:width-7] + "..."
+				}
+				b.WriteString(m.styles.Value.Render("  " + displayLine))
+				b.WriteString("\n")
+			}
+		}
+
+		b.WriteString("\n")
+		b.WriteString(m.styles.Label.Render("Command: "))
+		b.WriteString(m.input.View())
+		b.WriteString("\n")
+	} else if agent.Found {
+		b.WriteString("\n")
+		b.WriteString(m.styles.Placeholder.Render("Agent is idle. Assign it to a ticket and set status to 'in_progress' to start."))
+	}
+
+	return lipgloss.NewStyle().
+		Padding(0, 2).
+		Width(width).
+		Height(m.height - 8).
+		Render(b.String())
 }
 
 func formatUptime(since time.Time) string {
