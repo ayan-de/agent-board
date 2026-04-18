@@ -9,7 +9,7 @@ import (
 
 func TestContextCarryAdapterBuildsHandoffPayload(t *testing.T) {
 	// NewContextCarryAdapter(nil) is fine for testing Build which doesn't use the manager.
-	adapter := mcp.NewContextCarryAdapter(nil)
+	adapter := mcp.NewContextCarryAdapter(nil, "test-project")
 
 	payload := adapter.Build(mcp.HandoffInput{
 		TicketID:     "AGE-01",

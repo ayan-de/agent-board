@@ -15,14 +15,17 @@ type HandoffInput struct {
 }
 
 type ContextCarryAdapter struct {
-	manager *Manager
+	manager     *Manager
+	projectName string
 }
 
-func NewContextCarryAdapter(manager *Manager) *ContextCarryAdapter {
+func NewContextCarryAdapter(manager *Manager, projectName string) *ContextCarryAdapter {
 	return &ContextCarryAdapter{
-		manager: manager,
+		manager:     manager,
+		projectName: projectName,
 	}
 }
+
 
 // Build currently just formats a string.
 func (a *ContextCarryAdapter) Build(input HandoffInput) string {
@@ -96,3 +99,15 @@ func (a *ContextCarryAdapter) Save(ctx context.Context, project, branch, context
 
 	return nil
 }
+// LoadContext implements orchestrator.ContextCarryProvider.
+func (a *ContextCarryAdapter) LoadContext(ctx context.Context, ticketID string) (string, error) {
+	// In a real implementation, we'd fetch the ticket to get the branch.
+	// For now, let's assume branch = ticketID or project-branch.
+	return a.Load(ctx, a.projectName, ticketID)
+}
+
+// SaveContext implements orchestrator.ContextCarryProvider.
+func (a *ContextCarryAdapter) SaveContext(ctx context.Context, ticketID, outcome string) error {
+	return a.Save(ctx, a.projectName, ticketID, outcome)
+}
+
