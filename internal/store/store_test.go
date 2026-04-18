@@ -774,3 +774,166 @@ func TestDeleteTicketCascadesSessions(t *testing.T) {
 		t.Errorf("session should be deleted with ticket, error = %v, want ErrNotFound", err)
 	}
 }
+
+func TestCreateAndApproveProposal(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	proposal, err := s.CreateProposal(context.Background(), Proposal{
+		TicketID: "AGT-01",
+		Agent:    "opencode",
+		Status:   "pending",
+		Prompt:   "do the work",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if proposal.ID == "" {
+		t.Fatal("expected proposal ID")
+	}
+	if proposal.Status != "pending" {
+		t.Fatalf("Status = %q, want pending", proposal.Status)
+	}
+
+	err = s.UpdateProposalStatus(context.Background(), proposal.ID, "approved")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.GetProposal(context.Background(), proposal.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "approved" {
+		t.Fatalf("Status = %q, want approved", got.Status)
+	}
+}
+
+func TestGetProposalNotFound(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	_, err := s.GetProposal(context.Background(), "PRO-99")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestUpsertAndGetContextCarry(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	err := s.UpsertContextCarry(context.Background(), ContextCarry{
+		TicketID: "AGT-01",
+		Summary:  "previous run summary",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.GetContextCarry(context.Background(), "AGT-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Summary != "previous run summary" {
+		t.Fatalf("Summary = %q, want previous run summary", got.Summary)
+	}
+}
+
+func TestUpsertContextCarryOverwrites(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	s.UpsertContextCarry(context.Background(), ContextCarry{
+		TicketID: "AGT-01",
+		Summary:  "first",
+	})
+	s.UpsertContextCarry(context.Background(), ContextCarry{
+		TicketID: "AGT-01",
+		Summary:  "second",
+	})
+
+	got, err := s.GetContextCarry(context.Background(), "AGT-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Summary != "second" {
+		t.Fatalf("Summary = %q, want second", got.Summary)
+	}
+}
+
+func TestGetContextCarryNotFound(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	_, err := s.GetContextCarry(context.Background(), "AGT-99")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestCreateAndRetrieveEvent(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	event, err := s.CreateEvent(context.Background(), Event{
+		TicketID:  "AGT-01",
+		SessionID: "SES-01",
+		Kind:      "proposal.created",
+		Payload:   "test payload",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if event.ID == "" {
+		t.Fatal("expected event ID")
+	}
+	if event.TicketID != "AGT-01" {
+		t.Fatalf("TicketID = %q, want AGT-01", event.TicketID)
+	}
+	if event.Kind != "proposal.created" {
+		t.Fatalf("Kind = %q, want proposal.created", event.Kind)
+	}
+	if event.CreatedAt.IsZero() {
+		t.Fatal("CreatedAt should be set")
+	}
+}
+
+func TestHasActiveSession(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	ticket, _ := s.CreateTicket(context.Background(), Ticket{Title: "T", Status: "in_progress"})
+
+	if s.HasActiveSession(context.Background(), ticket.ID) {
+		t.Fatal("should have no active session initially")
+	}
+
+	s.CreateSession(context.Background(), Session{
+		TicketID: ticket.ID,
+		Agent:    "opencode",
+		Status:   "running",
+	})
+
+	if !s.HasActiveSession(context.Background(), ticket.ID) {
+		t.Fatal("should have active session after creation")
+	}
+}
+
+func TestHasActiveSessionFalseAfterEnd(t *testing.T) {
+	s := openTestDB(t)
+	defer s.Close()
+
+	ticket, _ := s.CreateTicket(context.Background(), Ticket{Title: "T", Status: "in_progress"})
+	session, _ := s.CreateSession(context.Background(), Session{
+		TicketID: ticket.ID,
+		Agent:    "opencode",
+		Status:   "running",
+	})
+
+	s.EndSession(context.Background(), session.ID, "completed")
+
+	if s.HasActiveSession(context.Background(), ticket.ID) {
+		t.Fatal("should have no active session after end")
+	}
+}
