@@ -59,6 +59,8 @@ type TicketViewModel struct {
 	agentCursor int
 
 	styles TicketViewStyles
+
+	activeProposal *store.Proposal
 }
 
 func DefaultTicketViewStyles() TicketViewStyles {
@@ -264,6 +266,19 @@ func (m TicketViewModel) handleViewKey(msg tea.KeyMsg) (TicketViewModel, tea.Cmd
 			m.mode = ticketAgentSelectMode
 			m.agentCursor = 0
 		}
+	case "p":
+		if m.activeProposal != nil && m.activeProposal.Status == "pending" {
+			proposalID := m.activeProposal.ID
+			return m, func() tea.Msg {
+				return proposalApprovedMsg{proposalID: proposalID}
+			}
+		}
+	case "r":
+		if m.activeProposal != nil && m.activeProposal.Status == "approved" {
+			return m, func() tea.Msg {
+				return runStartedMsg{proposalID: m.activeProposal.ID}
+			}
+		}
 	}
 
 	return m, nil
@@ -384,6 +399,12 @@ func (m TicketViewModel) SetTicket(t *store.Ticket) TicketViewModel {
 	m.cursor = 0
 	m.mode = ticketViewMode
 	m.editBuffer = ""
+	m.activeProposal = nil
+	return m
+}
+
+func (m TicketViewModel) SetProposal(p *store.Proposal) TicketViewModel {
+	m.activeProposal = p
 	return m
 }
 
@@ -474,8 +495,33 @@ func (m TicketViewModel) View() string {
 		footer = "↑/k: up │ ↓/j: down │ Enter: select │ Esc: cancel"
 	} else {
 		footer = "e: edit │ s: cycle status │ a: assign agent │ Esc: back"
+		if m.activeProposal != nil && m.activeProposal.Status == "pending" {
+			footer += " │ p: approve proposal"
+		} else if m.activeProposal != nil && m.activeProposal.Status == "approved" {
+			footer += " │ r: start run"
+		}
 	}
 	b.WriteString(m.styles.Footer.Render(footer))
 
+	if m.activeProposal != nil {
+		b.WriteString("\n\n")
+		b.WriteString(m.styles.Title.Render("── Active Proposal ───────────────────────"))
+		b.WriteString("\n")
+		statusColor := "240"
+		if m.activeProposal.Status == "pending" {
+			statusColor = "213"
+		} else if m.activeProposal.Status == "approved" {
+			statusColor = "42"
+		}
+		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(statusColor)).Render("Status: " + m.activeProposal.Status))
+		b.WriteString("\n\n")
+		prompt := m.activeProposal.Prompt
+		if len(prompt) > innerWidth*3 {
+			prompt = prompt[:innerWidth*3] + "..."
+		}
+		b.WriteString(m.styles.Value.Width(innerWidth).Render(prompt))
+	}
+
 	return m.styles.Border.Render(b.String())
 }
+
