@@ -61,3 +61,50 @@ func (s Service) CreateProposal(ctx context.Context, input CreateProposalInput) 
 
 	return proposal, nil
 }
+
+func (s Service) StartApprovedRun(ctx context.Context, proposalID string) (store.Session, error) {
+	proposal, err := s.store.GetProposal(ctx, proposalID)
+	if err != nil {
+		return store.Session{}, err
+	}
+	if proposal.Status != "approved" {
+		return store.Session{}, fmt.Errorf("orchestrator.startApprovedRun: proposal is not approved")
+	}
+	if s.store.HasActiveSession(ctx, proposal.TicketID) {
+		return store.Session{}, fmt.Errorf("orchestrator.startApprovedRun: active session exists")
+	}
+
+	session, err := s.store.CreateSession(ctx, store.Session{
+		TicketID: proposal.TicketID,
+		Agent:    proposal.Agent,
+		Status:   "running",
+	})
+	if err != nil {
+		return store.Session{}, err
+	}
+
+	if err := s.store.SetAgentActive(ctx, proposal.TicketID, true); err != nil {
+		return store.Session{}, err
+	}
+
+	handle, err := s.runner.Start(ctx, RunRequest{
+		TicketID:  proposal.TicketID,
+		SessionID: session.ID,
+		Agent:     proposal.Agent,
+		Prompt:    proposal.Prompt,
+	})
+	if err != nil {
+		_ = s.store.EndSession(ctx, session.ID, "failed")
+		_ = s.store.SetAgentActive(ctx, proposal.TicketID, false)
+		return store.Session{}, err
+	}
+
+	_, _ = s.store.CreateEvent(ctx, store.Event{
+		TicketID:  proposal.TicketID,
+		SessionID: session.ID,
+		Kind:      "run.started",
+		Payload:   handle.Outcome,
+	})
+
+	return session, nil
+}
