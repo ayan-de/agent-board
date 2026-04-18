@@ -257,7 +257,7 @@ func (m TicketViewModel) handleViewKey(msg tea.KeyMsg) (TicketViewModel, tea.Cmd
 		}
 	case "s":
 		if m.ticket != nil {
-			m = m.cycleStatus()
+			return m.cycleStatus()
 		}
 	case "a":
 		if m.ticket != nil {
@@ -359,7 +359,7 @@ func (m TicketViewModel) handleAgentSelectKey(msg tea.KeyMsg) (TicketViewModel, 
 	return m, nil
 }
 
-func (m TicketViewModel) cycleStatus() TicketViewModel {
+func (m TicketViewModel) cycleStatus() (TicketViewModel, tea.Cmd) {
 	currentIdx := -1
 	for i, s := range statusCycle {
 		if s == m.ticket.Status {
@@ -371,9 +371,12 @@ func (m TicketViewModel) cycleStatus() TicketViewModel {
 		currentIdx = 0
 	}
 	nextIdx := (currentIdx + 1) % len(statusCycle)
-	m.ticket.Status = statusCycle[nextIdx]
-	_ = m.store.MoveStatus(context.Background(), m.ticket.ID, m.ticket.Status)
-	return m
+	newStatus := statusCycle[nextIdx]
+	ticketID := m.ticket.ID
+
+	return m, func() tea.Msg {
+		return statusChangedMsg{ticketID: ticketID, newStatus: newStatus}
+	}
 }
 
 func (m TicketViewModel) SetTicket(t *store.Ticket) TicketViewModel {
