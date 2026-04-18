@@ -3,6 +3,8 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+
+	"github.com/ayan-de/agent-board/internal/store"
 )
 
 func (s Service) ApproveProposal(ctx context.Context, proposalID string) error {
@@ -22,5 +24,15 @@ func (s Service) ApproveProposal(ctx context.Context, proposalID string) error {
 		return fmt.Errorf("orchestrator.approveProposal: proposal is stale (ticket updated after proposal)")
 	}
 
-	return s.store.UpdateProposalStatus(ctx, proposalID, "approved")
+	if err := s.store.UpdateProposalStatus(ctx, proposalID, "approved"); err != nil {
+		return err
+	}
+
+	_, _ = s.store.CreateEvent(ctx, store.Event{
+		TicketID: proposal.TicketID,
+		Kind:     "proposal.approved",
+		Payload:  proposalID,
+	})
+
+	return nil
 }
