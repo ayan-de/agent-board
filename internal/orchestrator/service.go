@@ -3,6 +3,8 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"io"
+	"sync"
 
 	"github.com/ayan-de/agent-board/internal/llm"
 	"github.com/ayan-de/agent-board/internal/store"
@@ -13,10 +15,20 @@ type Service struct {
 	llm    LLMClient
 	runner Runner
 	ctx    ContextCarryProvider
+	logs   map[string][]string
+	inputs map[string]io.Writer
+	mu     sync.RWMutex
 }
 
 func NewService(store Store, llm LLMClient, runner Runner, ctx ContextCarryProvider) *Service {
-	return &Service{store: store, llm: llm, runner: runner, ctx: ctx}
+	return &Service{
+		store:  store,
+		llm:    llm,
+		runner: runner,
+		ctx:    ctx,
+		logs:   make(map[string][]string),
+		inputs: make(map[string]io.Writer),
+	}
 }
 
 func (s Service) CreateProposal(ctx context.Context, input CreateProposalInput) (store.Proposal, error) {
@@ -95,12 +107,27 @@ func (s Service) StartApprovedRun(ctx context.Context, proposalID string) (store
 		return store.Session{}, err
 	}
 
+	inputChan := make(chan io.Writer, 1)
+	go func() {
+		if w, ok := <-inputChan; ok {
+			s.mu.Lock()
+			s.inputs[session.ID] = w
+			s.mu.Unlock()
+		}
+	}()
+
 	handle, err := s.runner.Start(ctx, RunRequest{
 		TicketID:  proposal.TicketID,
 		SessionID: session.ID,
 		Agent:     proposal.Agent,
 		Prompt:    proposal.Prompt,
+		Reporter:  func(line string) { s.AppendLog(session.ID, line) },
+		InputChan: inputChan,
 	})
+	
+	s.mu.Lock()
+	delete(s.inputs, session.ID)
+	s.mu.Unlock()
 	if err != nil {
 		_ = s.store.EndSession(ctx, session.ID, "failed")
 		_ = s.store.SetAgentActive(ctx, proposal.TicketID, false)
@@ -122,4 +149,30 @@ func (s Service) StartApprovedRun(ctx context.Context, proposalID string) (store
 	})
 
 	return session, nil
+}
+
+func (s *Service) AppendLog(sessionID, line string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.logs[sessionID] = append(s.logs[sessionID], line)
+	if len(s.logs[sessionID]) > 1000 {
+		s.logs[sessionID] = s.logs[sessionID][len(s.logs[sessionID])-1000:]
+	}
+}
+
+func (s *Service) GetLogs(sessionID string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.logs[sessionID]
+}
+
+func (s *Service) SendInput(sessionID, input string) error {
+	s.mu.RLock()
+	w, ok := s.inputs[sessionID]
+	s.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("service.sendInput: session %s not found or not interactive", sessionID)
+	}
+	_, err := fmt.Fprintln(w, input)
+	return err
 }

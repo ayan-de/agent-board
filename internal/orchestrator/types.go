@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"io"
 
 	"github.com/ayan-de/agent-board/internal/llm"
 	"github.com/ayan-de/agent-board/internal/store"
@@ -28,6 +29,8 @@ type RunRequest struct {
 	SessionID string
 	Agent     string
 	Prompt    string
+	Reporter  func(string)
+	InputChan chan io.Writer
 }
 
 
