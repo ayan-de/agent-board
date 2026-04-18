@@ -81,3 +81,18 @@ func (s *Store) UpdateProposalStatus(ctx context.Context, id, status string) err
 	}
 	return nil
 }
+
+func (s *Store) GetActiveProposalForTicket(ctx context.Context, ticketID string) (Proposal, error) {
+	var p Proposal
+	err := s.db.QueryRowContext(ctx,
+		"SELECT id, ticket_id, agent, status, prompt, created_at, updated_at FROM proposals WHERE ticket_id = ? AND status IN ('pending', 'approved') ORDER BY created_at DESC LIMIT 1",
+		ticketID,
+	).Scan(&p.ID, &p.TicketID, &p.Agent, &p.Status, &p.Prompt, &p.CreatedAt, &p.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return Proposal{}, fmt.Errorf("store.getActiveProposalForTicket %s: %w", ticketID, ErrNotFound)
+	}
+	if err != nil {
+		return Proposal{}, fmt.Errorf("store.getActiveProposalForTicket %s: %w", ticketID, err)
+	}
+	return p, nil
+}
