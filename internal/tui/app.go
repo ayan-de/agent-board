@@ -127,7 +127,6 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry, deps AppDep
 		dashboard:    NewDashboardModel(s, resolver, agents, t),
 	}
 
-
 	cr := NewCommandRegistry()
 	ac := newAppCommands(a, reg, cfg)
 	ac.registerAll(cr)
@@ -261,7 +260,6 @@ func (a *App) startRunCmd(proposalID string) tea.Cmd {
 	}
 }
 
-
 func (a *App) handleStatusChanged(msg statusChangedMsg) (tea.Model, tea.Cmd) {
 	// First update the store
 	err := a.store.MoveStatus(context.Background(), msg.ticketID, msg.newStatus)
@@ -292,14 +290,11 @@ func (a *App) createProposalCmd(ticketID string) tea.Cmd {
 			TicketID: ticketID,
 		})
 		if err != nil {
-			// We skip error notification here to avoid cluttering if it's a known non-retryable state
-			// but in a real app we might want to show it.
-			return nil
+			return notificationMsg{title: "Proposal failed", message: err.Error(), variant: NotificationError}
 		}
 		return proposalCreatedMsg{proposal: proposal}
 	}
 }
-
 
 func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if a.modal.Active() {
@@ -375,7 +370,11 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.activeTicket = selected
 			a.ticketView = a.ticketView.SetTicket(selected)
 			a.view = viewTicket
-			return a, a.loadProposalCmd(selected.ID)
+			p, _ := a.store.GetActiveProposalForTicket(context.Background(), selected.ID)
+			if p.ID != "" {
+				a.ticketView = a.ticketView.SetProposal(&p)
+			}
+			return a, nil
 		}
 	case keybinding.ActionShowHelp:
 		if a.view == viewHelp {
