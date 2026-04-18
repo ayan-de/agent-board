@@ -45,6 +45,25 @@ type proposalCreatedMsg struct {
 	proposal store.Proposal
 }
 
+type proposalApprovedMsg struct {
+	proposalID string
+}
+
+type runStartedMsg struct {
+	proposalID string
+}
+
+type proposalLoadedMsg struct {
+	TicketID string
+	proposal *store.Proposal
+}
+
+type notificationMsg struct {
+	title   string
+	message string
+	variant NotificationVariant
+}
+
 type Orchestrator interface {
 	CreateProposal(ctx context.Context, input orchestrator.CreateProposalInput) (store.Proposal, error)
 	ApproveProposal(ctx context.Context, proposalID string) error
@@ -183,11 +202,25 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case statusChangedMsg:
 		return a.handleStatusChanged(msg)
 	case proposalCreatedMsg:
-		return a, a.showNotification(
-			"Proposal created",
-			fmt.Sprintf("AI proposed work for %s", msg.proposal.TicketID),
-			NotificationInfo,
+		return a, tea.Batch(
+			a.showNotification(
+				"Proposal created",
+				fmt.Sprintf("AI proposed work for %s", msg.proposal.TicketID),
+				NotificationInfo,
+			),
+			a.loadProposalCmd(msg.proposal.TicketID),
 		)
+	case proposalLoadedMsg:
+		if a.activeTicket != nil && a.activeTicket.ID == msg.TicketID {
+			a.ticketView = a.ticketView.SetProposal(msg.proposal)
+		}
+		return a, nil
+	case proposalApprovedMsg:
+		return a, a.approveProposalCmd(msg.proposalID)
+	case runStartedMsg:
+		return a, a.startRunCmd(msg.proposalID)
+	case notificationMsg:
+		return a, a.showNotification(msg.title, msg.message, msg.variant)
 	}
 
 	if a.kanban.NeedsTick() {
@@ -195,6 +228,39 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	return a, nil
 }
+
+func (a *App) loadProposalCmd(ticketID string) tea.Cmd {
+	return func() tea.Msg {
+		p, err := a.store.GetActiveProposalForTicket(context.Background(), ticketID)
+		if err != nil {
+			return proposalLoadedMsg{proposal: nil, TicketID: ticketID}
+		}
+		return proposalLoadedMsg{proposal: &p, TicketID: ticketID}
+	}
+}
+
+func (a *App) approveProposalCmd(proposalID string) tea.Cmd {
+	return func() tea.Msg {
+		err := a.orchestrator.ApproveProposal(context.Background(), proposalID)
+		if err != nil {
+			return notificationMsg{title: "Error", message: err.Error(), variant: NotificationError}
+		}
+		// Reload proposal
+		p, _ := a.store.GetProposal(context.Background(), proposalID)
+		return proposalLoadedMsg{proposal: &p, TicketID: p.TicketID}
+	}
+}
+
+func (a *App) startRunCmd(proposalID string) tea.Cmd {
+	return func() tea.Msg {
+		session, err := a.orchestrator.StartApprovedRun(context.Background(), proposalID)
+		if err != nil {
+			return notificationMsg{title: "Error", message: err.Error(), variant: NotificationError}
+		}
+		return a.showNotification("Run started", fmt.Sprintf("Agent started working on %s", session.TicketID), NotificationSuccess)()
+	}
+}
+
 
 func (a *App) handleStatusChanged(msg statusChangedMsg) (tea.Model, tea.Cmd) {
 	// First update the store
@@ -309,6 +375,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.activeTicket = selected
 			a.ticketView = a.ticketView.SetTicket(selected)
 			a.view = viewTicket
+			return a, a.loadProposalCmd(selected.ID)
 		}
 	case keybinding.ActionShowHelp:
 		if a.view == viewHelp {

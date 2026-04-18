@@ -17,25 +17,41 @@ import (
 )
 
 type fakeOrchestrator struct {
+	store                      *store.Store
 	lastCreateProposalTicketID string
 }
 
 func (f *fakeOrchestrator) CreateProposal(ctx context.Context, input orchestrator.CreateProposalInput) (store.Proposal, error) {
 	f.lastCreateProposalTicketID = input.TicketID
-	return store.Proposal{ID: "PRO-01", TicketID: input.TicketID}, nil
+	p := store.Proposal{
+		TicketID: input.TicketID,
+		Status:   "pending",
+		Prompt:   "Proposed work",
+	}
+	return f.store.CreateProposal(ctx, p)
 }
 
 func (f *fakeOrchestrator) ApproveProposal(ctx context.Context, proposalID string) error {
-	return nil
+	return f.store.UpdateProposalStatus(ctx, proposalID, "approved")
 }
 
 func (f *fakeOrchestrator) StartApprovedRun(ctx context.Context, proposalID string) (store.Session, error) {
-	return store.Session{}, nil
+	p, _ := f.store.GetProposal(ctx, proposalID)
+	session, err := f.store.CreateSession(ctx, store.Session{
+		TicketID: p.TicketID,
+		Status:   "running",
+	})
+	if err != nil {
+		return store.Session{}, err
+	}
+	_ = f.store.SetAgentActive(ctx, p.TicketID, true)
+	return session, nil
 }
 
 func (f *fakeOrchestrator) FinishRun(ctx context.Context, input orchestrator.FinishRunInput) error {
 	return nil
 }
+
 
 func newTestApp(t *testing.T) (*App, *fakeOrchestrator) {
 	t.Helper()
@@ -57,7 +73,7 @@ func newTestApp(t *testing.T) (*App, *fakeOrchestrator) {
 		Success: lipgloss.Color("42"), Accent: lipgloss.Color("213"),
 	})
 
-	fo := &fakeOrchestrator{}
+	fo := &fakeOrchestrator{store: s}
 	app, err := NewApp(cfg, s, reg, AppDeps{
 		Orchestrator: fo,
 	})
@@ -100,7 +116,7 @@ func TestMoveToInProgressCreatesProposalRequest(t *testing.T) {
 		t.Fatal("expected command for proposal creation")
 	}
 
-	runCmd(cmd)
+	execCmd(app, cmd)
 
 	if fo.lastCreateProposalTicketID != ticket.ID {
 		t.Fatalf("ticketID = %q, want %q", fo.lastCreateProposalTicketID, ticket.ID)
@@ -108,13 +124,18 @@ func TestMoveToInProgressCreatesProposalRequest(t *testing.T) {
 }
 
 
-func runCmd(cmd tea.Cmd) {
+func updateLoop(app *App, msg tea.Msg) {
+	_, cmd := app.Update(msg)
 	if cmd == nil {
 		return
 	}
-	// We run the command in a goroutine with a short timeout.
-	// This allows immediate commands (like our mock orchestrator) to finish
-	// while skipping long-running ones (like notification timers).
+	execCmd(app, cmd)
+}
+
+func execCmd(app *App, cmd tea.Cmd) {
+	if cmd == nil {
+		return
+	}
 	done := make(chan tea.Msg, 1)
 	go func() {
 		done <- cmd()
@@ -122,15 +143,21 @@ func runCmd(cmd tea.Cmd) {
 
 	select {
 	case msg := <-done:
+		if msg == nil {
+			return
+		}
 		if batch, ok := msg.(tea.BatchMsg); ok {
 			for _, c := range batch {
-				runCmd(c)
+				execCmd(app, c)
 			}
+		} else {
+			updateLoop(app, msg)
 		}
 	case <-time.After(20 * time.Millisecond):
-		// Likely a timer/infinite wait, skip it
+		// Skip timers
 	}
 }
+
 
 
 
@@ -359,3 +386,54 @@ func TestAppWindowResizeDelegatesToDashboard(t *testing.T) {
 		t.Errorf("dashboard height = %d, want 40", app.dashboard.height)
 	}
 }
+
+func TestProposalApprovalAndRunWorkflow(t *testing.T) {
+	app, fo := newTestApp(t)
+	ctx := context.Background()
+
+	ticket, _ := app.store.CreateTicket(ctx, store.Ticket{Status: "backlog", Agent: "claude-code", Title: "Work Ticket"})
+
+	// 1. Move to in_progress to create proposal
+	_, cmd := app.Update(statusChangedMsg{
+		ticketID:  ticket.ID,
+		newStatus: "in_progress",
+	})
+	execCmd(app, cmd)
+
+	if fo.lastCreateProposalTicketID != ticket.ID {
+		t.Fatalf("expected proposal for %s", ticket.ID)
+	}
+
+	// 2. Mock proposal loading (simulate what happens in App after creation)
+	app.activeTicket = &ticket
+	p, _ := app.store.GetActiveProposalForTicket(ctx, ticket.ID)
+	app.Update(proposalLoadedMsg{TicketID: ticket.ID, proposal: &p})
+
+	if app.ticketView.activeProposal == nil {
+		t.Fatal("activeProposal should not be nil")
+	}
+
+	// 3. Approve proposal
+	_, cmd = app.Update(proposalApprovedMsg{proposalID: p.ID})
+	execCmd(app, cmd)
+
+	// Verify status updated in store
+	updatedP, _ := app.store.GetProposal(ctx, p.ID)
+	if updatedP.Status != "approved" {
+		t.Errorf("proposal status = %s, want approved", updatedP.Status)
+	}
+
+	// 4. Start run
+	_, cmd = app.Update(runStartedMsg{proposalID: p.ID})
+	execCmd(app, cmd)
+
+	// Verify session created and agent active
+	if !app.store.HasActiveSession(ctx, ticket.ID) {
+		t.Error("expected active session")
+	}
+	updatedT, _ := app.store.GetTicket(ctx, ticket.ID)
+	if !updatedT.AgentActive {
+		t.Error("expected ticket AgentActive to be true")
+	}
+}
+
