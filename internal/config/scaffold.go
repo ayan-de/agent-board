@@ -84,6 +84,11 @@ default = "opencode"
 [mcp]
 npm_path = "npm"
 node_path = "node"
+
+[mcp.contextcarry]
+enabled = true
+command = "npx"
+args = ["-y", "@thisisayande/contextcarry-mcp"]
 `
 
 	return os.WriteFile(path, []byte(defaultContent), 0644)

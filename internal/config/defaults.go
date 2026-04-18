@@ -26,6 +26,13 @@ func SetDefaults() *Config {
 		MCP: MCPConfig{
 			NPMPath:  "npm",
 			NodePath: "node",
+			Servers: map[string]MCPServerConfig{
+				"contextcarry": {
+					Enabled: true,
+					Command: "npx",
+					Args:    []string{"-y", "@thisisayande/contextcarry-mcp"},
+				},
+			},
 		},
 	}
 }
