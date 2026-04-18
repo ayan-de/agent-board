@@ -4,7 +4,7 @@
 
 AgentBoard is currently a terminal-based Kanban board for managing AI-oriented development tickets.
 
-The implemented product today is the TUI foundation:
+The implemented product today is the TUI foundation plus the first AI orchestration slice:
 - Bubble Tea application shell
 - Kanban board and ticket detail views
 - Ticket persistence in SQLite
@@ -13,15 +13,16 @@ The implemented product today is the TUI foundation:
 - Theme registry with builtin and user JSON themes
 - Configurable keybindings and command palette
 - Agent dashboard based on local detection state
+- AI orchestration: proposal creation, approval gating, subprocess worker execution
+- LangChain Go integration for coordinator and summarizer models
+- MCP context carry integration via `@thisisayande/contextcarry-mcp`
 
-The long-term product direction is still AI agent orchestration:
+The long-term product direction is full AI agent orchestration:
 - tmux and embedded PTY agent execution
 - session and process lifecycle management
-- MCP integrations
+- additional MCP integrations
 - HTTP/WebSocket API
 - LLM-based decomposition and assignment
-
-Those orchestration features are planned, but are not implemented yet.
 
 ---
 
@@ -31,26 +32,27 @@ Those orchestration features are planned, but are not implemented yet.
 
 - `cmd/agentboard/main.go` starts the TUI
 - `internal/tui` contains the working Bubble Tea application
-- `internal/store` contains the SQLite-backed ticket and session persistence layer
-- `internal/config` handles defaults, TOML loading, env overlay, project naming, config scaffolding, and agent detection
+- `internal/store` contains the SQLite-backed ticket, session, proposal, event, and context carry persistence
+- `internal/config` handles defaults, TOML loading, env overlay, project naming, config scaffolding, agent detection, and MCP server config
 - `internal/theme` handles builtin theme embedding, user theme loading, parsing, and runtime selection
 - `internal/keybinding` handles keymap definitions, config overrides, and action resolution
+- `internal/llm` provides provider registry (openai, ollama, claude, zai) with LangChain Go behind a Client interface
+- `internal/orchestrator` implements proposal creation, approval gating, session start, outcome mapping, context carry persistence, and subprocess worker execution
+- `internal/prompt` central repository for all LLM prompt templates
+- `internal/mcp` provides MCP manager, context carry adapter with load/save via MCP protocol
+- `internal/mcpclient` wraps mcp-go stdio client for MCP server communication
 
 ### Partially Implemented
 
-- `internal/store/sessions.go` exists and persists session records, but there is no orchestrator using it yet
 - `internal/tui/dashboard.go` shows detected agents, but it is not connected to live agent processes
-- ticket assignment and status updates exist in the TUI, but agent execution does not
+- `internal/orchestrator/exec_runner.go` runs subprocess workers but does not yet call FinishRun after worker completion
+- `internal/mcp/contextcarry.go` has SaveContext/LoadContext but SaveContext is not called from the orchestrator yet
 
 ### Placeholder / Not Yet Implemented
 
-- `internal/orchestrator`
-- `internal/mcp`
 - `internal/api`
 - `internal/decomposition`
 - `internal/apitypes`
-- `internal/mcpclient`
-- `internal/tui/pane.go` as a real embedded agent terminal
 
 When touching one of those packages, assume the architecture is still open unless another section here says otherwise.
 
@@ -64,8 +66,11 @@ When touching one of those packages, assume the architecture is still open unles
 cmd/agentboard/main.go
   -> config.Load()
   -> store.Open()
+  -> llm.NewFromConfig()
+  -> mcp.NewManager() + mcp.NewContextCarryAdapter()
+  -> orchestrator.NewService(store, llm, runner, ctxCarry)
   -> theme.Registry setup
-  -> tui.NewApp()
+  -> tui.NewApp(cfg, store, registry, AppDeps{Orchestrator})
   -> bubbletea.Program.Run()
 ```
 
@@ -81,28 +86,29 @@ agent-board/
 │   ├── config/             # Working config loading, defaults, detection
 │   ├── theme/              # Working theme registry and JSON theme loading
 │   ├── keybinding/         # Working keymap model and config overrides
-│   ├── orchestrator/       # Planned agent lifecycle layer
-│   ├── mcp/                # Planned MCP integrations
+│   ├── llm/                # Working LangChain Go integration with provider registry
+│   ├── orchestrator/       # Working agent lifecycle layer
+│   ├── prompt/             # Working central prompt repository
+│   ├── mcp/                # Working MCP manager and context carry adapter
+│   ├── mcpclient/          # Working mcp-go stdio client wrapper
 │   ├── api/                # Planned HTTP/WebSocket API
 │   ├── decomposition/      # Planned LLM-driven project decomposition
-│   ├── apitypes/           # Planned shared DTOs
-│   └── mcpclient/          # Planned reusable MCP wrapper
+│   └── apitypes/           # Planned shared DTOs
 ├── docs/                   # Design notes, plans, and roadmap
 └── AGENTS.md               # Operational project memory
 ```
 
 ### Data Flow Today
 
-The actual flow today is simpler than the long-term vision:
-
 ```text
 TUI <-> Store
 TUI <-> Config
 TUI <-> Theme Registry
-TUI <-> Agent Detection
+TUI <-> Orchestrator <-> Store
+                    <-> LLM (coordinator/summarizer)
+                    <-> Runner (subprocess exec)
+                    <-> ContextCarryProvider (MCP)
 ```
-
-There is no orchestrator in the runtime path yet.
 
 ---
 
@@ -128,6 +134,9 @@ There is no orchestrator in the runtime path yet.
 - ticket CRUD
 - ticket filtering
 - session CRUD primitives
+- proposal CRUD with status tracking
+- orchestration event recording
+- context carry upsert with ticket-scoped keys
 - ticket ID generation from configurable project prefix
 
 ### Config
@@ -137,6 +146,25 @@ There is no orchestrator in the runtime path yet.
 - env var overlay for several runtime fields
 - project name derived from git remote or working directory
 - agent detection for local CLIs on `$PATH`
+- MCP server configuration with `[mcp.<name>]` sections in config.toml
+
+### AI Orchestration
+
+- proposal creation triggered by moving assigned ticket to `in_progress`
+- coordinator LLM shapes worker prompt from ticket context + context carry
+- approval gate with stale proposal rejection
+- subprocess exec runner with structured JSON outcome parsing
+- outcome-driven board transitions (completed -> review, failed -> stays)
+- context carry persistence and summarization for run continuity
+- event recording for orchestration lifecycle
+- MCP context carry integration via `@thisisayande/contextcarry-mcp`
+
+### LLM Integration
+
+- provider registry with openai, ollama, claude, zai support
+- LangChain Go isolated behind `internal/llm` Client interface
+- separate coordinator and summarizer model configuration
+- central prompt repository in `internal/prompt`
 
 ### Themes
 
@@ -177,6 +205,8 @@ These are the current default bindings implemented in code.
 | `e` | Edit the selected editable field |
 | `s` | Cycle ticket status |
 | `a` | Open agent selection |
+| `p` | Approve pending proposal |
+| `r` | Start approved run |
 | `Enter` | Save edits / confirm selection |
 | `Esc` | Cancel edit or return to board |
 
@@ -214,7 +244,38 @@ updated_at    DATETIME
 
 Notes:
 - `tags` and `depends_on` are stored as JSON arrays, not comma-separated strings
-- `agent_active` exists in the store schema already, even though there is no running orchestrator yet
+- `agent_active` is set by the orchestrator when a worker starts/stops
+
+### Proposal
+
+```text
+id         TEXT PRIMARY KEY
+ticket_id  TEXT NOT NULL
+agent      TEXT NOT NULL
+status     TEXT NOT NULL (pending|approved|rejected)
+prompt     TEXT NOT NULL
+created_at DATETIME NOT NULL
+updated_at DATETIME NOT NULL
+```
+
+### Event
+
+```text
+id         TEXT PRIMARY KEY
+ticket_id  TEXT NOT NULL
+session_id TEXT
+kind       TEXT NOT NULL
+payload    TEXT NOT NULL
+created_at DATETIME NOT NULL
+```
+
+### Context Carry
+
+```text
+ticket_id  TEXT PRIMARY KEY
+summary    TEXT NOT NULL
+updated_at DATETIME NOT NULL
+```
 
 ### Session
 
@@ -231,8 +292,9 @@ context_key  TEXT
 ```
 
 Notes:
-- session persistence exists before live process orchestration
-- this is acceptable, but the runtime does not use sessions yet
+- session persistence is used by the orchestrator for active run tracking
+- proposals track the approval pipeline per ticket
+- events provide an append-only audit log of orchestration lifecycle
 
 ---
 
@@ -278,6 +340,8 @@ go vet ./...
 | `AGENTBOARD_LLM_MODEL` | overrides `llm.model` |
 | `AGENTBOARD_LLM_API_KEY` | overrides `llm.api_key` |
 | `AGENTBOARD_LLM_BASE_URL` | overrides `llm.base_url` |
+| `AGENTBOARD_LLM_COORDINATOR_MODEL` | overrides `llm.coordinator_model` |
+| `AGENTBOARD_LLM_SUMMARIZER_MODEL` | overrides `llm.summarizer_model` |
 | `AGENTBOARD_NPM_PATH` | overrides `mcp.npm_path` |
 | `AGENTBOARD_NODE_PATH` | overrides `mcp.node_path` |
 
