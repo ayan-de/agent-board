@@ -40,6 +40,13 @@ type RunHandle struct {
 	Summary string
 }
 
+type RunCompletion struct {
+	TicketID  string
+	SessionID string
+	Outcome   string
+	Summary   string
+}
+
 type LLMClient interface {
 	GenerateProposal(ctx context.Context, input llm.ProposalPrompt) (llm.ProposalDraft, error)
 	SummarizeContext(ctx context.Context, input llm.SummaryInput) (string, error)

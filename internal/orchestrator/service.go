@@ -19,8 +19,8 @@ type Service struct {
 	inputs map[string]io.Writer
 	mu     sync.RWMutex
 
-	// For tracking active sessions
 	activeSessions map[string]*AgentSession
+	completionCh   chan RunCompletion
 }
 
 // AgentSession tracks an active agent session
@@ -43,7 +43,12 @@ func NewService(store Store, llm LLMClient, runner Runner, ctx ContextCarryProvi
 		logs:           make(map[string][]string),
 		inputs:         make(map[string]io.Writer),
 		activeSessions: make(map[string]*AgentSession),
+		completionCh:   make(chan RunCompletion, 16),
 	}
+}
+
+func (s *Service) CompletionChan() <-chan RunCompletion {
+	return s.completionCh
 }
 
 func (s Service) CreateProposal(ctx context.Context, input CreateProposalInput) (store.Proposal, error) {
@@ -140,6 +145,12 @@ func (s *Service) StartApprovedRun(ctx context.Context, proposalID string) (stor
 			Outcome:   outcome,
 			Summary:   summary,
 		})
+		s.completionCh <- RunCompletion{
+			TicketID:  proposal.TicketID,
+			SessionID: session.ID,
+			Outcome:   outcome,
+			Summary:   summary,
+		}
 	}
 
 	handle, err := s.runner.Start(ctx, RunRequest{
