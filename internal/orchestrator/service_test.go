@@ -37,6 +37,40 @@ func TestStartApprovedRunRejectsExistingActiveSession(t *testing.T) {
 	}
 }
 
+func TestStartApprovedRunCallsFinishRunForBlockingRunner(t *testing.T) {
+	fs := &fakeStore{
+		ticket: store.Ticket{
+			ID:     "AGE-01",
+			Status: "in_progress",
+		},
+		proposal: store.Proposal{
+			ID:       "PRO-01",
+			TicketID: "AGE-01",
+			Agent:    "opencode",
+			Status:   "approved",
+			Prompt:   "do work",
+		},
+	}
+	fllm := &fakeLLMClient{summary: "summary of run"}
+	runner := &fakeRunner{outcome: "completed", summary: "raw worker output"}
+	svc := orchestrator.NewService(fs, fllm, runner, fakeCtx{})
+
+	_, err := svc.StartApprovedRun(context.Background(), "PRO-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if fs.lastMoveStatus != "review" {
+		t.Fatalf("MoveStatus = %q, want review (FinishRun should have been called)", fs.lastMoveStatus)
+	}
+	if fs.lastAgentActive != false {
+		t.Fatal("AgentActive should be false after FinishRun")
+	}
+	if fs.lastContextCarry.Summary != "summary of run" {
+		t.Fatalf("ContextCarry.Summary = %q, want %q", fs.lastContextCarry.Summary, "summary of run")
+	}
+}
+
 func TestFinishRunPersistsContextCarry(t *testing.T) {
 	fs := &fakeStore{
 		ticket: store.Ticket{

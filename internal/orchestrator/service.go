@@ -25,23 +25,23 @@ type Service struct {
 
 // AgentSession tracks an active agent session
 type AgentSession struct {
-	SessionID  string
-	TicketID   string
-	Agent      string
-	StartedAt  int64
-	Status     string
-	PaneID     string
-	WindowID   string
+	SessionID string
+	TicketID  string
+	Agent     string
+	StartedAt int64
+	Status    string
+	PaneID    string
+	WindowID  string
 }
 
 func NewService(store Store, llm LLMClient, runner Runner, ctx ContextCarryProvider) *Service {
 	return &Service{
 		store:          store,
 		llm:            llm,
-		runner:        runner,
-		ctx:           ctx,
-		logs:          make(map[string][]string),
-		inputs:        make(map[string]io.Writer),
+		runner:         runner,
+		ctx:            ctx,
+		logs:           make(map[string][]string),
+		inputs:         make(map[string]io.Writer),
 		activeSessions: make(map[string]*AgentSession),
 	}
 }
@@ -133,14 +133,23 @@ func (s *Service) StartApprovedRun(ctx context.Context, proposalID string) (stor
 		}
 	}()
 
-	// Start the agent (non-blocking for TmuxRunner)
+	onComplete := func(outcome, summary string) {
+		_ = s.FinishRun(context.Background(), FinishRunInput{
+			TicketID:  proposal.TicketID,
+			SessionID: session.ID,
+			Outcome:   outcome,
+			Summary:   summary,
+		})
+	}
+
 	handle, err := s.runner.Start(ctx, RunRequest{
-		TicketID:  proposal.TicketID,
-		SessionID: session.ID,
-		Agent:     proposal.Agent,
-		Prompt:    proposal.Prompt,
-		Reporter:  func(line string) { s.AppendLog(session.ID, line) },
-		InputChan: inputChan,
+		TicketID:   proposal.TicketID,
+		SessionID:  session.ID,
+		Agent:      proposal.Agent,
+		Prompt:     proposal.Prompt,
+		Reporter:   func(line string) { s.AppendLog(session.ID, line) },
+		InputChan:  inputChan,
+		OnComplete: onComplete,
 	})
 
 	if err != nil {
@@ -149,7 +158,6 @@ func (s *Service) StartApprovedRun(ctx context.Context, proposalID string) (stor
 		return store.Session{}, err
 	}
 
-	// Track the active session
 	s.mu.Lock()
 	s.activeSessions[session.ID] = &AgentSession{
 		SessionID: session.ID,
@@ -167,8 +175,9 @@ func (s *Service) StartApprovedRun(ctx context.Context, proposalID string) (stor
 		Payload:   handle.Outcome,
 	})
 
-	// For non-blocking runners, we don't call FinishRun here
-	// It will be called when the agent actually completes
+	if handle.Outcome != "running" {
+		onComplete(handle.Outcome, handle.Summary)
+	}
 
 	return session, nil
 }
