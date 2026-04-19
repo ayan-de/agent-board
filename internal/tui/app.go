@@ -139,16 +139,16 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry, deps AppDep
 	agents := config.DetectAgents()
 
 	a := &App{
-		store:        s,
-		orchestrator: deps.Orchestrator,
-		resolver:     resolver,
-		config:       cfg,
-		registry:     reg,
-		focus:        focusBoard,
-		view:         viewBoard,
-		kanban:       kanban,
-		ticketView:   NewTicketViewModel(s, resolver, t, agents),
-		dashboard:    NewDashboardModel(s, deps.Orchestrator, resolver, agents, t),
+		store:               s,
+		orchestrator:        deps.Orchestrator,
+		resolver:            resolver,
+		config:              cfg,
+		registry:            reg,
+		focus:               focusBoard,
+		view:                viewBoard,
+		kanban:              kanban,
+		ticketView:          NewTicketViewModel(s, resolver, t, agents),
+		dashboard:           NewDashboardModel(s, deps.Orchestrator, resolver, agents, t),
 		generatingProposals: make(map[string]bool),
 	}
 
@@ -328,7 +328,7 @@ func (a *App) startRunCmd(proposalID string) tea.Cmd {
 func (a *App) syncDashboardPane() {
 	agent := a.dashboard.SelectedAgent()
 	sess, running := a.dashboard.ActiveSessions[agent.Binary]
-	
+
 	// Create a stable key for comparison
 	sessID := ""
 	if running {
@@ -509,6 +509,8 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case keybinding.ActionOpenPalette:
 		a.palette.Open()
+	case keybinding.ActionRefresh:
+		a.kanban, _ = a.kanban.Reload()
 	default:
 		var cmd tea.Cmd
 		a.kanban, cmd = a.kanban.Update(msg)
@@ -546,7 +548,7 @@ func (a *App) renderHeader() string {
 	hintStyle := lipgloss.NewStyle().Foreground(muted)
 
 	projectPart := labelStyle.Render("Project: ") + nameStyle.Render(name)
-	hintPart := hintStyle.Render("? for keybindings")
+	hintPart := hintStyle.Render("?: help │ r: refresh")
 
 	projectWidth := lipgloss.Width(projectPart)
 	hintWidth := lipgloss.Width(hintPart)
