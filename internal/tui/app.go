@@ -58,6 +58,10 @@ type runStartedMsg struct {
 	proposalID string
 }
 
+type runStartFailedMsg struct {
+	err error
+}
+
 type runCompletedMsg struct {
 	ticketID string
 }
@@ -88,6 +92,7 @@ type Orchestrator interface {
 	GetActiveSessions() []*orchestrator.AgentSession
 	GetPaneContent(sessionID string, lines int) (string, error)
 	SwitchToPane(sessionID string) error
+	CompletionChan() <-chan orchestrator.RunCompletion
 }
 
 type AppDeps struct {
@@ -117,6 +122,7 @@ type App struct {
 	activeTicket *store.Ticket
 
 	generatingProposals map[string]bool
+	completionCh        <-chan orchestrator.RunCompletion
 	dashboardPaneID     string
 	lastSelectedAgent   string
 	lastSelectedSession string
@@ -150,6 +156,7 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry, deps AppDep
 		ticketView:          NewTicketViewModel(s, resolver, t, agents),
 		dashboard:           NewDashboardModel(s, deps.Orchestrator, resolver, agents, t),
 		generatingProposals: make(map[string]bool),
+		completionCh:        deps.Orchestrator.CompletionChan(),
 	}
 
 	cr := NewCommandRegistry()
@@ -266,10 +273,17 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case runStartedMsg:
 		return a, tea.Batch(
 			a.showNotification("Run started", "Agent is working...", NotificationInfo),
-			a.startRunCmd(msg.proposalID),
+			a.startRunAndListenCmd(msg.proposalID),
 		)
 	case runCompletedMsg:
 		a.kanban, _ = a.kanban.Reload()
+		if a.activeTicket != nil && a.activeTicket.ID == msg.ticketID {
+			updated, err := a.store.GetTicket(context.Background(), msg.ticketID)
+			if err == nil {
+				a.activeTicket = &updated
+				a.ticketView = a.ticketView.SetTicket(&updated)
+			}
+		}
 		return a, a.showNotification("Run completed", fmt.Sprintf("Agent finished working on %s", msg.ticketID), NotificationSuccess)
 	case proposalFailedMsg:
 		delete(a.generatingProposals, msg.ticketID)
@@ -277,6 +291,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.ticketView = a.ticketView.SetLoading(false)
 		}
 		return a, a.showNotification("Proposal failed", msg.err.Error(), NotificationError)
+	case runStartFailedMsg:
+		return a, a.showNotification("Run failed", msg.err.Error(), NotificationError)
 	case notificationMsg:
 		return a, a.showNotification(msg.title, msg.message, msg.variant)
 	}
@@ -312,16 +328,17 @@ func (a *App) approveProposalCmd(proposalID string) tea.Cmd {
 	}
 }
 
-func (a *App) startRunCmd(proposalID string) tea.Cmd {
+func (a *App) startRunAndListenCmd(proposalID string) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute) // Runs can take longer
-		defer cancel()
+		ctx := context.Background()
 
-		session, err := a.orchestrator.StartApprovedRun(ctx, proposalID)
+		_, err := a.orchestrator.StartApprovedRun(ctx, proposalID)
 		if err != nil {
-			return notificationMsg{title: "Error", message: err.Error(), variant: NotificationError}
+			return runStartFailedMsg{err: err}
 		}
-		return runCompletedMsg{ticketID: session.TicketID}
+
+		completion := <-a.completionCh
+		return runCompletedMsg{ticketID: completion.TicketID}
 	}
 }
 
