@@ -12,24 +12,25 @@ import (
 
 // PaneManager manages tmux panes for running agents
 type PaneManager struct {
-	mu     sync.RWMutex
-	panes  map[string]*AgentPane // sessionID -> AgentPane
-	tmux   string
+	mu    sync.RWMutex
+	panes map[string]*AgentPane // sessionID -> AgentPane
+	tmux  string
 }
 
 // AgentPane represents a running agent's tmux pane
 type AgentPane struct {
-	SessionID   string
-	TicketID    string
-	Agent       string
-	PaneID      string
-	WindowID    string
-	StartedAt   time.Time
-	Status      string // "running", "completed", "failed"
-	Outcome     string
-	Summary     string
-	cancelFunc  context.CancelFunc
-	promptFile  string // Path to the prompt file for cleanup
+	SessionID  string
+	TicketID   string
+	Agent      string
+	PaneID     string
+	WindowID   string
+	StartedAt  time.Time
+	Status     string
+	Outcome    string
+	Summary    string
+	cancelFunc context.CancelFunc
+	promptFile string
+	onComplete func(outcome, summary string)
 }
 
 // NewPaneManager creates a new pane manager
@@ -64,6 +65,7 @@ func (pm *PaneManager) CreatePane(ctx context.Context, req RunRequest) (*AgentPa
 		StartedAt:  time.Now(),
 		Status:     "running",
 		cancelFunc: cancel,
+		onComplete: req.OnComplete,
 	}
 
 	// Get the main agentboard session name
@@ -149,35 +151,58 @@ func (pm *PaneManager) monitorPane(ctx context.Context, pane *AgentPane, reporte
 	for {
 		select {
 		case <-ctx.Done():
-			// Context cancelled - pane was stopped
 			return
 		case <-ticker.C:
-			// Check if the window/pane still exists
 			checkCmd := exec.Command(pm.tmux, "list-panes", "-t", pane.PaneID, "-F", "#{pane_pid}")
 			output, err := checkCmd.Output()
 
 			if err != nil || len(output) == 0 {
-				// Pane no longer exists - agent finished
+				outcome := "completed"
+				summary := fmt.Sprintf("Agent %s finished for ticket %s", pane.Agent, pane.TicketID)
+
+				captured, capErr := pm.capturePaneOutput(pane.PaneID, 200)
+				if capErr == nil && captured != "" {
+					parsed, parseErr := ParseOpencodeOutput(strings.NewReader(captured))
+					if parseErr == nil {
+						if parsed.Outcome != "" {
+							outcome = parsed.Outcome
+						}
+						if parsed.Summary != "" {
+							summary = parsed.Summary
+						}
+					}
+				}
+
 				pm.mu.Lock()
-				pane.Status = "completed"
-				// Clean up the prompt file
+				pane.Status = outcome
+				pane.Outcome = outcome
+				pane.Summary = summary
 				if pane.promptFile != "" {
 					_ = os.Remove(pane.promptFile)
 					pane.promptFile = ""
 				}
 				pm.mu.Unlock()
+
 				if reporter != nil {
-					reporter(fmt.Sprintf("Agent %s finished for ticket %s", pane.Agent, pane.TicketID))
+					reporter(summary)
+				}
+				if pane.onComplete != nil {
+					pane.onComplete(outcome, summary)
 				}
 				return
 			}
-
-			// Pane still running, report that we're monitoring
-			if reporter != nil {
-				// We could capture pane content here if needed
-			}
 		}
 	}
+}
+
+func (pm *PaneManager) capturePaneOutput(paneID string, lines int) (string, error) {
+	captureCmd := exec.Command(pm.tmux, "capture-pane", "-t", paneID, "-p", "-e", "-J", "-C", "-P",
+		"-S", fmt.Sprintf("-%d", lines))
+	output, err := captureCmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to capture pane output: %w", err)
+	}
+	return string(output), nil
 }
 
 // GetPane retrieves a pane by session ID

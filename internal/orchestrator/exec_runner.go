@@ -39,7 +39,7 @@ func (r ExecRunner) Start(ctx context.Context, req RunRequest) (RunHandle, error
 	}
 
 	cmd := exec.CommandContext(ctx, path, "run", "--format", "json", req.Prompt)
-	
+
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return RunHandle{}, err
@@ -64,7 +64,7 @@ func (r ExecRunner) Start(ctx context.Context, req RunRequest) (RunHandle, error
 	for scanner.Scan() {
 		line := scanner.Text()
 		fullOutput.WriteString(line + "\n")
-		
+
 		displayLine := line
 		var evt opencodeEvent
 		if err := json.Unmarshal([]byte(line), &evt); err == nil {
@@ -89,10 +89,10 @@ func (r ExecRunner) Start(ctx context.Context, req RunRequest) (RunHandle, error
 		}
 	}
 
-	return parseOpencodeOutput(&fullOutput)
+	return ParseOpencodeOutput(&fullOutput)
 }
 
-func parseOpencodeOutput(r io.Reader) (RunHandle, error) {
+func ParseOpencodeOutput(r io.Reader) (RunHandle, error) {
 	var texts []string
 	var lastReason string
 	scanner := bufio.NewScanner(r)
