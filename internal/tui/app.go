@@ -85,6 +85,9 @@ type Orchestrator interface {
 	FinishRun(ctx context.Context, input orchestrator.FinishRunInput) error
 	GetLogs(sessionID string) []string
 	SendInput(sessionID, input string) error
+	GetActiveSessions() []*orchestrator.AgentSession
+	GetPaneContent(sessionID string, lines int) (string, error)
+	SwitchToPane(sessionID string) error
 }
 
 type AppDeps struct {

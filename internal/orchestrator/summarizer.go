@@ -9,6 +9,11 @@ import (
 )
 
 func (s Service) FinishRun(ctx context.Context, input FinishRunInput) error {
+	// Clean up active sessions tracking
+	s.mu.Lock()
+	delete(s.activeSessions, input.SessionID)
+	s.mu.Unlock()
+
 	cc, err := s.llm.SummarizeContext(ctx, llm.SummaryInput{
 		TicketID: input.TicketID,
 		Outcome:  input.Outcome,

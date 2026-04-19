@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -50,6 +51,26 @@ func (f *fakeOrchestrator) StartApprovedRun(ctx context.Context, proposalID stri
 
 func (f *fakeOrchestrator) FinishRun(ctx context.Context, input orchestrator.FinishRunInput) error {
 	return nil
+}
+
+func (f *fakeOrchestrator) GetLogs(sessionID string) []string {
+	return []string{"mock log line"}
+}
+
+func (f *fakeOrchestrator) SendInput(sessionID, input string) error {
+	return nil
+}
+
+func (f *fakeOrchestrator) GetActiveSessions() []*orchestrator.AgentSession {
+	return []*orchestrator.AgentSession{}
+}
+
+func (f *fakeOrchestrator) GetPaneContent(sessionID string, lines int) (string, error) {
+	return "", fmt.Errorf("not implemented in fake")
+}
+
+func (f *fakeOrchestrator) SwitchToPane(sessionID string) error {
+	return fmt.Errorf("not implemented in fake")
 }
 
 

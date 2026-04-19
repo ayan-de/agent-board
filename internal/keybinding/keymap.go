@@ -48,6 +48,7 @@ func DefaultKeyMap() KeyMap {
 			{Key: "g", Action: ActionGoToTicket, IsChord: true},
 			{Key: "i", Action: ActionShowDashboard},
 			{Key: "e", Action: ActionInteract},
+			{Key: "v", Action: ActionSwitchToPane},
 			{Key: ":", Action: ActionOpenPalette},
 		},
 	}

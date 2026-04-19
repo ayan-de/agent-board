@@ -52,8 +52,11 @@ func main() {
 	}
 
 	var runner orchestrator.Runner = orchestrator.NewExecRunner()
-	if _, err := exec.LookPath("tmux"); err == nil {
-		runner = orchestrator.NewTmuxRunner()
+	// Only use TmuxRunner if we're actually inside a tmux session
+	if tmux.IsInTmux() {
+		if tmuxRunner, err := orchestrator.NewTmuxRunner(); err == nil {
+			runner = tmuxRunner
+		}
 	}
 	mcpManager := mcp.NewManager(cfg.MCP)
 	ctxCarry := mcp.NewContextCarryAdapter(mcpManager, cfg.ProjectName)

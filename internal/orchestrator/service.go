@@ -18,16 +18,31 @@ type Service struct {
 	logs   map[string][]string
 	inputs map[string]io.Writer
 	mu     sync.RWMutex
+
+	// For tracking active sessions
+	activeSessions map[string]*AgentSession
+}
+
+// AgentSession tracks an active agent session
+type AgentSession struct {
+	SessionID  string
+	TicketID   string
+	Agent      string
+	StartedAt  int64
+	Status     string
+	PaneID     string
+	WindowID   string
 }
 
 func NewService(store Store, llm LLMClient, runner Runner, ctx ContextCarryProvider) *Service {
 	return &Service{
-		store:  store,
-		llm:    llm,
-		runner: runner,
-		ctx:    ctx,
-		logs:   make(map[string][]string),
-		inputs: make(map[string]io.Writer),
+		store:          store,
+		llm:            llm,
+		runner:        runner,
+		ctx:           ctx,
+		logs:          make(map[string][]string),
+		inputs:        make(map[string]io.Writer),
+		activeSessions: make(map[string]*AgentSession),
 	}
 }
 
@@ -82,7 +97,7 @@ func (s Service) CreateProposal(ctx context.Context, input CreateProposalInput) 
 	return proposal, nil
 }
 
-func (s Service) StartApprovedRun(ctx context.Context, proposalID string) (store.Session, error) {
+func (s *Service) StartApprovedRun(ctx context.Context, proposalID string) (store.Session, error) {
 	proposal, err := s.store.GetProposal(ctx, proposalID)
 	if err != nil {
 		return store.Session{}, err
@@ -107,6 +122,8 @@ func (s Service) StartApprovedRun(ctx context.Context, proposalID string) (store
 		return store.Session{}, err
 	}
 
+	// For TmuxRunner, we don't need stdin pipe since it's a pane
+	// For ExecRunner, we might still need it
 	inputChan := make(chan io.Writer, 1)
 	go func() {
 		if w, ok := <-inputChan; ok {
@@ -116,6 +133,7 @@ func (s Service) StartApprovedRun(ctx context.Context, proposalID string) (store
 		}
 	}()
 
+	// Start the agent (non-blocking for TmuxRunner)
 	handle, err := s.runner.Start(ctx, RunRequest{
 		TicketID:  proposal.TicketID,
 		SessionID: session.ID,
@@ -124,15 +142,23 @@ func (s Service) StartApprovedRun(ctx context.Context, proposalID string) (store
 		Reporter:  func(line string) { s.AppendLog(session.ID, line) },
 		InputChan: inputChan,
 	})
-	
-	s.mu.Lock()
-	delete(s.inputs, session.ID)
-	s.mu.Unlock()
+
 	if err != nil {
 		_ = s.store.EndSession(ctx, session.ID, "failed")
 		_ = s.store.SetAgentActive(ctx, proposal.TicketID, false)
 		return store.Session{}, err
 	}
+
+	// Track the active session
+	s.mu.Lock()
+	s.activeSessions[session.ID] = &AgentSession{
+		SessionID: session.ID,
+		TicketID:  proposal.TicketID,
+		Agent:     proposal.Agent,
+		StartedAt: session.StartedAt.Unix(),
+		Status:    "running",
+	}
+	s.mu.Unlock()
 
 	_, _ = s.store.CreateEvent(ctx, store.Event{
 		TicketID:  proposal.TicketID,
@@ -141,14 +167,70 @@ func (s Service) StartApprovedRun(ctx context.Context, proposalID string) (store
 		Payload:   handle.Outcome,
 	})
 
-	_ = s.FinishRun(ctx, FinishRunInput{
-		TicketID:  proposal.TicketID,
-		SessionID: session.ID,
-		Outcome:   handle.Outcome,
-		Summary:   handle.Summary,
-	})
+	// For non-blocking runners, we don't call FinishRun here
+	// It will be called when the agent actually completes
 
 	return session, nil
+}
+
+// GetActiveSessions returns all active agent sessions
+func (s *Service) GetActiveSessions() []*AgentSession {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	sessions := make([]*AgentSession, 0, len(s.activeSessions))
+	for _, sess := range s.activeSessions {
+		sessions = append(sessions, sess)
+	}
+	return sessions
+}
+
+// GetActiveSessionByTicket returns the active session for a ticket
+func (s *Service) GetActiveSessionByTicket(ticketID string) (*AgentSession, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, sess := range s.activeSessions {
+		if sess.TicketID == ticketID {
+			return sess, true
+		}
+	}
+	return nil, false
+}
+
+// GetActiveSessionByAgent returns active sessions for a specific agent
+func (s *Service) GetActiveSessionByAgent(agent string) *AgentSession {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, sess := range s.activeSessions {
+		if sess.Agent == agent {
+			return sess
+		}
+	}
+	return nil
+}
+
+// StopSession stops an active agent session
+func (s *Service) StopSession(ctx context.Context, sessionID string) error {
+	s.mu.Lock()
+	sess, ok := s.activeSessions[sessionID]
+	if !ok {
+		s.mu.Unlock()
+		return fmt.Errorf("session %s not found", sessionID)
+	}
+	delete(s.activeSessions, sessionID)
+	s.mu.Unlock()
+
+	// Try to use TmuxRunner's StopPane if available
+	if tmuxRunner, ok := s.runner.(*TmuxRunner); ok {
+		_ = tmuxRunner.StopPane(sessionID)
+	}
+
+	_ = s.store.EndSession(ctx, sessionID, "cancelled")
+	_ = s.store.SetAgentActive(ctx, sess.TicketID, false)
+
+	return nil
 }
 
 func (s *Service) AppendLog(sessionID, line string) {
@@ -167,6 +249,14 @@ func (s *Service) GetLogs(sessionID string) []string {
 }
 
 func (s *Service) SendInput(sessionID, input string) error {
+	// First try the TmuxRunner's SendInput
+	if tmuxRunner, ok := s.runner.(*TmuxRunner); ok {
+		if err := tmuxRunner.SendInput(sessionID, input); err == nil {
+			return nil
+		}
+	}
+
+	// Fall back to stdin pipe for ExecRunner
 	s.mu.RLock()
 	w, ok := s.inputs[sessionID]
 	s.mu.RUnlock()
@@ -175,4 +265,29 @@ func (s *Service) SendInput(sessionID, input string) error {
 	}
 	_, err := fmt.Fprintln(w, input)
 	return err
+}
+
+// GetTmuxRunner returns the runner as a TmuxRunner if it is one
+func (s *Service) GetTmuxRunner() (*TmuxRunner, bool) {
+	tmuxRunner, ok := s.runner.(*TmuxRunner)
+	return tmuxRunner, ok
+}
+
+// GetPaneContent returns the current content of a pane
+func (s *Service) GetPaneContent(sessionID string, lines int) (string, error) {
+	tmuxRunner, ok := s.runner.(*TmuxRunner)
+	if !ok {
+		return "", fmt.Errorf("pane content only available with TmuxRunner")
+	}
+	return tmuxRunner.CapturePane(sessionID, lines)
+}
+
+// SwitchToPane switches the tmux view to a specific pane
+func (s *Service) SwitchToPane(sessionID string) error {
+	tmuxRunner, ok := s.runner.(*TmuxRunner)
+	if !ok {
+		return fmt.Errorf("pane switching only available with TmuxRunner")
+	}
+	pm := tmuxRunner.GetPaneManager()
+	return pm.SwitchToPane(sessionID)
 }

@@ -27,6 +27,7 @@ const (
 	ActionShowDashboard
 	ActionOpenPalette
 	ActionInteract
+	ActionSwitchToPane
 )
 
 func (a Action) String() string {
@@ -79,6 +80,8 @@ func (a Action) String() string {
 		return "open_palette"
 	case ActionInteract:
 		return "interact"
+	case ActionSwitchToPane:
+		return "switch_to_pane"
 	default:
 		return "unknown"
 	}

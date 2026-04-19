@@ -1,144 +1,69 @@
 package orchestrator
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
-	"time"
 )
 
+// TmuxRunner manages agents in tmux panes using a PaneManager
 type TmuxRunner struct {
-	LookPath func(string) (string, error)
+	paneManager *PaneManager
 }
 
-func NewTmuxRunner() *TmuxRunner {
+// NewTmuxRunner creates a new TmuxRunner with a pane manager
+func NewTmuxRunner() (*TmuxRunner, error) {
+	pm, err := NewPaneManager()
+	if err != nil {
+		return nil, err
+	}
 	return &TmuxRunner{
-		LookPath: exec.LookPath,
-	}
+		paneManager: pm,
+	}, nil
 }
 
-func (r TmuxRunner) Start(ctx context.Context, req RunRequest) (RunHandle, error) {
-	tmuxPath, err := r.LookPath("tmux")
+// Start creates a new tmux pane for the agent and starts it non-blocking
+// The agent runs in the background and can be monitored via the pane manager
+func (r *TmuxRunner) Start(ctx context.Context, req RunRequest) (RunHandle, error) {
+	// Create a new pane for this agent session
+	pane, err := r.paneManager.CreatePane(ctx, req)
 	if err != nil {
-		return RunHandle{}, fmt.Errorf("tmuxRunner.start: tmux not found: %w", err)
+		return RunHandle{}, fmt.Errorf("tmuxRunner.start: %w", err)
 	}
-
-	agentPath, err := r.LookPath(req.Agent)
-	if err != nil {
-		return RunHandle{}, fmt.Errorf("tmuxRunner.start: agent %s not found: %w", req.Agent, err)
-	}
-
-	sessionName := fmt.Sprintf("agentboard-%s", req.TicketID)
-	// Clean up existing session
-	_ = exec.Command(tmuxPath, "kill-session", "-t", sessionName).Run()
-
-	// We'll use a temp file to capture the raw output for parsing
-	logDir := filepath.Join(os.TempDir(), "agentboard")
-	_ = os.MkdirAll(logDir, 0755)
-	logFile := filepath.Join(logDir, fmt.Sprintf("%s.log", req.SessionID))
-	
-	// Command to run inside tmux: run the agent directly in TUI mode.
-	innerCmd := fmt.Sprintf("%s run %q", agentPath, req.Prompt)
-	
-	// Create detached session
-	cmd := exec.Command(tmuxPath, "new-session", "-d", "-s", sessionName, innerCmd)
-	if err := cmd.Run(); err != nil {
-		return RunHandle{}, fmt.Errorf("tmuxRunner.start: failed to create tmux session: %w", err)
-	}
-
-	// Use pipe-pane to capture output for parsing without interfering with the PTY
-	_ = exec.Command(tmuxPath, "pipe-pane", "-t", sessionName, fmt.Sprintf("cat > %s", logFile)).Run()
 
 	if req.Reporter != nil {
-		req.Reporter(fmt.Sprintf("Tmux session %s created. Run 'tmux attach -t %s' to watch live.", sessionName, sessionName))
+		req.Reporter(fmt.Sprintf("Agent %s started in tmux window %s. Press 'i' in dashboard to view.",
+			req.Agent, pane.WindowID))
 	}
 
-	// Poll for completion and stream logs from the file
-	handleChan := make(chan RunHandle)
-	errChan := make(chan error)
-
-	go func() {
-		defer os.Remove(logFile)
-
-		lastOffset := int64(0)
-		ticker := time.NewTicker(500 * time.Millisecond)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				_ = exec.Command(tmuxPath, "kill-session", "-t", sessionName).Run()
-				errChan <- ctx.Err()
-				return
-			case <-ticker.C:
-				// Read new lines from log file
-				newContent, newOffset, _ := readNewLines(logFile, lastOffset)
-				if len(newContent) > 0 {
-					lines := strings.Split(strings.TrimSpace(string(newContent)), "\n")
-					for _, line := range lines {
-						if req.Reporter != nil {
-							// Filter/Format JSON as we do in exec_runner
-							// For simplicity, we can reuse parseOpencodeOutput logic later
-							req.Reporter(line) 
-						}
-					}
-					lastOffset = newOffset
-				}
-
-				// Check if tmux session still exists
-				if err := exec.Command(tmuxPath, "has-session", "-t", sessionName).Run(); err != nil {
-					// Session ended
-					finalOutput, _ := os.ReadFile(logFile)
-					handle, err := parseOpencodeOutput(bytes.NewReader(finalOutput))
-					if err != nil {
-						handleChan <- RunHandle{Outcome: "completed", Summary: "Session finished but could not parse result."}
-					} else {
-						handleChan <- handle
-					}
-					return
-				}
-			}
-		}
-	}()
-
-	select {
-	case handle := <-handleChan:
-		return handle, nil
-	case err := <-errChan:
-		return RunHandle{}, err
-	}
+	// Return immediately - agent is running in background
+	// The pane manager will monitor and update status when it completes
+	return RunHandle{
+		Outcome: "running",
+		Summary: fmt.Sprintf("Agent started in pane %s", pane.WindowID),
+	}, nil
 }
 
-func readNewLines(path string, offset int64) ([]byte, int64, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, offset, err
-	}
-	defer f.Close()
+// GetPaneManager returns the underlying pane manager
+func (r *TmuxRunner) GetPaneManager() *PaneManager {
+	return r.paneManager
+}
 
-	info, err := f.Stat()
-	if err != nil {
-		return nil, offset, err
-	}
+// SendInput sends input to a specific agent session
+func (r *TmuxRunner) SendInput(sessionID, input string) error {
+	return r.paneManager.SendInput(sessionID, input)
+}
 
-	if info.Size() <= offset {
-		return nil, offset, nil
-	}
+// CapturePane captures the current content of a pane
+func (r *TmuxRunner) CapturePane(sessionID string, lines int) (string, error) {
+	return r.paneManager.CapturePane(sessionID, lines)
+}
 
-	_, err = f.Seek(offset, 0)
-	if err != nil {
-		return nil, offset, err
-	}
+// ListPanes returns all active agent panes
+func (r *TmuxRunner) ListPanes() []*AgentPane {
+	return r.paneManager.ListPanes()
+}
 
-	buf := make([]byte, info.Size()-offset)
-	_, err = f.Read(buf)
-	if err != nil {
-		return nil, offset, err
-	}
-
-	return buf, info.Size(), nil
+// StopPane stops a specific agent pane
+func (r *TmuxRunner) StopPane(sessionID string) error {
+	return r.paneManager.RemovePane(sessionID, true)
 }

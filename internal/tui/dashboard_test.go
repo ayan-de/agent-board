@@ -44,7 +44,9 @@ func newTestDashboard(t *testing.T) DashboardModel {
 		{Name: "cursor", Binary: "cursor", Found: false},
 	}
 
-	return NewDashboardModel(s, resolver, agents, testDashboardTheme())
+	// Create a fake orchestrator for testing
+	fo := &fakeOrchestrator{store: s}
+	return NewDashboardModel(s, fo, resolver, agents, testDashboardTheme())
 }
 
 func TestNewDashboardModel(t *testing.T) {
@@ -55,8 +57,8 @@ func TestNewDashboardModel(t *testing.T) {
 	if m.resolver == nil {
 		t.Error("resolver is nil")
 	}
-	if len(m.agents) != 4 {
-		t.Errorf("agents = %d, want 4", len(m.agents))
+	if len(m.Agents) != 4 {
+		t.Errorf("Agents = %d, want 4", len(m.Agents))
 	}
 	if m.width != 0 {
 		t.Errorf("width = %d, want 0", m.width)
@@ -127,7 +129,7 @@ func TestDashboardViewNoAgentsFound(t *testing.T) {
 		{Name: "claude-code", Binary: "claude", Found: false},
 	}
 
-	m := NewDashboardModel(s, resolver, agents, testDashboardTheme())
+	m := NewDashboardModel(s, &fakeOrchestrator{store: s}, resolver, agents, testDashboardTheme())
 	m.width = 80
 	m.height = 24
 
