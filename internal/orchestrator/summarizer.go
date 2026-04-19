@@ -2,14 +2,12 @@ package orchestrator
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/ayan-de/agent-board/internal/llm"
 	"github.com/ayan-de/agent-board/internal/store"
 )
 
 func (s Service) FinishRun(ctx context.Context, input FinishRunInput) error {
-	// Clean up active sessions tracking
 	s.mu.Lock()
 	delete(s.activeSessions, input.SessionID)
 	s.mu.Unlock()
@@ -20,19 +18,15 @@ func (s Service) FinishRun(ctx context.Context, input FinishRunInput) error {
 		Summary:  input.Summary,
 	})
 	if err != nil {
-		return fmt.Errorf("orchestrator.finishRun: %w", err)
+		cc = input.Summary
 	}
 
-	if err := s.store.UpsertContextCarry(ctx, store.ContextCarry{
+	_ = s.store.UpsertContextCarry(ctx, store.ContextCarry{
 		TicketID: input.TicketID,
 		Summary:  cc,
-	}); err != nil {
-		return err
-	}
+	})
 
-	if err := s.store.EndSession(ctx, input.SessionID, input.Outcome); err != nil {
-		return err
-	}
+	_ = s.store.EndSession(ctx, input.SessionID, input.Outcome)
 
 	_, _ = s.store.CreateEvent(ctx, store.Event{
 		TicketID:  input.TicketID,
