@@ -25,15 +25,15 @@ type FinishRunInput struct {
 }
 
 type RunRequest struct {
-	TicketID  string
-	SessionID string
-	Agent     string
-	Prompt    string
-	Reporter  func(string)
-	InputChan chan io.Writer
-	Target    string
+	TicketID   string
+	SessionID  string
+	Agent      string
+	Prompt     string
+	Reporter   func(string)
+	InputChan  chan io.Writer
+	Target     string
+	OnComplete func(outcome, summary string)
 }
-
 
 type RunHandle struct {
 	Outcome string
