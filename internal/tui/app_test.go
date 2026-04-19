@@ -20,6 +20,14 @@ import (
 type fakeOrchestrator struct {
 	store                      *store.Store
 	lastCreateProposalTicketID string
+	completionCh               chan orchestrator.RunCompletion
+}
+
+func newFakeOrchestrator(s *store.Store) *fakeOrchestrator {
+	return &fakeOrchestrator{
+		store:        s,
+		completionCh: make(chan orchestrator.RunCompletion, 16),
+	}
 }
 
 func (f *fakeOrchestrator) CreateProposal(ctx context.Context, input orchestrator.CreateProposalInput) (store.Proposal, error) {
@@ -73,6 +81,21 @@ func (f *fakeOrchestrator) SwitchToPane(sessionID string) error {
 	return fmt.Errorf("not implemented in fake")
 }
 
+func (f *fakeOrchestrator) CompletionChan() <-chan orchestrator.RunCompletion {
+	return f.completionCh
+}
+
+func (f *fakeOrchestrator) completeRun(ticketID, sessionID, outcome string) {
+	f.store.SetAgentActive(context.Background(), ticketID, false)
+	if outcome == "completed" {
+		f.store.MoveStatus(context.Background(), ticketID, "review")
+	}
+	f.completionCh <- orchestrator.RunCompletion{
+		TicketID:  ticketID,
+		SessionID: sessionID,
+		Outcome:   outcome,
+	}
+}
 
 func newTestApp(t *testing.T) (*App, *fakeOrchestrator) {
 	t.Helper()
@@ -94,7 +117,7 @@ func newTestApp(t *testing.T) (*App, *fakeOrchestrator) {
 		Success: lipgloss.Color("42"), Accent: lipgloss.Color("213"),
 	})
 
-	fo := &fakeOrchestrator{store: s}
+	fo := newFakeOrchestrator(s)
 	app, err := NewApp(cfg, s, reg, AppDeps{
 		Orchestrator: fo,
 	})
@@ -144,7 +167,6 @@ func TestMoveToInProgressCreatesProposalRequest(t *testing.T) {
 	}
 }
 
-
 func updateLoop(app *App, msg tea.Msg) {
 	_, cmd := app.Update(msg)
 	if cmd == nil {
@@ -178,10 +200,6 @@ func execCmd(app *App, cmd tea.Cmd) {
 		// Skip timers
 	}
 }
-
-
-
-
 
 func TestAppQuitShowsConfirmation(t *testing.T) {
 	app, _ := newTestApp(t)
@@ -457,4 +475,3 @@ func TestProposalApprovalAndRunWorkflow(t *testing.T) {
 		t.Error("expected ticket AgentActive to be true")
 	}
 }
-

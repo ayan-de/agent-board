@@ -45,7 +45,7 @@ func newTestDashboard(t *testing.T) DashboardModel {
 	}
 
 	// Create a fake orchestrator for testing
-	fo := &fakeOrchestrator{store: s}
+	fo := newFakeOrchestrator(s)
 	return NewDashboardModel(s, fo, resolver, agents, testDashboardTheme())
 }
 
@@ -129,7 +129,7 @@ func TestDashboardViewNoAgentsFound(t *testing.T) {
 		{Name: "claude-code", Binary: "claude", Found: false},
 	}
 
-	m := NewDashboardModel(s, &fakeOrchestrator{store: s}, resolver, agents, testDashboardTheme())
+	m := NewDashboardModel(s, newFakeOrchestrator(s), resolver, agents, testDashboardTheme())
 	m.width = 80
 	m.height = 24
 
