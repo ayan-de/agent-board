@@ -19,16 +19,17 @@ type PaneManager struct {
 
 // AgentPane represents a running agent's tmux pane
 type AgentPane struct {
-	SessionID  string
-	TicketID   string
-	Agent      string
-	PaneID     string
-	WindowID   string
-	StartedAt  time.Time
-	Status     string // "running", "completed", "failed"
-	Outcome    string
-	Summary    string
-	cancelFunc context.CancelFunc
+	SessionID   string
+	TicketID    string
+	Agent       string
+	PaneID      string
+	WindowID    string
+	StartedAt   time.Time
+	Status      string // "running", "completed", "failed"
+	Outcome     string
+	Summary     string
+	cancelFunc  context.CancelFunc
+	promptFile  string // Path to the prompt file for cleanup
 }
 
 // NewPaneManager creates a new pane manager
@@ -71,7 +72,7 @@ func (pm *PaneManager) CreatePane(ctx context.Context, req RunRequest) (*AgentPa
 	// Find or create a window for agent panes
 	windowName := fmt.Sprintf("agents-%s", req.TicketID)
 
-	// First, check if the session exists and list its format to verify
+	// First, check if the session exists
 	checkCmd := exec.Command(pm.tmux, "has-session", "-t", mainSession)
 	if checkCmd.Run() != nil {
 		// Session doesn't exist, create it first
@@ -102,8 +103,26 @@ func (pm *PaneManager) CreatePane(ctx context.Context, req RunRequest) (*AgentPa
 	pane.WindowID = parts[0]
 	pane.PaneID = parts[1]
 
-	// Build the agent command
-	agentCmd := fmt.Sprintf("%s run %q", req.Agent, req.Prompt)
+	// Write the prompt to a persistent file (not tmp, to avoid cleanup issues)
+	// Store in user's home directory under .agentboard/cache
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = "/tmp"
+	}
+	cacheDir := fmt.Sprintf("%s/.agentboard/cache", homeDir)
+	_ = os.MkdirAll(cacheDir, 0755)
+	promptFile := fmt.Sprintf("%s/prompt-%s.txt", cacheDir, req.SessionID)
+	if err := os.WriteFile(promptFile, []byte(req.Prompt), 0644); err != nil {
+		pm.killWindow(pane.WindowID)
+		cancel()
+		return nil, fmt.Errorf("failed to write prompt file: %w", err)
+	}
+	// Store the prompt file path for cleanup later
+	pane.promptFile = promptFile
+
+	// Build the agent command using the persistent file
+	// This avoids escaping issues with special characters in the prompt
+	agentCmd := fmt.Sprintf("%s run \"$(cat %s)\"", req.Agent, promptFile)
 
 	// Send the command to the pane
 	sendCmd := exec.Command(pm.tmux, "send-keys", "-t", pane.PaneID, agentCmd, "Enter")
@@ -141,6 +160,11 @@ func (pm *PaneManager) monitorPane(ctx context.Context, pane *AgentPane, reporte
 				// Pane no longer exists - agent finished
 				pm.mu.Lock()
 				pane.Status = "completed"
+				// Clean up the prompt file
+				if pane.promptFile != "" {
+					_ = os.Remove(pane.promptFile)
+					pane.promptFile = ""
+				}
 				pm.mu.Unlock()
 				if reporter != nil {
 					reporter(fmt.Sprintf("Agent %s finished for ticket %s", pane.Agent, pane.TicketID))
@@ -217,6 +241,12 @@ func (pm *PaneManager) RemovePane(sessionID string, kill bool) error {
 	if kill {
 		pm.killWindow(pane.WindowID)
 		pane.cancelFunc()
+	}
+
+	// Clean up the prompt file
+	if pane.promptFile != "" {
+		_ = os.Remove(pane.promptFile)
+		pane.promptFile = ""
 	}
 
 	delete(pm.panes, sessionID)
