@@ -27,6 +27,8 @@ type AgentSession struct {
 	SessionID string
 	TicketID  string
 	Agent     string
+	Prompt    string
+	Target    string
 	StartedAt int64
 	Status    string
 }
@@ -164,11 +166,20 @@ func (s *Service) StartApprovedRun(ctx context.Context, proposalID string) (stor
 		return store.Session{}, err
 	}
 
+	target := ""
+	if tr, ok := s.runner.(*TmuxRunner); ok {
+		if pane, found := tr.GetPaneManager().GetPane(session.ID); found {
+			target = pane.TmuxSession
+		}
+	}
+
 	s.mu.Lock()
 	s.activeSessions[session.ID] = &AgentSession{
 		SessionID: session.ID,
 		TicketID:  proposal.TicketID,
 		Agent:     proposal.Agent,
+		Prompt:    proposal.Prompt,
+		Target:    target,
 		StartedAt: session.StartedAt.Unix(),
 		Status:    "running",
 	}
@@ -236,6 +247,9 @@ func (s *Service) StopSession(ctx context.Context, sessionID string) error {
 	if pr, ok := s.runner.(*PtyRunner); ok {
 		_ = pr.Stop(sessionID)
 	}
+	if tr, ok := s.runner.(*TmuxRunner); ok {
+		_ = tr.StopPane(sessionID)
+	}
 
 	_ = s.store.EndSession(ctx, sessionID, "cancelled")
 	_ = s.store.SetAgentActive(ctx, sess.TicketID, false)
@@ -280,8 +294,29 @@ func (s *Service) GetPtyRunner() (*PtyRunner, bool) {
 
 func (s *Service) GetPTYOutput(sessionID string, lines int) (string, error) {
 	pr, ok := s.runner.(*PtyRunner)
-	if !ok {
-		return "", fmt.Errorf("pty output only available with PtyRunner")
+	if ok {
+		return pr.GetPTYOutput(sessionID, lines)
 	}
-	return pr.GetPTYOutput(sessionID, lines)
+	tr, ok := s.runner.(*TmuxRunner)
+	if ok {
+		return tr.CapturePane(sessionID, lines)
+	}
+	return "", fmt.Errorf("terminal output only available with PtyRunner or TmuxRunner")
+}
+
+func (s *Service) SetTerminalSize(sessionID string, rows, cols int) error {
+	if rows <= 0 || cols <= 0 {
+		return nil
+	}
+	if pr, ok := s.runner.(*PtyRunner); ok {
+		sess, found := pr.GetSession(sessionID)
+		if !found {
+			return fmt.Errorf("session %s not found", sessionID)
+		}
+		return sess.SetSize(uint16(rows), uint16(cols))
+	}
+	if tr, ok := s.runner.(*TmuxRunner); ok {
+		return tr.Resize(sessionID, rows, cols)
+	}
+	return fmt.Errorf("terminal resize only available with PtyRunner or TmuxRunner")
 }

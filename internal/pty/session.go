@@ -129,6 +129,7 @@ func (s *Session) run(cfg *AgentConfig, prompt string) {
 	buf := make([]byte, 4096)
 	var stripBuf []string
 	var workingBuf []string
+	var completionStarted bool
 
 	for {
 		n, err := s.ptmx.Read(buf)
@@ -175,19 +176,23 @@ func (s *Session) run(cfg *AgentConfig, prompt string) {
 				}
 			}
 
-		case StateWorking:
-			s.mu.Lock()
-			canCheck := s.canCheckCompletion
-			s.mu.Unlock()
-			if !canCheck {
-				continue
-			}
-			detected := DetectCompletionFromBuffer(workingBuf, doneRe, idleRes)
-			if detected {
-				s.transitionDone("completed", "Agent completed task")
-				s.cleanupProcess()
-				return
-			}
+			case StateWorking:
+				s.mu.Lock()
+				canCheck := s.canCheckCompletion
+				s.mu.Unlock()
+				if !canCheck {
+					continue
+				}
+				if !completionStarted {
+					workingBuf = nil
+					completionStarted = true
+				}
+				detected := DetectCompletionFromBuffer(workingBuf, doneRe, idleRes)
+				if detected {
+					s.transitionDone("completed", "Agent completed task")
+					s.cleanupProcess()
+					return
+				}
 		}
 	}
 }

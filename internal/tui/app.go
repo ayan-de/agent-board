@@ -65,6 +65,8 @@ type runCompletedMsg struct {
 	ticketID string
 }
 
+type dashboardTickMsg time.Time
+
 type proposalFailedMsg struct {
 	ticketID string
 	err      error
@@ -90,6 +92,7 @@ type Orchestrator interface {
 	SendInput(sessionID, input string) error
 	GetActiveSessions() []*orchestrator.AgentSession
 	GetPTYOutput(sessionID string, lines int) (string, error)
+	SetTerminalSize(sessionID string, rows, cols int) error
 	CompletionChan() <-chan orchestrator.RunCompletion
 }
 
@@ -186,6 +189,12 @@ func (a *App) Init() tea.Cmd {
 	return tea.EnterAltScreen
 }
 
+func dashboardTick() tea.Cmd {
+	return tea.Tick(250*time.Millisecond, func(t time.Time) tea.Msg {
+		return dashboardTickMsg(t)
+	})
+}
+
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -207,6 +216,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.kanban, cmd = a.kanban.Update(msg)
 		a.dashboard, _ = a.dashboard.Update(msg)
 		return a, cmd
+	case dashboardTickMsg:
+		if a.view != viewDashboard {
+			return a, nil
+		}
+		a.dashboard = a.dashboard.Refresh()
+		a.dashboard = a.dashboard.refreshPaneContent()
+		return a, dashboardTick()
 	case notificationDismissMsg:
 		a.notification = a.notification.HandleDismiss(msg)
 		return a, nil
@@ -252,6 +268,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 	case runCompletedMsg:
 		a.kanban, _ = a.kanban.Reload()
+		a.dashboard = a.dashboard.Refresh()
 		if a.activeTicket != nil && a.activeTicket.ID == msg.ticketID {
 			updated, err := a.store.GetTicket(context.Background(), msg.ticketID)
 			if err == nil {
@@ -265,8 +282,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.activeTicket != nil && a.activeTicket.ID == msg.ticketID {
 			a.ticketView = a.ticketView.SetLoading(false)
 		}
+		a.dashboard = a.dashboard.Refresh()
 		return a, a.showNotification("Proposal failed", msg.err.Error(), NotificationError)
 	case runStartFailedMsg:
+		a.dashboard = a.dashboard.Refresh()
 		return a, a.showNotification("Run failed", msg.err.Error(), NotificationError)
 	case notificationMsg:
 		return a, a.showNotification(msg.title, msg.message, msg.variant)
@@ -457,7 +476,9 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.view = viewBoard
 		} else {
 			a.dashboard = a.dashboard.Refresh()
+			a.dashboard = a.dashboard.refreshPaneContent()
 			a.view = viewDashboard
+			return a, dashboardTick()
 		}
 	case keybinding.ActionOpenPalette:
 		a.palette.Open()

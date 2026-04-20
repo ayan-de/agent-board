@@ -48,6 +48,26 @@ func TestSessionNoFalsePositive(t *testing.T) {
 
 func TestSessionDetectsCompletionViaIdlePattern(t *testing.T) {
 	reg := pty.NewRegistry()
+	cfg := reg["claude-code"] // Use claude-code which has idle patterns
+
+	lines := []string{
+		"Press Ctrl-C again to exit",
+		"some output",
+		"Press Ctrl-C again to exit",
+		"more output",
+		"Press Ctrl-C again to exit",
+	}
+
+	detected := pty.DetectCompletion(cfg, lines, 5*time.Second)
+	if !detected {
+		t.Fatal("expected completion detection via idle pattern (3 occurrences)")
+	}
+}
+
+func TestOpenCodeNoIdleDetection(t *testing.T) {
+	// OpenCode should NOT detect completion via idle pattern
+	// It relies only on the DoneMarker
+	reg := pty.NewRegistry()
 	cfg := reg["opencode"]
 
 	lines := []string{
@@ -57,8 +77,8 @@ func TestSessionDetectsCompletionViaIdlePattern(t *testing.T) {
 	}
 
 	detected := pty.DetectCompletion(cfg, lines, 5*time.Second)
-	if !detected {
-		t.Fatal("expected completion detection via idle pattern (3 occurrences)")
+	if detected {
+		t.Fatal("OpenCode should not detect completion via idle pattern")
 	}
 }
 

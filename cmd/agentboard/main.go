@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 
 	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/llm"
@@ -36,11 +37,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	cwd, _ := os.Getwd()
 	registry := pty.NewRegistry()
 	var runner orchestrator.Runner
-	if len(registry) > 0 {
-		runner = orchestrator.NewPtyRunner(registry, "")
-	} else {
+	if _, err := exec.LookPath("tmux"); err == nil {
+		tmuxRunner, tmuxErr := orchestrator.NewTmuxRunner(registry, cwd)
+		if tmuxErr == nil {
+			runner = tmuxRunner
+		}
+	}
+	if runner == nil && len(registry) > 0 {
+		runner = orchestrator.NewPtyRunner(registry, cwd)
+	}
+	if runner == nil {
 		runner = orchestrator.NewExecRunner()
 	}
 

@@ -41,7 +41,7 @@ func newOpenCode() *AgentConfig {
 		FallbackTimeout: 5 * time.Second,
 		ReadyWait:       800 * time.Millisecond,
 		FormatPrompt:    func(p string) string { return DefaultFormatPrompt(p, DoneMarker) },
-		IdlePatterns:    []string{`Ask\s+anything`},
+		IdlePatterns:    []string{}, // Rely on DoneMarker for completion
 	}
 }
 

@@ -77,6 +77,10 @@ func (f *fakeOrchestrator) GetPTYOutput(sessionID string, lines int) (string, er
 	return "", fmt.Errorf("not implemented in fake")
 }
 
+func (f *fakeOrchestrator) SetTerminalSize(sessionID string, rows, cols int) error {
+	return nil
+}
+
 func (f *fakeOrchestrator) CompletionChan() <-chan orchestrator.RunCompletion {
 	return f.completionCh
 }

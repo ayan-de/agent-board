@@ -13,7 +13,7 @@ The implemented product today is the TUI foundation plus the first AI orchestrat
 - Theme registry with builtin and user JSON themes
 - Configurable keybindings and command palette
 - Agent dashboard based on local detection state
-- AI orchestration: proposal creation, approval gating, subprocess worker execution
+- AI orchestration: proposal creation, approval gating, tmux-backed terminal sessions, PTY fallback, subprocess worker execution
 - LangChain Go integration for coordinator and summarizer models
 - MCP context carry integration via `@thisisayande/contextcarry-mcp`
 
@@ -37,7 +37,7 @@ The long-term product direction is full AI agent orchestration:
 - `internal/theme` handles builtin theme embedding, user theme loading, parsing, and runtime selection
 - `internal/keybinding` handles keymap definitions, config overrides, and action resolution
 - `internal/llm` provides provider registry (openai, ollama, claude, zai) with LangChain Go behind a Client interface
-- `internal/orchestrator` implements proposal creation, approval gating, session start, outcome mapping, context carry persistence, PTY runner, and subprocess worker execution
+- `internal/orchestrator` implements proposal creation, approval gating, session start, outcome mapping, context carry persistence, tmux runner, PTY runner, and subprocess worker execution
 - `internal/pty` provides agent config registry, PTY session management, completion detection, and prompt injection (ported from pty-go)
 - `internal/prompt` central repository for all LLM prompt templates
 - `internal/mcp` provides MCP manager, context carry adapter with load/save via MCP protocol
@@ -45,7 +45,7 @@ The long-term product direction is full AI agent orchestration:
 
 ### Partially Implemented
 
-- `internal/tui/dashboard.go` shows detected agents with live PTY output in right pane, but completion countdown and 15s auto-close are not yet implemented
+- `internal/tui/dashboard.go` shows detected agents with live tmux-backed terminal capture in the right pane, with PTY fallback when tmux is unavailable; completion countdown and 15s auto-close are not yet implemented
 - `internal/orchestrator/exec_runner.go` runs subprocess workers but does not yet call FinishRun after worker completion
 - `internal/mcp/contextcarry.go` has SaveContext/LoadContext but SaveContext is not called from the orchestrator yet
 
@@ -68,7 +68,7 @@ cmd/agentboard/main.go
   -> config.Load()
   -> store.Open()
   -> llm.NewFromConfig()
-  -> pty.NewRegistry() -> orchestrator.NewPtyRunner()
+  -> pty.NewRegistry() -> orchestrator.NewTmuxRunner() if tmux exists, else orchestrator.NewPtyRunner()
   -> mcp.NewManager() + mcp.NewContextCarryAdapter()
   -> orchestrator.NewService(store, llm, runner, ctxCarry)
   -> theme.Registry setup
@@ -109,7 +109,7 @@ TUI <-> Config
 TUI <-> Theme Registry
 TUI <-> Orchestrator <-> Store
                     <-> LLM (coordinator/summarizer)
-                    <-> Runner (PTY or subprocess exec)
+                    <-> Runner (tmux, PTY, or subprocess exec)
                     <-> ContextCarryProvider (MCP)
 ```
 
@@ -156,7 +156,8 @@ TUI <-> Orchestrator <-> Store
 - proposal creation triggered by moving assigned ticket to `in_progress`
 - coordinator LLM shapes worker prompt from ticket context + context carry
 - approval gate with stale proposal rejection
-- PTY runner with agent-specific ready detection, prompt injection, and completion detection
+- tmux runner with detached per-session panes, agent-specific ready detection, prompt injection, terminal capture, and resize support
+- PTY runner fallback with agent-specific ready detection, prompt injection, and completion detection
 - subprocess exec runner as fallback with structured JSON outcome parsing
 - outcome-driven board transitions (completed -> review, failed -> stays)
 - context carry persistence and summarization for run continuity

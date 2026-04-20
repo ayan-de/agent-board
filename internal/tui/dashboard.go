@@ -34,7 +34,7 @@ type DashboardModel struct {
 	orchestrator   Orchestrator
 	resolver       *keybinding.Resolver
 	Agents         []config.DetectedAgent
-	ActiveSessions map[string]store.Session // agent binary -> session
+	ActiveSessions map[string]store.Session
 	width          int
 	height         int
 	refreshed      bool
@@ -147,6 +147,56 @@ func (m DashboardModel) SelectedSession() *orchestrator.AgentSession {
 	return nil
 }
 
+func (m DashboardModel) visibleAgents() []config.DetectedAgent {
+	agents := make([]config.DetectedAgent, 0, len(m.Agents))
+	for _, agent := range m.Agents {
+		if agent.Found || m.sessionForAgent(agent) != nil {
+			agents = append(agents, agent)
+		}
+	}
+	return agents
+}
+
+func (m DashboardModel) sessionForAgent(agent config.DetectedAgent) *store.Session {
+	if sess, ok := m.ActiveSessions[agent.Binary]; ok {
+		s := sess
+		return &s
+	}
+	if sess, ok := m.ActiveSessions[agent.Name]; ok {
+		s := sess
+		return &s
+	}
+	return nil
+}
+
+func (m DashboardModel) refreshPaneContent() DashboardModel {
+	sess := m.SelectedSession()
+	if sess == nil {
+		m.paneContent = ""
+		m.paneContentLoadedAt = time.Time{}
+		return m
+	}
+
+	rows := m.height - 12
+	if rows < 8 {
+		rows = 8
+	}
+	cols := m.width - 36
+	if cols < 40 {
+		cols = 40
+	}
+	_ = m.orchestrator.SetTerminalSize(sess.SessionID, rows, cols)
+
+	content, err := m.orchestrator.GetPTYOutput(sess.SessionID, rows)
+	if err != nil {
+		return m
+	}
+
+	m.paneContent = content
+	m.paneContentLoadedAt = time.Now()
+	return m
+}
+
 func (m DashboardModel) Init() tea.Cmd {
 	return nil
 }
@@ -245,10 +295,72 @@ func (m *DashboardModel) loadActiveSessions() {
 	if len(m.activeAgentSessions) > 0 && m.selectedSessionID == "" {
 		m.selectedSessionID = m.activeAgentSessions[0].SessionID
 	}
+	if m.selectedSessionID != "" {
+		found := false
+		for _, sess := range m.activeAgentSessions {
+			if sess.SessionID == m.selectedSessionID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			m.selectedSessionID = ""
+		}
+	}
+	if len(m.activeAgentSessions) == 0 && len(m.ActiveSessions) > 0 {
+		currentRunning := false
+		if m.cursor >= 0 && m.cursor < len(m.Agents) {
+			currentRunning = m.sessionForAgent(m.Agents[m.cursor]) != nil
+		}
+		if !currentRunning {
+			for i, agent := range m.Agents {
+				if m.sessionForAgent(agent) != nil {
+					m.cursor = i
+					break
+				}
+			}
+		}
+	}
 }
 
 func (m DashboardModel) Refresh() DashboardModel {
-	m.Agents = config.DetectAgents()
+	detected := config.DetectAgents()
+	if len(m.Agents) == 0 {
+		m.Agents = detected
+	} else {
+		merged := make([]config.DetectedAgent, len(m.Agents))
+		copy(merged, m.Agents)
+		byBinary := make(map[string]config.DetectedAgent, len(detected))
+		byName := make(map[string]config.DetectedAgent, len(detected))
+		for _, agent := range detected {
+			byBinary[agent.Binary] = agent
+			byName[agent.Name] = agent
+		}
+		for i, agent := range merged {
+			if updated, ok := byBinary[agent.Binary]; ok {
+				merged[i].Found = updated.Found
+				merged[i].Path = updated.Path
+				if updated.Logo != "" {
+					merged[i].Logo = updated.Logo
+				}
+				if updated.LogoClr != "" {
+					merged[i].LogoClr = updated.LogoClr
+				}
+				continue
+			}
+			if updated, ok := byName[agent.Name]; ok {
+				merged[i].Found = updated.Found
+				merged[i].Path = updated.Path
+				if updated.Logo != "" {
+					merged[i].Logo = updated.Logo
+				}
+				if updated.LogoClr != "" {
+					merged[i].LogoClr = updated.LogoClr
+				}
+			}
+		}
+		m.Agents = merged
+	}
 	m.loadActiveSessions()
 	m.refreshed = true
 	return m
@@ -291,8 +403,25 @@ func (m DashboardModel) renderSidebar(width int) string {
 	// If we have active agent sessions, show those instead of detected agents
 	sessions := m.activeAgentSessions
 	if len(sessions) == 0 {
-		// Fall back to showing detected agents
-		for i, agent := range m.Agents {
+		agents := m.visibleAgents()
+		if len(agents) == 0 {
+			b.WriteString(m.styles.Placeholder.Render("No agents found"))
+			return lipgloss.NewStyle().
+				Border(lipgloss.NormalBorder(), false, true, false, false).
+				BorderForeground(lipgloss.Color("240")).
+				Height(m.height - 8).
+				Width(width).
+				Render(b.String())
+		}
+
+		if m.cursor >= len(agents) {
+			m.cursor = len(agents) - 1
+		}
+		if m.cursor < 0 {
+			m.cursor = 0
+		}
+
+		for i, agent := range agents {
 			prefix := "  "
 			style := m.styles.Label
 			if i == m.cursor && len(sessions) == 0 {
@@ -304,7 +433,7 @@ func (m DashboardModel) renderSidebar(width int) string {
 			statusColor := "240"
 			if agent.Found {
 				statusColor = "42"
-				if _, running := m.ActiveSessions[agent.Binary]; running {
+				if m.sessionForAgent(agent) != nil {
 					statusColor = "213"
 				}
 			}
@@ -356,7 +485,18 @@ func (m DashboardModel) renderSidebar(width int) string {
 func (m DashboardModel) renderContent(width int) string {
 	sess := m.SelectedSession()
 	if sess == nil {
-		agent := m.SelectedAgent()
+		agents := m.visibleAgents()
+		if len(agents) == 0 {
+			return m.styles.Placeholder.Width(width).Render("No agents found")
+		}
+		if m.cursor >= len(agents) {
+			m.cursor = len(agents) - 1
+		}
+		if m.cursor < 0 {
+			m.cursor = 0
+		}
+
+		agent := agents[m.cursor]
 		if agent.Binary == "" {
 			return m.styles.Placeholder.Width(width).Render("No agent selected")
 		}
@@ -380,35 +520,37 @@ func (m DashboardModel) renderContent(width int) string {
 			statusVal = "READY"
 		}
 
-		if sess, running := m.ActiveSessions[agent.Binary]; running {
+		runningVal := "no"
+		ticketVal := "—"
+		uptimeVal := "—"
+		if runningSess := m.sessionForAgent(agent); runningSess != nil {
 			statusVal = "RUNNING"
-			fields := []struct {
-				label string
-				value string
-			}{
-				{"Status:", statusVal},
-				{"Binary:", agent.Binary},
-				{"Ticket:", sess.TicketID},
-				{"Uptime:", formatUptime(sess.StartedAt)},
-			}
-			for _, f := range fields {
-				b.WriteString(m.styles.Label.Render(fmt.Sprintf("%-12s", f.label)))
+			runningVal = "yes"
+			ticketVal = runningSess.TicketID
+			uptimeVal = formatUptime(runningSess.StartedAt)
+		}
+
+		fields := []struct {
+			label string
+			value string
+		}{
+			{"Status:", statusVal},
+			{"Binary:", agent.Binary},
+			{"Running:", runningVal},
+			{"Ticket:", ticketVal},
+			{"Uptime:", uptimeVal},
+			{"Tmux:", "—"},
+			{"Subagents:", "—"},
+			{"Tokens:", "—"},
+		}
+		for _, f := range fields {
+			b.WriteString(m.styles.Label.Render(f.label + " "))
+			if f.value == "—" {
+				b.WriteString(m.styles.Placeholder.Render(f.value))
+			} else {
 				b.WriteString(m.styles.Value.Render(f.value))
-				b.WriteString("\n")
 			}
-		} else {
-			fields := []struct {
-				label string
-				value string
-			}{
-				{"Status:", statusVal},
-				{"Binary:", agent.Binary},
-			}
-			for _, f := range fields {
-				b.WriteString(m.styles.Label.Render(fmt.Sprintf("%-12s", f.label)))
-				b.WriteString(m.styles.Value.Render(f.value))
-				b.WriteString("\n")
-			}
+			b.WriteString("\n")
 		}
 
 		return lipgloss.NewStyle().
@@ -426,6 +568,26 @@ func (m DashboardModel) renderContent(width int) string {
 	b.WriteString("\n")
 	b.WriteString(strings.Repeat("─", width))
 	b.WriteString("\n\n")
+
+	if sess.Target != "" {
+		b.WriteString(m.styles.Label.Render("Tmux: "))
+		b.WriteString(m.styles.Value.Render(sess.Target))
+		b.WriteString("\n")
+		b.WriteString(m.styles.Label.Render("Attach: "))
+		b.WriteString(m.styles.Value.Render("tmux attach -t " + sess.Target))
+		b.WriteString("\n\n")
+	}
+
+	if sess.Prompt != "" {
+		b.WriteString(m.styles.Label.Render("Prompt:"))
+		b.WriteString("\n")
+		promptLines := strings.Split(sess.Prompt, "\n")
+		for _, line := range promptLines {
+			b.WriteString(m.styles.Value.Render("  " + line))
+			b.WriteString("\n")
+		}
+		b.WriteString("\n")
+	}
 
 	// Get pane content
 	paneContent := m.paneContent
@@ -448,25 +610,10 @@ func (m DashboardModel) renderContent(width int) string {
 	}
 
 	if paneContent != "" {
-		// Display the pane content in a styled box
-		lines := strings.Split(paneContent, "\n")
-		// Show last N lines that fit
-		maxLines := (m.height - 16)
-		if maxLines < 5 {
-			maxLines = 5
-		}
-		if len(lines) > maxLines {
-			lines = lines[len(lines)-maxLines:]
-		}
-
 		b.WriteString(m.styles.Title.Render("Live Agent Output"))
 		b.WriteString("\n")
-		for _, line := range lines {
-			// Truncate long lines
-			if len(line) > width-6 {
-				line = line[:width-9] + "..."
-			}
-			b.WriteString(m.styles.Value.Render("  " + line))
+		b.WriteString(paneContent)
+		if !strings.HasSuffix(paneContent, "\n") {
 			b.WriteString("\n")
 		}
 	} else {
