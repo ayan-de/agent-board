@@ -18,7 +18,7 @@ The implemented product today is the TUI foundation plus the first AI orchestrat
 - MCP context carry integration via `@thisisayande/contextcarry-mcp`
 
 The long-term product direction is full AI agent orchestration:
-- tmux and embedded PTY agent execution
+- embedded PTY agent execution with live output rendering in dashboard
 - session and process lifecycle management
 - additional MCP integrations
 - HTTP/WebSocket API
@@ -37,14 +37,15 @@ The long-term product direction is full AI agent orchestration:
 - `internal/theme` handles builtin theme embedding, user theme loading, parsing, and runtime selection
 - `internal/keybinding` handles keymap definitions, config overrides, and action resolution
 - `internal/llm` provides provider registry (openai, ollama, claude, zai) with LangChain Go behind a Client interface
-- `internal/orchestrator` implements proposal creation, approval gating, session start, outcome mapping, context carry persistence, and subprocess worker execution
+- `internal/orchestrator` implements proposal creation, approval gating, session start, outcome mapping, context carry persistence, PTY runner, and subprocess worker execution
+- `internal/pty` provides agent config registry, PTY session management, completion detection, and prompt injection (ported from pty-go)
 - `internal/prompt` central repository for all LLM prompt templates
 - `internal/mcp` provides MCP manager, context carry adapter with load/save via MCP protocol
 - `internal/mcpclient` wraps mcp-go stdio client for MCP server communication
 
 ### Partially Implemented
 
-- `internal/tui/dashboard.go` shows detected agents, but it is not connected to live agent processes
+- `internal/tui/dashboard.go` shows detected agents with live PTY output in right pane, but completion countdown and 15s auto-close are not yet implemented
 - `internal/orchestrator/exec_runner.go` runs subprocess workers but does not yet call FinishRun after worker completion
 - `internal/mcp/contextcarry.go` has SaveContext/LoadContext but SaveContext is not called from the orchestrator yet
 
@@ -67,6 +68,7 @@ cmd/agentboard/main.go
   -> config.Load()
   -> store.Open()
   -> llm.NewFromConfig()
+  -> pty.NewRegistry() -> orchestrator.NewPtyRunner()
   -> mcp.NewManager() + mcp.NewContextCarryAdapter()
   -> orchestrator.NewService(store, llm, runner, ctxCarry)
   -> theme.Registry setup
@@ -88,6 +90,7 @@ agent-board/
 │   ├── keybinding/         # Working keymap model and config overrides
 │   ├── llm/                # Working LangChain Go integration with provider registry
 │   ├── orchestrator/       # Working agent lifecycle layer
+│   ├── pty/                # Working PTY session management and agent configs
 │   ├── prompt/             # Working central prompt repository
 │   ├── mcp/                # Working MCP manager and context carry adapter
 │   ├── mcpclient/          # Working mcp-go stdio client wrapper
@@ -106,7 +109,7 @@ TUI <-> Config
 TUI <-> Theme Registry
 TUI <-> Orchestrator <-> Store
                     <-> LLM (coordinator/summarizer)
-                    <-> Runner (subprocess exec)
+                    <-> Runner (PTY or subprocess exec)
                     <-> ContextCarryProvider (MCP)
 ```
 
@@ -153,7 +156,8 @@ TUI <-> Orchestrator <-> Store
 - proposal creation triggered by moving assigned ticket to `in_progress`
 - coordinator LLM shapes worker prompt from ticket context + context carry
 - approval gate with stale proposal rejection
-- subprocess exec runner with structured JSON outcome parsing
+- PTY runner with agent-specific ready detection, prompt injection, and completion detection
+- subprocess exec runner as fallback with structured JSON outcome parsing
 - outcome-driven board transitions (completed -> review, failed -> stays)
 - context carry persistence and summarization for run continuity
 - event recording for orchestration lifecycle
@@ -334,7 +338,6 @@ go vet ./...
 | `AGENTBOARD_LOG` | overrides `general.log` |
 | `AGENTBOARD_ADDR` | overrides `general.addr` |
 | `AGENTBOARD_MODE` | overrides `general.mode` |
-| `AGENTBOARD_TMUX` | overrides `general.tmux` |
 | `AGENTBOARD_DB` | overrides `db.path` |
 | `AGENTBOARD_LLM_PROVIDER` | overrides `llm.provider` |
 | `AGENTBOARD_LLM_MODEL` | overrides `llm.model` |
@@ -388,18 +391,18 @@ go vet ./...
 - keep Bubble Tea as a presentation layer that issues intents and renders state
 - introduce interfaces at the consumer boundary when real orchestration dependencies arrive
 - do not let `api` call process code separately from TUI; both TUI and API should talk to the same orchestration/service layer
-- treat MCP and tmux integrations as adapters behind small interfaces
+- treat MCP integrations as adapters behind small interfaces
 - keep session persistence and live runtime state separate in the model
 
 ---
 
 ## Suggested Next Build Order
 
-1. Define the orchestrator domain model and interfaces before wiring tmux or PTY process execution.
+1. Define the orchestrator domain model and interfaces before wiring PTY process execution.
 2. Implement a minimal in-process orchestrator service for start, stop, list, and observe agent sessions.
 3. Hook the TUI to that orchestrator for one agent flow end to end.
 4. Add persistence for orchestration events and session transitions where needed.
-5. Add tmux and PTY adapters behind the orchestrator.
+5. Add PTY adapter behind the orchestrator (done — `internal/pty` + `PtyRunner`).
 6. Add API handlers only after the orchestrator API is stable enough for both TUI and HTTP consumers.
 7. Add MCP and decomposition after the local orchestration loop is solid.
 
