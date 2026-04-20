@@ -44,15 +44,16 @@ type Session struct {
 	TicketID  string
 	Chdir     string
 
-	mu       sync.Mutex
-	state    SessionState
-	output   []string
-	outputMu sync.Mutex
-	cmd      *exec.Cmd
-	ptmx     *os.File
-	doneCh   chan struct{}
-	outcome  string
-	summary  string
+	mu                 sync.Mutex
+	state              SessionState
+	output             []string
+	outputMu           sync.Mutex
+	cmd                *exec.Cmd
+	ptmx               *os.File
+	doneCh             chan struct{}
+	outcome            string
+	summary            string
+	canCheckCompletion bool
 }
 
 func NewSession(cfg *AgentConfig, sessionID, ticketID, prompt, chdir string) (*Session, error) {
@@ -110,16 +111,24 @@ func (s *Session) run(cfg *AgentConfig, prompt string) {
 	}
 
 	fired := false
-	fallback := time.AfterFunc(cfg.FallbackTimeout, func() {
-		if !fired {
-			fired = true
-			s.sendPromptAndTransition(cfg, prompt)
+	var firedMu sync.Mutex
+	firePrompt := func(fn func()) {
+		firedMu.Lock()
+		defer firedMu.Unlock()
+		if fired {
+			return
 		}
+		fired = true
+		fn()
+	}
+	fallback := time.AfterFunc(cfg.FallbackTimeout, func() {
+		firePrompt(func() { s.sendPromptAndTransition(cfg, prompt) })
 	})
 	defer fallback.Stop()
 
 	buf := make([]byte, 4096)
 	var stripBuf []string
+	var workingBuf []string
 
 	for {
 		n, err := s.ptmx.Read(buf)
@@ -131,6 +140,10 @@ func (s *Session) run(cfg *AgentConfig, prompt string) {
 				stripBuf = append(stripBuf, stripped)
 				if len(stripBuf) > 500 {
 					stripBuf = stripBuf[len(stripBuf)-500:]
+				}
+				workingBuf = append(workingBuf, stripped)
+				if len(workingBuf) > 500 {
+					workingBuf = workingBuf[len(workingBuf)-500:]
 				}
 			}
 		}
@@ -152,19 +165,24 @@ func (s *Session) run(cfg *AgentConfig, prompt string) {
 		case StateWaitingReady:
 			for _, line := range stripBuf {
 				if readyRe.MatchString(line) {
-					if !fired {
-						fired = true
+					firePrompt(func() {
 						fallback.Stop()
 						time.AfterFunc(cfg.ReadyWait, func() {
 							s.sendPromptAndTransition(cfg, prompt)
 						})
-					}
+					})
 					break
 				}
 			}
 
 		case StateWorking:
-			detected := DetectCompletionFromBuffer(stripBuf, doneRe, idleRes)
+			s.mu.Lock()
+			canCheck := s.canCheckCompletion
+			s.mu.Unlock()
+			if !canCheck {
+				continue
+			}
+			detected := DetectCompletionFromBuffer(workingBuf, doneRe, idleRes)
 			if detected {
 				s.transitionDone("completed", "Agent completed task")
 				s.cleanupProcess()
@@ -184,7 +202,14 @@ func (s *Session) sendPromptAndTransition(cfg *AgentConfig, prompt string) {
 
 	s.mu.Lock()
 	s.state = StateWorking
+	s.canCheckCompletion = false
 	s.mu.Unlock()
+
+	time.AfterFunc(cfg.GracePeriod, func() {
+		s.mu.Lock()
+		s.canCheckCompletion = true
+		s.mu.Unlock()
+	})
 }
 
 func (s *Session) transitionDone(outcome, summary string) {
@@ -273,6 +298,10 @@ func (s *Session) isProcessAlive() bool {
 	}
 	err := s.cmd.Process.Signal(syscall.Signal(0))
 	return err == nil
+}
+
+func (s *Session) SetSize(rows, cols uint16) error {
+	return pty.Setsize(s.ptmx, &pty.Winsize{Rows: rows, Cols: cols})
 }
 
 func DetectCompletion(cfg *AgentConfig, lines []string, elapsed time.Duration) bool {
