@@ -222,18 +222,6 @@ func (m DashboardModel) handleKey(msg tea.KeyMsg) (DashboardModel, tea.Cmd) {
 				m.selectedSessionID = m.activeAgentSessions[m.cursor].SessionID
 			}
 		}
-	case keybinding.ActionInteract:
-		sess := m.SelectedSession()
-		if sess != nil {
-			m.isInput = true
-			return m, m.input.Focus()
-		}
-	case keybinding.ActionSwitchToPane:
-		sess := m.SelectedSession()
-		if sess != nil {
-			// Switch tmux to show the agent's pane
-			_ = m.orchestrator.SwitchToPane(sess.SessionID)
-		}
 	}
 
 	return m, nil
@@ -291,10 +279,6 @@ func (m DashboardModel) View() string {
 	b.WriteString(split)
 	b.WriteString("\n\n")
 	footerStr := "j/k: select │ r: refresh │ Esc: back"
-	sess := m.SelectedSession()
-	if sess != nil {
-		footerStr += " │ e: send input │ v: view in tmux"
-	}
 	footer := m.styles.Footer.Render(footerStr)
 	b.WriteString(footer)
 
@@ -447,7 +431,7 @@ func (m DashboardModel) renderContent(width int) string {
 	paneContent := m.paneContent
 	if time.Since(m.paneContentLoadedAt) > 500*time.Millisecond {
 		// Refresh pane content
-		if content, err := m.orchestrator.GetPaneContent(sess.SessionID, 30); err == nil {
+		if content, err := m.orchestrator.GetPTYOutput(sess.SessionID, 30); err == nil {
 			m.paneContent = content
 			m.paneContentLoadedAt = time.Now()
 			paneContent = content
@@ -456,7 +440,7 @@ func (m DashboardModel) renderContent(width int) string {
 
 	if paneContent == "" {
 		// Try to get it now
-		if content, err := m.orchestrator.GetPaneContent(sess.SessionID, 30); err == nil {
+		if content, err := m.orchestrator.GetPTYOutput(sess.SessionID, 30); err == nil {
 			m.paneContent = content
 			m.paneContentLoadedAt = time.Now()
 			paneContent = content
@@ -491,16 +475,6 @@ func (m DashboardModel) renderContent(width int) string {
 	}
 
 	b.WriteString("\n")
-
-	// Show input prompt if in input mode
-	if m.isInput {
-		b.WriteString(m.styles.Label.Render("Send to agent: "))
-		b.WriteString(m.input.View())
-		b.WriteString("\n")
-	} else {
-		b.WriteString(m.styles.Placeholder.Render("Press 'e' to send input to agent"))
-		b.WriteString("\n")
-	}
 
 	return lipgloss.NewStyle().
 		Padding(0, 2).

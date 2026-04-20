@@ -71,9 +71,6 @@ func applyEnvVars(cfg *Config) {
 	if v := os.Getenv("AGENTBOARD_MODE"); v != "" {
 		cfg.General.Mode = v
 	}
-	if v := os.Getenv("AGENTBOARD_TMUX"); v != "" {
-		cfg.General.Tmux = v
-	}
 	if v := os.Getenv("AGENTBOARD_DB"); v != "" {
 		cfg.DB.Path = v
 	}

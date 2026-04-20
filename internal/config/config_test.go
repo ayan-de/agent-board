@@ -161,17 +161,6 @@ func TestApplyEnvVars(t *testing.T) {
 			},
 		},
 		{
-			name: "AGENTBOARD_TMUX overrides General.Tmux",
-			envVars: map[string]string{
-				"AGENTBOARD_TMUX": "always",
-			},
-			check: func(cfg *Config, t *testing.T) {
-				if cfg.General.Tmux != "always" {
-					t.Errorf("General.Tmux = %q, want %q", cfg.General.Tmux, "always")
-				}
-			},
-		},
-		{
 			name: "AGENTBOARD_DB overrides DB.Path",
 			envVars: map[string]string{
 				"AGENTBOARD_DB": "/tmp/custom.db",

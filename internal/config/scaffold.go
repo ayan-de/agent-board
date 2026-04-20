@@ -40,7 +40,6 @@ func WriteDefaultConfig(path string) error {
 log = "info"
 addr = ":8080"
 mode = "tui"
-tmux = "auto"
 
 [board]
 # prefix = "AGB-"  # Ticket ID prefix. Default: first 3 letters of project name.

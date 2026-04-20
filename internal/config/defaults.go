@@ -6,7 +6,6 @@ func SetDefaults() *Config {
 			Log:  "info",
 			Addr: ":8080",
 			Mode: "tui",
-			Tmux: "auto",
 		},
 		Board: BoardConfig{
 			Statuses: []string{"backlog", "in_progress", "review", "done"},

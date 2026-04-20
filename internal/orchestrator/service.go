@@ -23,15 +23,12 @@ type Service struct {
 	completionCh   chan RunCompletion
 }
 
-// AgentSession tracks an active agent session
 type AgentSession struct {
 	SessionID string
 	TicketID  string
 	Agent     string
 	StartedAt int64
 	Status    string
-	PaneID    string
-	WindowID  string
 }
 
 func NewService(store Store, llm LLMClient, runner Runner, ctx ContextCarryProvider) *Service {
@@ -127,8 +124,6 @@ func (s *Service) StartApprovedRun(ctx context.Context, proposalID string) (stor
 		return store.Session{}, err
 	}
 
-	// For TmuxRunner, we don't need stdin pipe since it's a pane
-	// For ExecRunner, we might still need it
 	inputChan := make(chan io.Writer, 1)
 	go func() {
 		if w, ok := <-inputChan; ok {
@@ -193,7 +188,6 @@ func (s *Service) StartApprovedRun(ctx context.Context, proposalID string) (stor
 	return session, nil
 }
 
-// GetActiveSessions returns all active agent sessions
 func (s *Service) GetActiveSessions() []*AgentSession {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -205,7 +199,6 @@ func (s *Service) GetActiveSessions() []*AgentSession {
 	return sessions
 }
 
-// GetActiveSessionByTicket returns the active session for a ticket
 func (s *Service) GetActiveSessionByTicket(ticketID string) (*AgentSession, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -218,7 +211,6 @@ func (s *Service) GetActiveSessionByTicket(ticketID string) (*AgentSession, bool
 	return nil, false
 }
 
-// GetActiveSessionByAgent returns active sessions for a specific agent
 func (s *Service) GetActiveSessionByAgent(agent string) *AgentSession {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -231,7 +223,6 @@ func (s *Service) GetActiveSessionByAgent(agent string) *AgentSession {
 	return nil
 }
 
-// StopSession stops an active agent session
 func (s *Service) StopSession(ctx context.Context, sessionID string) error {
 	s.mu.Lock()
 	sess, ok := s.activeSessions[sessionID]
@@ -242,9 +233,8 @@ func (s *Service) StopSession(ctx context.Context, sessionID string) error {
 	delete(s.activeSessions, sessionID)
 	s.mu.Unlock()
 
-	// Try to use TmuxRunner's StopPane if available
-	if tmuxRunner, ok := s.runner.(*TmuxRunner); ok {
-		_ = tmuxRunner.StopPane(sessionID)
+	if pr, ok := s.runner.(*PtyRunner); ok {
+		_ = pr.Stop(sessionID)
 	}
 
 	_ = s.store.EndSession(ctx, sessionID, "cancelled")
@@ -269,14 +259,10 @@ func (s *Service) GetLogs(sessionID string) []string {
 }
 
 func (s *Service) SendInput(sessionID, input string) error {
-	// First try the TmuxRunner's SendInput
-	if tmuxRunner, ok := s.runner.(*TmuxRunner); ok {
-		if err := tmuxRunner.SendInput(sessionID, input); err == nil {
-			return nil
-		}
+	if pr, ok := s.runner.(*PtyRunner); ok {
+		return pr.SendInput(sessionID, input)
 	}
 
-	// Fall back to stdin pipe for ExecRunner
 	s.mu.RLock()
 	w, ok := s.inputs[sessionID]
 	s.mu.RUnlock()
@@ -287,27 +273,15 @@ func (s *Service) SendInput(sessionID, input string) error {
 	return err
 }
 
-// GetTmuxRunner returns the runner as a TmuxRunner if it is one
-func (s *Service) GetTmuxRunner() (*TmuxRunner, bool) {
-	tmuxRunner, ok := s.runner.(*TmuxRunner)
-	return tmuxRunner, ok
+func (s *Service) GetPtyRunner() (*PtyRunner, bool) {
+	pr, ok := s.runner.(*PtyRunner)
+	return pr, ok
 }
 
-// GetPaneContent returns the current content of a pane
-func (s *Service) GetPaneContent(sessionID string, lines int) (string, error) {
-	tmuxRunner, ok := s.runner.(*TmuxRunner)
+func (s *Service) GetPTYOutput(sessionID string, lines int) (string, error) {
+	pr, ok := s.runner.(*PtyRunner)
 	if !ok {
-		return "", fmt.Errorf("pane content only available with TmuxRunner")
+		return "", fmt.Errorf("pty output only available with PtyRunner")
 	}
-	return tmuxRunner.CapturePane(sessionID, lines)
-}
-
-// SwitchToPane switches the tmux view to a specific pane
-func (s *Service) SwitchToPane(sessionID string) error {
-	tmuxRunner, ok := s.runner.(*TmuxRunner)
-	if !ok {
-		return fmt.Errorf("pane switching only available with TmuxRunner")
-	}
-	pm := tmuxRunner.GetPaneManager()
-	return pm.SwitchToPane(sessionID)
+	return pr.GetPTYOutput(sessionID, lines)
 }

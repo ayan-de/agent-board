@@ -73,12 +73,8 @@ func (f *fakeOrchestrator) GetActiveSessions() []*orchestrator.AgentSession {
 	return []*orchestrator.AgentSession{}
 }
 
-func (f *fakeOrchestrator) GetPaneContent(sessionID string, lines int) (string, error) {
+func (f *fakeOrchestrator) GetPTYOutput(sessionID string, lines int) (string, error) {
 	return "", fmt.Errorf("not implemented in fake")
-}
-
-func (f *fakeOrchestrator) SwitchToPane(sessionID string) error {
-	return fmt.Errorf("not implemented in fake")
 }
 
 func (f *fakeOrchestrator) CompletionChan() <-chan orchestrator.RunCompletion {

@@ -16,9 +16,6 @@ func TestSetDefaults(t *testing.T) {
 	if cfg.General.Mode != "tui" {
 		t.Errorf("General.Mode = %q, want %q", cfg.General.Mode, "tui")
 	}
-	if cfg.General.Tmux != "auto" {
-		t.Errorf("General.Tmux = %q, want %q", cfg.General.Tmux, "auto")
-	}
 
 	wantStatuses := []string{"backlog", "in_progress", "review", "done"}
 	if len(cfg.Board.Statuses) != len(wantStatuses) {
