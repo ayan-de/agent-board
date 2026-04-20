@@ -9,7 +9,7 @@ import (
 func TestNewRegistryContainsAllAgents(t *testing.T) {
 	r := pty.NewRegistry()
 
-	agents := []string{"opencode", "claudecode", "codex"}
+	agents := []string{"opencode", "claude-code", "codex"}
 	for _, name := range agents {
 		cfg, ok := r[name]
 		if !ok {

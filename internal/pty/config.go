@@ -25,9 +25,9 @@ type AgentConfig struct {
 
 func NewRegistry() map[string]*AgentConfig {
 	return map[string]*AgentConfig{
-		"opencode":   newOpenCode(),
-		"claudecode": newClaudeCode(),
-		"codex":      newCodex(),
+		"opencode":    newOpenCode(),
+		"claude-code": newClaudeCode(),
+		"codex":       newCodex(),
 	}
 }
 

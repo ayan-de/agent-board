@@ -75,6 +75,13 @@ func NewSession(cfg *AgentConfig, sessionID, ticketID, prompt, chdir string) (*S
 		return nil, fmt.Errorf("pty.newSession: starting pty: %w", err)
 	}
 
+	ws, _ := pty.GetsizeFull(os.Stdin)
+	if ws != nil {
+		_ = pty.Setsize(ptmx, ws)
+	} else {
+		_ = pty.Setsize(ptmx, &pty.Winsize{Rows: 40, Cols: 120})
+	}
+
 	s := &Session{
 		SessionID: sessionID,
 		Agent:     cfg.Name,
@@ -116,19 +123,25 @@ func (s *Session) run(cfg *AgentConfig, prompt string) {
 
 	for {
 		n, err := s.ptmx.Read(buf)
-		if err != nil {
-			s.transitionDone("completed", "Agent process exited")
-			return
+		if n > 0 {
+			raw := string(buf[:n])
+			for _, line := range splitLines(raw) {
+				s.AppendOutput(line)
+				stripped := StripANSI(line)
+				stripBuf = append(stripBuf, stripped)
+				if len(stripBuf) > 500 {
+					stripBuf = stripBuf[len(stripBuf)-500:]
+				}
+			}
 		}
 
-		raw := string(buf[:n])
-		for _, line := range splitLines(raw) {
-			s.AppendOutput(line)
-			stripped := StripANSI(line)
-			stripBuf = append(stripBuf, stripped)
-			if len(stripBuf) > 500 {
-				stripBuf = stripBuf[len(stripBuf)-500:]
+		if err != nil {
+			if s.isProcessAlive() {
+				time.Sleep(100 * time.Millisecond)
+				continue
 			}
+			s.transitionDone("completed", "Agent process exited")
+			return
 		}
 
 		s.mu.Lock()
@@ -252,6 +265,14 @@ func (s *Session) RecentOutput(n int) []string {
 func (s *Session) SendInput(data []byte) error {
 	_, err := s.ptmx.Write(data)
 	return err
+}
+
+func (s *Session) isProcessAlive() bool {
+	if s.cmd.Process == nil {
+		return false
+	}
+	err := s.cmd.Process.Signal(syscall.Signal(0))
+	return err == nil
 }
 
 func DetectCompletion(cfg *AgentConfig, lines []string, elapsed time.Duration) bool {
