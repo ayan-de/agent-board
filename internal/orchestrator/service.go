@@ -14,6 +14,7 @@ type Service struct {
 	store  Store
 	llm    LLMClient
 	runner Runner
+	ptyRunner *PtyRunner
 	ctx    ContextCarryProvider
 	logs   map[string][]string
 	inputs map[string]io.Writer
@@ -45,6 +46,10 @@ func NewService(store Store, llm LLMClient, runner Runner, ctx ContextCarryProvi
 		activeSessions: make(map[string]*AgentSession),
 		completionCh:   make(chan RunCompletion, 16),
 	}
+}
+
+func (s *Service) SetPtyRunner(pr *PtyRunner) {
+	s.ptyRunner = pr
 }
 
 func (s *Service) CompletionChan() <-chan RunCompletion {
@@ -153,15 +158,28 @@ func (s *Service) StartApprovedRun(ctx context.Context, proposalID string) (stor
 		}
 	}
 
-	handle, err := s.runner.Start(ctx, RunRequest{
-		TicketID:   proposal.TicketID,
-		SessionID:  session.ID,
-		Agent:      proposal.Agent,
-		Prompt:     proposal.Prompt,
-		Reporter:   func(line string) { s.AppendLog(session.ID, line) },
-		InputChan:  inputChan,
-		OnComplete: onComplete,
-	})
+	var handle RunHandle
+	if s.ptyRunner != nil {
+		handle, err = s.ptyRunner.Start(ctx, RunRequest{
+			TicketID:   proposal.TicketID,
+			SessionID:  session.ID,
+			Agent:      proposal.Agent,
+			Prompt:     proposal.Prompt,
+			Reporter:   func(line string) { s.AppendLog(session.ID, line) },
+			InputChan:  inputChan,
+			OnComplete: onComplete,
+		})
+	} else {
+		handle, err = s.runner.Start(ctx, RunRequest{
+			TicketID:   proposal.TicketID,
+			SessionID:  session.ID,
+			Agent:      proposal.Agent,
+			Prompt:     proposal.Prompt,
+			Reporter:   func(line string) { s.AppendLog(session.ID, line) },
+			InputChan:  inputChan,
+			OnComplete: onComplete,
+		})
+	}
 
 	if err != nil {
 		_ = s.store.EndSession(ctx, session.ID, "failed")
