@@ -52,15 +52,23 @@ func main() {
 	}
 
 	var runner orchestrator.Runner = orchestrator.NewExecRunner()
+	var ptyRunner *orchestrator.PtyRunner
 	// Only use TmuxRunner if we're actually inside a tmux session
 	if tmux.IsInTmux() {
 		if tmuxRunner, err := orchestrator.NewTmuxRunner(); err == nil {
 			runner = tmuxRunner
 		}
+		// Also create PtyRunner for interactive PTY sessions
+		if pr, err := orchestrator.NewPtyRunner("agentboard"); err == nil {
+			ptyRunner = pr
+		}
 	}
 	mcpManager := mcp.NewManager(cfg.MCP)
 	ctxCarry := mcp.NewContextCarryAdapter(mcpManager, cfg.ProjectName)
 	orch := orchestrator.NewService(s, llmClient, runner, ctxCarry)
+	if ptyRunner != nil {
+		orch.SetPtyRunner(ptyRunner)
+	}
 
 	reg := theme.NewRegistry("dark")
 	reg.LoadBuiltins()
