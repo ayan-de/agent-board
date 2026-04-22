@@ -192,7 +192,11 @@ func (m DashboardModel) handleKey(msg tea.KeyMsg) (DashboardModel, tea.Cmd) {
 
 	switch action {
 	case keybinding.ActionRefresh:
-		m = m.Refresh()
+		if m.selectedSessionID != "" {
+			_ = m.orchestrator.SwitchToPane(m.selectedSessionID)
+		} else {
+			m = m.Refresh()
+		}
 	case keybinding.ActionNextTicket:
 		m.cursor++
 		if m.activeAgentSessions == nil || len(m.activeAgentSessions) == 0 {
