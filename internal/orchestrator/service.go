@@ -1,13 +1,14 @@
 package orchestrator
 
 import (
-	"context"
-	"fmt"
-	"io"
-	"sync"
+    "context"
+    "fmt"
+    "io"
+    "os/exec"
+    "sync"
 
-	"github.com/ayan-de/agent-board/internal/llm"
-	"github.com/ayan-de/agent-board/internal/store"
+    "github.com/ayan-de/agent-board/internal/llm"
+    "github.com/ayan-de/agent-board/internal/store"
 )
 
 type Service struct {
@@ -322,10 +323,16 @@ func (s *Service) GetPaneContent(sessionID string, lines int) (string, error) {
 
 // SwitchToPane switches the tmux view to a specific pane
 func (s *Service) SwitchToPane(sessionID string) error {
-	tmuxRunner, ok := s.runner.(*TmuxRunner)
-	if !ok {
-		return fmt.Errorf("pane switching only available with TmuxRunner")
-	}
-	pm := tmuxRunner.GetPaneManager()
-	return pm.SwitchToPane(sessionID)
+    // Try TmuxRunner first
+    if tmuxRunner, ok := s.runner.(*TmuxRunner); ok {
+        pm := tmuxRunner.GetPaneManager()
+        return pm.SwitchToPane(sessionID)
+    }
+    // Try PtyRunner
+    if s.ptyRunner != nil {
+        if paneID, ok := s.ptyRunner.GetPaneID(sessionID); ok {
+            return exec.Command("tmux", "select-pane", "-t", paneID).Run()
+        }
+    }
+    return fmt.Errorf("pane switching only available with TmuxRunner or PtyRunner")
 }
