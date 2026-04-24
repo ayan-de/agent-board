@@ -56,3 +56,17 @@ func RespawnPane(id, command string) error {
 func GetCurrentPaneID() string {
 	return os.Getenv("TMUX_PANE")
 }
+
+// GetCurrentSessionName returns the active tmux session name.
+func GetCurrentSessionName() (string, error) {
+	if !IsInTmux() {
+		return "", fmt.Errorf("not in tmux")
+	}
+
+	out, err := exec.Command("tmux", "display-message", "-p", "#S").Output()
+	if err != nil {
+		return "", fmt.Errorf("tmux display-message: %w", err)
+	}
+
+	return strings.TrimSpace(string(out)), nil
+}

@@ -58,6 +58,11 @@ type runStartedMsg struct {
 	proposalID string
 }
 
+type adhocRunStartedMsg struct {
+	agent  string
+	prompt string
+}
+
 type runStartFailedMsg struct {
 	err error
 }
@@ -86,6 +91,7 @@ type Orchestrator interface {
 	CreateProposal(ctx context.Context, input orchestrator.CreateProposalInput) (store.Proposal, error)
 	ApproveProposal(ctx context.Context, proposalID string) error
 	StartApprovedRun(ctx context.Context, proposalID string) (store.Session, error)
+	StartAdHocRun(ctx context.Context, agent, prompt string) (store.Session, error)
 	FinishRun(ctx context.Context, input orchestrator.FinishRunInput) error
 	GetLogs(sessionID string) []string
 	SendInput(sessionID, input string) error
@@ -275,6 +281,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.showNotification("Run started", "Agent is working...", NotificationInfo),
 			a.startRunAndListenCmd(msg.proposalID),
 		)
+	case adhocRunStartedMsg:
+		return a, tea.Batch(
+			a.showNotification("Ad-hoc run started", fmt.Sprintf("%s is working...", msg.agent), NotificationInfo),
+			a.startAdHocRunAndListenCmd(msg.agent, msg.prompt),
+		)
 	case runCompletedMsg:
 		a.kanban, _ = a.kanban.Reload()
 		if a.activeTicket != nil && a.activeTicket.ID == msg.ticketID {
@@ -337,8 +348,30 @@ func (a *App) startRunAndListenCmd(proposalID string) tea.Cmd {
 			return runStartFailedMsg{err: err}
 		}
 
-		completion := <-a.completionCh
-		return runCompletedMsg{ticketID: completion.TicketID}
+		select {
+		case completion := <-a.completionCh:
+			return runCompletedMsg{ticketID: completion.TicketID}
+		case <-time.After(60 * time.Second):
+			return runCompletedMsg{ticketID: ""}
+		}
+	}
+}
+
+func (a *App) startAdHocRunAndListenCmd(agent, prompt string) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+
+		_, err := a.orchestrator.StartAdHocRun(ctx, agent, prompt)
+		if err != nil {
+			return runStartFailedMsg{err: err}
+		}
+
+		select {
+		case completion := <-a.completionCh:
+			return runCompletedMsg{ticketID: completion.TicketID}
+		case <-time.After(60 * time.Second):
+			return runCompletedMsg{ticketID: ""}
+		}
 	}
 }
 

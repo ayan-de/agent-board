@@ -21,6 +21,7 @@ const (
 	ticketViewMode ticketViewModeType = iota
 	ticketEditMode
 	ticketAgentSelectMode
+	ticketAdHocPromptMode
 )
 
 var statusCycle = [4]string{"backlog", "in_progress", "review", "done"}
@@ -62,6 +63,10 @@ type TicketViewModel struct {
 
 	activeProposal *store.Proposal
 	loading        bool
+
+	adhocAgent    string
+	adhocPrompt   string
+	adhocPromptCursor int
 }
 
 func DefaultTicketViewStyles() TicketViewStyles {
@@ -234,6 +239,9 @@ func (m TicketViewModel) handleKey(msg tea.KeyMsg) (TicketViewModel, tea.Cmd) {
 	if m.mode == ticketAgentSelectMode {
 		return m.handleAgentSelectKey(msg)
 	}
+	if m.mode == ticketAdHocPromptMode {
+		return m.handleAdHocPromptKey(msg)
+	}
 	return m.handleViewKey(msg)
 }
 
@@ -375,6 +383,38 @@ func (m TicketViewModel) handleAgentSelectKey(msg tea.KeyMsg) (TicketViewModel, 
 	return m, nil
 }
 
+func (m TicketViewModel) handleAdHocPromptKey(msg tea.KeyMsg) (TicketViewModel, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEscape:
+		m.mode = ticketViewMode
+		m.adhocPrompt = ""
+		return m, nil
+	case tea.KeyEnter:
+		if m.adhocPrompt != "" {
+			agent := m.adhocAgent
+			prompt := m.adhocPrompt
+			m.mode = ticketViewMode
+			m.adhocPrompt = ""
+			return m, func() tea.Msg {
+				return adhocRunStartedMsg{agent: agent, prompt: prompt}
+			}
+		}
+		return m, nil
+	case tea.KeyBackspace:
+		if len(m.adhocPrompt) > 0 {
+			runes := []rune(m.adhocPrompt)
+			m.adhocPrompt = string(runes[:len(runes)-1])
+		}
+		return m, nil
+	}
+
+	if msg.Type == tea.KeyRunes {
+		m.adhocPrompt += string(msg.Runes)
+	}
+
+	return m, nil
+}
+
 func (m TicketViewModel) cycleStatus() (TicketViewModel, tea.Cmd) {
 	currentIdx := -1
 	for i, s := range statusCycle {
@@ -393,6 +433,13 @@ func (m TicketViewModel) cycleStatus() (TicketViewModel, tea.Cmd) {
 	return m, func() tea.Msg {
 		return statusChangedMsg{ticketID: ticketID, newStatus: newStatus}
 	}
+}
+
+func (m TicketViewModel) buildPromptFromTicket() string {
+	if m.ticket == nil {
+		return ""
+	}
+	return fmt.Sprintf("Ticket: %s\nTitle: %s\nDescription: %s", m.ticket.ID, m.ticket.Title, m.ticket.Description)
 }
 
 func (m TicketViewModel) SetTicket(t *store.Ticket) TicketViewModel {
@@ -496,10 +543,27 @@ func (m TicketViewModel) View() string {
 		}
 	}
 
+	if m.mode == ticketAdHocPromptMode {
+		b.WriteString("\n")
+		b.WriteString(m.styles.Title.Render(fmt.Sprintf("Run %s with prompt:", m.adhocAgent)))
+		b.WriteString("\n\n")
+		promptLabel := m.styles.Label.Render("Task:")
+		b.WriteString(promptLabel)
+		b.WriteString("\n")
+		promptLine := m.adhocPrompt + "│"
+		if len(promptLine) > innerWidth-4 {
+			promptLine = promptLine[:innerWidth-7] + "..."
+		}
+		b.WriteString(m.styles.EditBox.Width(innerWidth - 4).Render(promptLine))
+		b.WriteString("\n")
+	}
+
 	b.WriteString("\n")
 	var footer string
 	if m.mode == ticketAgentSelectMode {
 		footer = "↑/k: up │ ↓/j: down │ Enter: select │ Esc: cancel"
+	} else if m.mode == ticketAdHocPromptMode {
+		footer = "Enter: run agent │ Esc: cancel"
 	} else {
 		footer = "e: edit │ s: cycle status │ a: assign agent │ Esc: back"
 		if m.activeProposal != nil && m.activeProposal.Status == "pending" {
@@ -540,4 +604,3 @@ func (m TicketViewModel) View() string {
 
 	return m.styles.Border.Render(b.String())
 }
-

@@ -53,6 +53,94 @@ func (s *Service) SetPtyRunner(pr *PtyRunner) {
 	s.ptyRunner = pr
 }
 
+func (s *Service) StartAdHocRun(ctx context.Context, agent, prompt string) (store.Session, error) {
+	session, err := s.store.CreateSession(ctx, store.Session{
+		TicketID: "",
+		Agent:    agent,
+		Status:   "running",
+	})
+	if err != nil {
+		return store.Session{}, err
+	}
+
+	onComplete := func(outcome, summary string) {
+		_ = s.FinishRun(context.Background(), FinishRunInput{
+			TicketID:  "",
+			SessionID: session.ID,
+			Outcome:   outcome,
+			Summary:   summary,
+		})
+		s.completionCh <- RunCompletion{
+			TicketID:  "",
+			SessionID: session.ID,
+			Outcome:   outcome,
+			Summary:   summary,
+		}
+	}
+
+	inputChan := make(chan io.Writer, 1)
+	go func() {
+		if w, ok := <-inputChan; ok {
+			s.mu.Lock()
+			s.inputs[session.ID] = w
+			s.mu.Unlock()
+		}
+	}()
+
+	var handle RunHandle
+	if s.ptyRunner != nil {
+		handle, err = s.ptyRunner.Start(ctx, RunRequest{
+			TicketID:   "",
+			SessionID:  session.ID,
+			Agent:      agent,
+			Prompt:     prompt,
+			Reporter:   func(line string) { s.AppendLog(session.ID, line) },
+			InputChan:  inputChan,
+			OnComplete: onComplete,
+		})
+	} else if s.runner != nil {
+		handle, err = s.runner.Start(ctx, RunRequest{
+			TicketID:   "",
+			SessionID:  session.ID,
+			Agent:      agent,
+			Prompt:     prompt,
+			Reporter:   func(line string) { s.AppendLog(session.ID, line) },
+			InputChan:  inputChan,
+			OnComplete: onComplete,
+		})
+	} else {
+		return store.Session{}, fmt.Errorf("no runner configured")
+	}
+
+	if err != nil {
+		_ = s.store.EndSession(ctx, session.ID, "failed")
+		return store.Session{}, err
+	}
+
+	s.mu.Lock()
+	s.activeSessions[session.ID] = &AgentSession{
+		SessionID: session.ID,
+		TicketID:  "",
+		Agent:     agent,
+		StartedAt: session.StartedAt.Unix(),
+		Status:    "running",
+	}
+	s.mu.Unlock()
+
+	_, _ = s.store.CreateEvent(ctx, store.Event{
+		TicketID:  "",
+		SessionID: session.ID,
+		Kind:      "run.started",
+		Payload:   handle.Outcome,
+	})
+
+	if handle.Outcome != "running" {
+		onComplete(handle.Outcome, handle.Summary)
+	}
+
+	return session, nil
+}
+
 func (s *Service) CompletionChan() <-chan RunCompletion {
 	return s.completionCh
 }

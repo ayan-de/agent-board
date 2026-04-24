@@ -75,3 +75,42 @@ func TestSummarizeContextReturnsSummary(t *testing.T) {
 		t.Fatal("expected summarizer to be called")
 	}
 }
+
+func TestGenerateProposalStripsThinkBlocks(t *testing.T) {
+	client := &llm.LangChainClient{
+		Coordinator: &stubModel{},
+	}
+
+	client.Coordinator = llmModelFunc(func(ctx context.Context, prompt string, options ...llms.CallOption) (string, error) {
+		return "<think>internal reasoning</think>\nWorker prompt body", nil
+	})
+
+	got, err := client.GenerateProposal(context.Background(), llm.ProposalPrompt{
+		TicketID:      "AGT-01",
+		Title:         "Add orchestrator",
+		Description:   "Build service layer",
+		AssignedAgent: "opencode",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Prompt != "Worker prompt body" {
+		t.Fatalf("Prompt = %q, want sanitized worker prompt", got.Prompt)
+	}
+}
+
+type llmModelFunc func(ctx context.Context, prompt string, options ...llms.CallOption) (string, error)
+
+func (f llmModelFunc) Call(ctx context.Context, prompt string, options ...llms.CallOption) (string, error) {
+	return f(ctx, prompt, options...)
+}
+
+func (f llmModelFunc) GenerateContent(ctx context.Context, messages []llms.MessageContent, options ...llms.CallOption) (*llms.ContentResponse, error) {
+	text, err := f(ctx, "", options...)
+	if err != nil {
+		return nil, err
+	}
+	return &llms.ContentResponse{
+		Choices: []*llms.ContentChoice{{Content: text}},
+	}, nil
+}

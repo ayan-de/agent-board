@@ -85,6 +85,18 @@ func (f *fakeOrchestrator) CompletionChan() <-chan orchestrator.RunCompletion {
 	return f.completionCh
 }
 
+func (f *fakeOrchestrator) StartAdHocRun(ctx context.Context, agent, prompt string) (store.Session, error) {
+	session, err := f.store.CreateSession(ctx, store.Session{
+		TicketID: "",
+		Agent:    agent,
+		Status:   "running",
+	})
+	if err != nil {
+		return store.Session{}, err
+	}
+	return session, nil
+}
+
 func (f *fakeOrchestrator) completeRun(ticketID, sessionID, outcome string) {
 	f.store.SetAgentActive(context.Background(), ticketID, false)
 	if outcome == "completed" {
