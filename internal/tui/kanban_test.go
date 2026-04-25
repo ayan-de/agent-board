@@ -218,19 +218,23 @@ func TestKanbanDeleteTicket(t *testing.T) {
 		t.Fatalf("setup: backlog has %d tickets, want 1", len(m.columns[0]))
 	}
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
-
-	if len(m.columns[0]) != 0 {
-		t.Errorf("backlog has %d tickets after delete, want 0", len(m.columns[0]))
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	if cmd == nil {
+		t.Fatal("delete key should return a command")
+	}
+	msg := cmd()
+	_, ok := msg.(deleteTicketRequestMsg)
+	if !ok {
+		t.Errorf("delete key should return deleteTicketRequestMsg, got %T", msg)
 	}
 }
 
 func TestKanbanDeleteTicketEmptyColumn(t *testing.T) {
 	m := newTestKanban(t)
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
 
-	if len(m.columns[0]) != 0 {
-		t.Errorf("backlog has %d tickets, want 0", len(m.columns[0]))
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	if cmd != nil {
+		t.Error("delete key on empty column should not return a command")
 	}
 }
 

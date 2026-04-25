@@ -87,6 +87,18 @@ type notificationMsg struct {
 	variant NotificationVariant
 }
 
+type deleteTicketConfirmMsg struct {
+	ticketID string
+}
+
+type deleteTicketRequestMsg struct {
+	ticketID string
+}
+
+type showDeleteModalMsg struct {
+	ticketID string
+}
+
 type Orchestrator interface {
 	CreateProposal(ctx context.Context, input orchestrator.CreateProposalInput) (store.Proposal, error)
 	ApproveProposal(ctx context.Context, proposalID string) error
@@ -307,8 +319,36 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.ticketView = a.ticketView.SetLoading(false)
 		}
 		return a, a.showNotification("Proposal failed", msg.err.Error(), NotificationError)
-	case runStartFailedMsg:
-		return a, a.showNotification("Run failed", msg.err.Error(), NotificationError)
+	case showDeleteModalMsg:
+		ticketID := msg.ticketID
+		a.modal.Open(
+			"Delete Ticket",
+			fmt.Sprintf("Delete %s?", ticketID),
+			func() tea.Cmd {
+				return func() tea.Msg {
+					return deleteTicketConfirmMsg{ticketID: ticketID}
+				}
+			},
+			nil,
+		)
+		return a, nil
+	case deleteTicketConfirmMsg:
+		_ = a.store.DeleteTicket(context.Background(), msg.ticketID)
+		a.kanban, _ = a.kanban.Reload()
+		return a, nil
+	case deleteTicketRequestMsg:
+		ticketID := msg.ticketID
+		a.modal.Open(
+			"Delete Ticket",
+			fmt.Sprintf("Delete %s?", ticketID),
+			func() tea.Cmd {
+				return func() tea.Msg {
+					return deleteTicketConfirmMsg{ticketID: ticketID}
+				}
+			},
+			nil,
+		)
+		return a, nil
 	case notificationMsg:
 		return a, a.showNotification(msg.title, msg.message, msg.variant)
 	}

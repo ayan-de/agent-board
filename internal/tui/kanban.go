@@ -125,6 +125,17 @@ func (m KanbanModel) Update(msg tea.Msg) (KanbanModel, tea.Cmd) {
 			return m, animationTick()
 		}
 		return m, nil
+	case deleteTicketConfirmMsg:
+		return m, nil
+	case deleteTicketRequestMsg:
+		col := m.columns[m.colIndex]
+		if len(col) > 0 {
+			cursor := m.cursors[m.colIndex]
+			return m, func() tea.Msg {
+				return showDeleteModalMsg{ticketID: col[cursor].ID}
+			}
+		}
+		return m, nil
 	}
 	return m, nil
 }
@@ -179,8 +190,9 @@ func (m KanbanModel) handleKey(msg tea.KeyMsg) (KanbanModel, tea.Cmd) {
 		col := m.columns[m.colIndex]
 		if len(col) > 0 {
 			cursor := m.cursors[m.colIndex]
-			_ = m.store.DeleteTicket(context.Background(), col[cursor].ID)
-			m, _ = m.loadColumns()
+			return m, func() tea.Msg {
+				return deleteTicketRequestMsg{ticketID: col[cursor].ID}
+			}
 		}
 	}
 
@@ -289,6 +301,14 @@ func (m KanbanModel) SelectedTicket() *store.Ticket {
 		return nil
 	}
 	return &col[cursor]
+}
+
+func (m KanbanModel) Column() []store.Ticket {
+	return m.columns[m.colIndex]
+}
+
+func (m KanbanModel) Cursor() int {
+	return m.cursors[m.colIndex]
 }
 
 func (m KanbanModel) Reload() (KanbanModel, error) {
