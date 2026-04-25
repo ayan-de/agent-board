@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/ayan-de/agent-board/internal/keybinding"
 	"github.com/ayan-de/agent-board/internal/store"
@@ -11,6 +12,13 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+)
+
+type KanbanTab int
+
+const (
+	TabSearch KanbanTab = iota
+	TabDateFilter
 )
 
 var statusNames = [4]string{"backlog", "in_progress", "review", "done"}
@@ -25,19 +33,26 @@ type KanbanStyles struct {
 	SelectedTicket lipgloss.Style
 	Ticket         lipgloss.Style
 	EmptyColumn    lipgloss.Style
+	TabBar         lipgloss.Style
+	TabActive      lipgloss.Style
+	TabInactive    lipgloss.Style
 }
 
 type KanbanModel struct {
-	store     *store.Store
-	resolver  *keybinding.Resolver
-	width     int
-	height    int
-	colIndex  int
-	cursors   [4]int
-	columns   [4][]store.Ticket
-	styles    KanbanStyles
-	animFrame int
-	theme     *theme.Theme
+	store           *store.Store
+	resolver        *keybinding.Resolver
+	width           int
+	height          int
+	colIndex        int
+	cursors         [4]int
+	columns         [4][]store.Ticket
+	styles          KanbanStyles
+	animFrame       int
+	theme           *theme.Theme
+	tab             KanbanTab
+	searchQuery     string
+	monthOffset     int
+	projectInitDate time.Time
 }
 
 func DefaultKanbanStyles() KanbanStyles {
@@ -62,6 +77,9 @@ func DefaultKanbanStyles() KanbanStyles {
 			Foreground(lipgloss.Color("252")),
 		EmptyColumn: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("240")),
+		TabBar: lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		TabActive: lipgloss.NewStyle().Foreground(lipgloss.Color("69")).Bold(true),
+		TabInactive: lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
 	}
 }
 
@@ -87,15 +105,20 @@ func NewKanbanStyles(t *theme.Theme) KanbanStyles {
 			Foreground(t.Text),
 		EmptyColumn: lipgloss.NewStyle().
 			Foreground(t.TextMuted),
+		TabBar: lipgloss.NewStyle().Foreground(t.TextMuted),
+		TabActive: lipgloss.NewStyle().Foreground(t.Primary).Bold(true),
+		TabInactive: lipgloss.NewStyle().Foreground(t.TextMuted),
 	}
 }
 
 func NewKanbanModel(s *store.Store, resolver *keybinding.Resolver, t *theme.Theme) (KanbanModel, error) {
 	m := KanbanModel{
-		store:    s,
-		resolver: resolver,
-		styles:   NewKanbanStyles(t),
-		theme:    t,
+		store:       s,
+		resolver:    resolver,
+		styles:      NewKanbanStyles(t),
+		theme:       t,
+		tab:         TabSearch,
+		monthOffset: 0,
 	}
 	m, err := m.loadColumns()
 	if err != nil {
@@ -124,6 +147,9 @@ func (m KanbanModel) Update(msg tea.Msg) (KanbanModel, tea.Cmd) {
 		if m.anyAgentActive() {
 			return m, animationTick()
 		}
+		return m, nil
+	case tabChangeMsg:
+		m.tab = msg.tab
 		return m, nil
 	case deleteTicketConfirmMsg:
 		return m, nil
@@ -288,7 +314,34 @@ func (m KanbanModel) View() string {
 		cols[i] = colStyle.Render(content.String())
 	}
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, cols...)
+	tabBar := m.renderTabBar()
+	board := lipgloss.JoinHorizontal(lipgloss.Top, cols...)
+	return lipgloss.JoinVertical(lipgloss.Top, tabBar, board)
+}
+
+func (m KanbanModel) renderTabBar() string {
+	searchLabel := "Search"
+	filterLabel := "Date Filter"
+	w := m.width
+
+	searchStyle := m.styles.TabActive
+	filterStyle := m.styles.TabInactive
+	if m.tab == TabDateFilter {
+		searchStyle = m.styles.TabInactive
+		filterStyle = m.styles.TabActive
+	}
+
+	searchTab := searchStyle.Render("[" + searchLabel + "]")
+	filterTab := filterStyle.Render("[" + filterLabel + "]")
+	sep := m.styles.TabBar.Render(" | ")
+	tabs := searchTab + sep + filterTab
+
+	pad := w - lipgloss.Width(tabs)
+	if pad < 0 {
+		pad = 0
+	}
+	leftPad := pad / 2
+	return strings.Repeat(" ", leftPad) + tabs
 }
 
 func (m KanbanModel) SelectedTicket() *store.Ticket {

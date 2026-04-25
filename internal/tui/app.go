@@ -99,6 +99,18 @@ type showDeleteModalMsg struct {
 	ticketID string
 }
 
+type tabChangeMsg struct {
+	tab KanbanTab
+}
+
+type searchQueryMsg struct {
+	query string
+}
+
+type monthNavigateMsg struct {
+	direction int
+}
+
 type Orchestrator interface {
 	CreateProposal(ctx context.Context, input orchestrator.CreateProposalInput) (store.Proposal, error)
 	ApproveProposal(ctx context.Context, proposalID string) error

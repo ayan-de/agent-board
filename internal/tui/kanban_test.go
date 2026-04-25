@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ayan-de/agent-board/internal/keybinding"
 	"github.com/ayan-de/agent-board/internal/store"
@@ -404,5 +405,19 @@ func TestKanbanViewNoAgentDot(t *testing.T) {
 	}
 	if strings.Contains(view, "○") {
 		t.Error("view should not contain idle dot '○' for unassigned ticket")
+	}
+}
+
+func TestKanbanTabSwitch(t *testing.T) {
+	m := newTestKanban(t)
+	m.projectInitDate = time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC)
+
+	if m.tab != TabSearch {
+		t.Errorf("tab = %v, want TabSearch", m.tab)
+	}
+
+	m, _ = m.Update(tabChangeMsg{tab: TabDateFilter})
+	if m.tab != TabDateFilter {
+		t.Errorf("tab = %v, want TabDateFilter", m.tab)
 	}
 }
