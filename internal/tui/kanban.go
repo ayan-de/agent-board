@@ -417,20 +417,17 @@ func (m KanbanModel) renderTabBar() string {
 		monthHeader = m.styles.TabInactive.Render(monthHeader)
 	}
 
-	searchWidth := m.width/2 - 4
-	if searchWidth < 20 {
-		searchWidth = 20
-	}
-	actualSearchWidth := searchWidth + 4
+	searchWidth := lipgloss.Width(searchBar)
+	monthWidth := lipgloss.Width(monthHeader)
 
-	gap := 3
-	totalWidth := actualSearchWidth + gap + lipgloss.Width(monthHeader)
-	leftPad := w - totalWidth
-	if leftPad < 1 {
-		leftPad = 1
+	leftPad := 2
+	rightPad := 2
+	gap := w - searchWidth - monthWidth - leftPad - rightPad
+	if gap < 1 {
+		gap = 1
 	}
 
-	return searchBar + strings.Repeat(" ", leftPad) + monthHeader
+	return strings.Repeat(" ", leftPad) + searchBar + strings.Repeat(" ", gap) + monthHeader + strings.Repeat(" ", rightPad)
 }
 
 func (m KanbanModel) SelectedTicket() *store.Ticket {
