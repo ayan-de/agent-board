@@ -85,15 +85,9 @@ func DefaultKanbanStyles() KanbanStyles {
 		TabActive: lipgloss.NewStyle().Foreground(lipgloss.Color("69")).Bold(true),
 		TabInactive: lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
 		SearchBox: lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color("240")).
-			Foreground(lipgloss.Color("252")),
-		SearchCursor: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("69")),
+			Foreground(lipgloss.Color("240")),
 		SearchBoxActive: lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color("69")).
-			Foreground(lipgloss.Color("15")),
+			Foreground(lipgloss.Color("69")).Bold(true),
 	}
 }
 
@@ -123,16 +117,9 @@ func NewKanbanStyles(t *theme.Theme) KanbanStyles {
 		TabActive: lipgloss.NewStyle().Foreground(t.Primary).Bold(true),
 		TabInactive: lipgloss.NewStyle().Foreground(t.TextMuted),
 		SearchBox: lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(t.TextMuted).
-			Foreground(t.Text),
-		SearchCursor: lipgloss.NewStyle().
-			Foreground(t.Primary),
+			Foreground(t.TextMuted),
 		SearchBoxActive: lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(t.Primary).
-			Foreground(t.Text).
-			Bold(true),
+			Foreground(t.Primary).Bold(true),
 	}
 }
 
@@ -412,23 +399,11 @@ func (m KanbanModel) renderMonthHeader() string {
 }
 
 func (m KanbanModel) renderSearchBar() string {
-	placeholder := "Search by title or description..."
-	query := m.searchQuery
-	cursor := m.styles.SearchCursor.Render("▌")
-	prompt := query + cursor
-	if query == "" {
-		prompt = placeholder + cursor
-	}
-	searchWidth := m.width/2 - 4
-	if searchWidth < 20 {
-		searchWidth = 20
-	}
-	boxStyle := m.styles.SearchBox
+	prompt := "Search: " + m.searchQuery
 	if m.tab == TabSearch {
-		boxStyle = m.styles.SearchBoxActive
+		return m.styles.SearchBoxActive.Render(prompt)
 	}
-	label := boxStyle.Width(searchWidth).Render("  " + prompt)
-	return label
+	return m.styles.SearchBox.Render(prompt)
 }
 
 func (m KanbanModel) renderTabBar() string {
