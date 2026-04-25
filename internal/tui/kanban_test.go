@@ -421,3 +421,18 @@ func TestKanbanTabSwitch(t *testing.T) {
 		t.Errorf("tab = %v, want TabDateFilter", m.tab)
 	}
 }
+
+func TestKanbanTabNavigation(t *testing.T) {
+	m := newTestKanban(t)
+	m.projectInitDate = time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC)
+
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	if m.tab != TabDateFilter {
+		t.Errorf("tab after h = %v, want TabDateFilter", m.tab)
+	}
+
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	if m.tab != TabSearch {
+		t.Errorf("tab after l = %v, want TabSearch", m.tab)
+	}
+}

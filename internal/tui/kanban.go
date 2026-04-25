@@ -172,10 +172,18 @@ func (m KanbanModel) handleKey(msg tea.KeyMsg) (KanbanModel, tea.Cmd) {
 
 	switch action {
 	case keybinding.ActionPrevColumn:
+		if m.tab == TabSearch {
+			m.tab = TabDateFilter
+			return m, nil
+		}
 		if m.colIndex > 0 {
 			m.colIndex--
 		}
 	case keybinding.ActionNextColumn:
+		if m.tab == TabDateFilter {
+			m.tab = TabSearch
+			return m, nil
+		}
 		if m.colIndex < 3 {
 			m.colIndex++
 		}
