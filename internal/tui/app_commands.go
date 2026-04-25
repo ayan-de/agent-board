@@ -1,7 +1,9 @@
 package tui
 
 import (
+	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/ayan-de/agent-board/internal/config"
@@ -46,6 +48,16 @@ func (ac *appCommands) registerAll(cr *CommandRegistry) {
 			}
 		},
 	})
+	cr.Register(Command{
+		Name:        "import theme",
+		Description: "Import a theme from JSON",
+		Prefix:      "",
+		Items: func() []Item {
+			return []Item{
+				{Label: "import theme", Description: "Paste theme JSON to import", ID: "ACTION:import_theme"},
+			}
+		},
+	})
 }
 
 func (ac *appCommands) themeItems() []Item {
@@ -78,6 +90,39 @@ func (ac *appCommands) onConfirm(item Item) {
 		ac.app.runCommand = tea.ExecProcess(
 			exec.Command("nvim", ac.config.ProjectConfigPath),
 			func(err error) tea.Msg { return editorFinishedMsg{err: err} },
+		)
+	case "import_theme":
+		themesDir := filepath.Join(config.GetBaseDir(), "themes")
+		ac.app.modal.Open(
+			"Import Theme",
+			fmt.Sprintf("Generate your theme at ayande.xyz and save the JSON file to:\n%s", themesDir),
+			func() tea.Cmd {
+				ac.app.registry.LoadUserThemes(themesDir)
+				themes := ac.app.registry.All()
+				var userThemes []string
+				for _, t := range themes {
+					if t.Source == "user" {
+						userThemes = append(userThemes, t.Name)
+					}
+				}
+				if len(userThemes) == 0 {
+					return func() tea.Msg {
+						return notificationMsg{
+							title:   "No Themes Found",
+							message: "No user themes found in " + themesDir,
+							variant: NotificationWarning,
+						}
+					}
+				}
+				return func() tea.Msg {
+					return notificationMsg{
+						title:   "Theme Loaded",
+						message: fmt.Sprintf("Found %d theme(s). Use /theme to select one.", len(userThemes)),
+						variant: NotificationSuccess,
+					}
+				}
+			},
+			nil,
 		)
 	default:
 		ac.registry.Set(id)

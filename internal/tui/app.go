@@ -118,6 +118,7 @@ type App struct {
 	view         viewMode
 	palette      CommandPalette
 	modal        ConfirmModal
+	textInput    TextInputModal
 	notification NotificationStack
 	quit         bool
 	runCommand   tea.Cmd
@@ -176,6 +177,8 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry, deps AppDep
 
 	a.modal = ConfirmModal{}
 	a.modal.SetTheme(t)
+	a.textInput = TextInputModal{}
+	a.textInput.SetTheme(t)
 	a.notification = NotificationStack{}
 	a.notification.SetTheme(t)
 
@@ -190,6 +193,7 @@ func (a *App) applyTheme() {
 	a.dashboard.styles = NewDashboardStyles(t)
 	a.palette.SetTheme(t)
 	a.modal.SetTheme(t)
+	a.textInput.SetTheme(t)
 	a.notification.SetTheme(t)
 }
 
@@ -207,6 +211,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.dashboard, _ = a.dashboard.Update(msg)
 		a.palette, _ = a.palette.Update(msg)
 		a.modal.SetSize(a.width, a.height)
+		a.textInput.SetSize(a.width, a.height)
 		a.notification.SetSize(a.width, a.height)
 		return a, nil
 	case tea.KeyMsg:
@@ -460,6 +465,12 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, cmd
 	}
 
+	if a.textInput.Active() {
+		var cmd tea.Cmd
+		a.textInput, cmd = a.textInput.Update(msg)
+		return a, cmd
+	}
+
 	if a.palette.Active() {
 		a.palette, _ = a.palette.Update(msg)
 		if !a.palette.Active() {
@@ -707,6 +718,10 @@ func (a *App) View() string {
 			}
 		}
 		return finalView.String()
+	}
+
+	if a.textInput.Active() {
+		return a.textInput.View()
 	}
 
 	if a.notification.Active() {
