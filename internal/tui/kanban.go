@@ -399,26 +399,6 @@ func (m KanbanModel) View() string {
 	return lipgloss.JoinVertical(lipgloss.Top, tabBar, board)
 }
 
-func (m KanbanModel) renderTabBar() string {
-	filterLabel := "Date Filter"
-	w := m.width
-
-	searchBar := m.renderSearchBar()
-	filterStyle := m.styles.TabInactive
-	if m.tab == TabDateFilter {
-		filterStyle = m.styles.TabActive
-	}
-	filterTab := filterStyle.Render("[" + filterLabel + "]")
-
-	totalWidth := lipgloss.Width(searchBar) + 3 + lipgloss.Width(filterTab)
-	leftPad := w - totalWidth - 2
-	if leftPad < 1 {
-		leftPad = 1
-	}
-
-	return searchBar + strings.Repeat(" ", leftPad) + filterTab
-}
-
 func (m KanbanModel) renderMonthHeader() string {
 	from, to := MonthWindow(m.projectInitDate, m.monthOffset)
 	count := len(m.columns[0]) + len(m.columns[1]) + len(m.columns[2]) + len(m.columns[3])
@@ -439,8 +419,39 @@ func (m KanbanModel) renderSearchBar() string {
 	if query == "" {
 		prompt = placeholder + cursor
 	}
-	label := m.styles.SearchBox.Width(m.width - 4).Render("  " + prompt)
+	searchWidth := m.width/2 - 4
+	if searchWidth < 20 {
+		searchWidth = 20
+	}
+	label := m.styles.SearchBox.Width(searchWidth).Render("  " + prompt)
 	return label
+}
+
+func (m KanbanModel) renderTabBar() string {
+	filterLabel := "Date Filter"
+	w := m.width
+
+	searchBar := m.renderSearchBar()
+	filterStyle := m.styles.TabInactive
+	if m.tab == TabDateFilter {
+		filterStyle = m.styles.TabActive
+	}
+	filterTab := filterStyle.Render("[" + filterLabel + "]")
+
+	searchWidth := m.width/2 - 4
+	if searchWidth < 20 {
+		searchWidth = 20
+	}
+	actualSearchWidth := searchWidth + 4
+
+	gap := 3
+	totalWidth := actualSearchWidth + gap + lipgloss.Width(filterTab)
+	leftPad := w - totalWidth
+	if leftPad < 1 {
+		leftPad = 1
+	}
+
+	return searchBar + strings.Repeat(" ", leftPad) + filterTab
 }
 
 func (m KanbanModel) SelectedTicket() *store.Ticket {

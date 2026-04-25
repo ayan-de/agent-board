@@ -7,8 +7,9 @@ import (
 )
 
 type BoardConfig struct {
-	Statuses []string `toml:"statuses"`
-	Prefix   string   `toml:"prefix"`
+	Statuses        []string `toml:"statuses"`
+	Prefix          string   `toml:"prefix"`
+	ProjectInitDate string   `toml:"-"` // format: "2006-01-02" — read from dir mtime, not user-editable
 }
 
 func DefaultPrefix(projectName string) string {
