@@ -39,6 +39,7 @@ type KanbanStyles struct {
 	TabInactive    lipgloss.Style
 	SearchBox      lipgloss.Style
 	SearchCursor   lipgloss.Style
+	SearchBoxActive lipgloss.Style
 }
 
 type KanbanModel struct {
@@ -85,10 +86,14 @@ func DefaultKanbanStyles() KanbanStyles {
 		TabInactive: lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
 		SearchBox: lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color("69")).
+			BorderForeground(lipgloss.Color("240")).
 			Foreground(lipgloss.Color("252")),
 		SearchCursor: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("69")),
+		SearchBoxActive: lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(lipgloss.Color("69")).
+			Foreground(lipgloss.Color("15")),
 	}
 }
 
@@ -119,10 +124,15 @@ func NewKanbanStyles(t *theme.Theme) KanbanStyles {
 		TabInactive: lipgloss.NewStyle().Foreground(t.TextMuted),
 		SearchBox: lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
-			BorderForeground(t.Primary).
+			BorderForeground(t.TextMuted).
 			Foreground(t.Text),
 		SearchCursor: lipgloss.NewStyle().
 			Foreground(t.Primary),
+		SearchBoxActive: lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(t.Primary).
+			Foreground(t.Text).
+			Bold(true),
 	}
 }
 
@@ -413,7 +423,11 @@ func (m KanbanModel) renderSearchBar() string {
 	if searchWidth < 20 {
 		searchWidth = 20
 	}
-	label := m.styles.SearchBox.Width(searchWidth).Render("  " + prompt)
+	boxStyle := m.styles.SearchBox
+	if m.tab == TabSearch {
+		boxStyle = m.styles.SearchBoxActive
+	}
+	label := boxStyle.Width(searchWidth).Render("  " + prompt)
 	return label
 }
 
