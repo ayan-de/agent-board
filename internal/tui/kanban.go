@@ -206,6 +206,20 @@ func (m KanbanModel) handleKey(msg tea.KeyMsg) (KanbanModel, tea.Cmd) {
 	action, _ := m.resolver.Resolve(key)
 
 	switch action {
+	case keybinding.ActionNextTab:
+		if m.tab == TabSearch {
+			m.tab = TabDateFilter
+		} else {
+			m.tab = TabSearch
+		}
+		return m, nil
+	case keybinding.ActionPrevTab:
+		if m.tab == TabSearch {
+			m.tab = TabDateFilter
+		} else {
+			m.tab = TabSearch
+		}
+		return m, nil
 	case keybinding.ActionPrevColumn:
 		if m.tab == TabDateFilter {
 			if m.monthOffset > 0 {
@@ -213,11 +227,6 @@ func (m KanbanModel) handleKey(msg tea.KeyMsg) (KanbanModel, tea.Cmd) {
 				m, _ = m.loadMonth()
 				return m, nil
 			}
-			m.tab = TabSearch
-			return m, nil
-		}
-		if m.tab == TabSearch {
-			m.tab = TabDateFilter
 			return m, nil
 		}
 		if m.colIndex > 0 {

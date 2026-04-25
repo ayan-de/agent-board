@@ -114,23 +114,14 @@ func TestKanbanColumnNavigation(t *testing.T) {
 	m := newTestKanban(t)
 	m.projectInitDate = time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC)
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
-	if m.tab != TabDateFilter {
-		t.Errorf("h from TabSearch should switch to TabDateFilter, tab = %v", m.tab)
-	}
-
-	m.monthOffset = 1
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
-	if m.monthOffset != 0 {
-		t.Errorf("monthOffset = %d after h, want 0", m.monthOffset)
-	}
-	if m.tab != TabDateFilter {
-		t.Errorf("tab should still be TabDateFilter after h when monthOffset > 0, got %v", m.tab)
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	if m.colIndex != 1 {
+		t.Errorf("l from colIndex=0 should give colIndex=1, got %d", m.colIndex)
 	}
 
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
-	if m.tab != TabSearch {
-		t.Errorf("h at offset=0 should switch to TabSearch, tab = %v", m.tab)
+	if m.colIndex != 0 {
+		t.Errorf("h from colIndex=1 should give colIndex=0, got %d", m.colIndex)
 	}
 
 	tests := []struct {
@@ -430,14 +421,15 @@ func TestKanbanTabNavigation(t *testing.T) {
 	m := newTestKanban(t)
 	m.projectInitDate = time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC)
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	tabKey := tea.KeyMsg{Type: tea.KeyTab}
+	m, _ = m.Update(tabKey)
 	if m.tab != TabDateFilter {
-		t.Errorf("tab after h = %v, want TabDateFilter", m.tab)
+		t.Errorf("tab after Tab = %v, want TabDateFilter", m.tab)
 	}
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	m, _ = m.Update(tabKey)
 	if m.tab != TabSearch {
-		t.Errorf("tab after second h = %v, want TabSearch (h at offset=0 returns to TabSearch)", m.tab)
+		t.Errorf("tab after second Tab = %v, want TabSearch", m.tab)
 	}
 }
 
