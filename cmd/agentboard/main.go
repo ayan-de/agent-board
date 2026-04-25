@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/llm"
@@ -68,7 +69,8 @@ func main() {
 
 	reg := theme.NewRegistry("dark")
 	reg.LoadBuiltins()
-	reg.LoadUserThemes()
+	themesDir := filepath.Join(config.GetBaseDir(), "themes")
+	reg.LoadUserThemes(themesDir)
 	if err := reg.Set(cfg.TUI.Theme); err != nil {
 		_ = reg.Set("agentboard")
 	}
