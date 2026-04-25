@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -157,6 +158,14 @@ func (m KanbanModel) Update(msg tea.Msg) (KanbanModel, tea.Cmd) {
 			m.columns = groupByStatus(results)
 		}
 		return m, nil
+	case monthNavigateMsg:
+		if msg.direction == 1 {
+			m.monthOffset++
+		} else if msg.direction == -1 && m.monthOffset > 0 {
+			m.monthOffset--
+		}
+		m, _ = m.loadMonth()
+		return m, nil
 	case tabChangeMsg:
 		m.tab = msg.tab
 		return m, nil
@@ -198,6 +207,13 @@ func (m KanbanModel) handleKey(msg tea.KeyMsg) (KanbanModel, tea.Cmd) {
 
 	switch action {
 	case keybinding.ActionPrevColumn:
+		if m.tab == TabDateFilter {
+			if m.monthOffset > 0 {
+				m.monthOffset--
+				m, _ = m.loadMonth()
+			}
+			return m, nil
+		}
 		if m.tab == TabSearch {
 			m.tab = TabDateFilter
 			return m, nil
@@ -207,7 +223,8 @@ func (m KanbanModel) handleKey(msg tea.KeyMsg) (KanbanModel, tea.Cmd) {
 		}
 	case keybinding.ActionNextColumn:
 		if m.tab == TabDateFilter {
-			m.tab = TabSearch
+			m.monthOffset++
+			m, _ = m.loadMonth()
 			return m, nil
 		}
 		if m.colIndex < 3 {
@@ -350,6 +367,10 @@ func (m KanbanModel) View() string {
 
 	tabBar := m.renderTabBar()
 	board := lipgloss.JoinHorizontal(lipgloss.Top, cols...)
+	if m.tab == TabDateFilter {
+		monthHeader := m.renderMonthHeader()
+		return lipgloss.JoinVertical(lipgloss.Top, tabBar, monthHeader, board)
+	}
 	return lipgloss.JoinVertical(lipgloss.Top, tabBar, board)
 }
 
@@ -376,6 +397,18 @@ func (m KanbanModel) renderTabBar() string {
 	}
 	leftPad := pad / 2
 	return strings.Repeat(" ", leftPad) + tabs
+}
+
+func (m KanbanModel) renderMonthHeader() string {
+	from, to := MonthWindow(m.projectInitDate, m.monthOffset)
+	count := len(m.columns[0]) + len(m.columns[1]) + len(m.columns[2]) + len(m.columns[3])
+	label := from.Format("Jan 15") + " - " + to.Format("Feb 14 2006") + " (" + strconv.Itoa(count) + " cards)"
+	pad := m.width - lipgloss.Width(label)
+	if pad < 0 {
+		pad = 0
+	}
+	leftPad := pad / 2
+	return strings.Repeat(" ", leftPad) + m.styles.TabBar.Render(label)
 }
 
 func (m KanbanModel) SelectedTicket() *store.Ticket {
@@ -454,4 +487,23 @@ func groupByStatus(tickets []store.Ticket) [4][]store.Ticket {
 		}
 	}
 	return cols
+}
+
+func MonthWindow(initDate time.Time, offset int) (from, to time.Time) {
+	base := time.Date(initDate.Year(), initDate.Month(), 15, 0, 0, 0, 0, initDate.Location())
+	from = base.AddDate(0, offset, 0)
+	to = time.Date(from.Year(), from.Month()+1, 14, 23, 59, 59, 0, from.Location())
+	return from, to
+}
+
+func (m KanbanModel) loadMonth() (KanbanModel, error) {
+	from, to := MonthWindow(m.projectInitDate, m.monthOffset)
+	fromPtr := &from
+	toPtr := &to
+	tickets, err := m.store.ListTickets(context.Background(), store.TicketFilters{From: fromPtr, To: toPtr})
+	if err != nil {
+		return m, err
+	}
+	m.columns = groupByStatus(tickets)
+	return m, nil
 }

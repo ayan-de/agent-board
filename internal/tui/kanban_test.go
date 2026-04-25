@@ -436,3 +436,61 @@ func TestKanbanTabNavigation(t *testing.T) {
 		t.Errorf("tab after l = %v, want TabSearch", m.tab)
 	}
 }
+
+func TestKanbanSearchFilter(t *testing.T) {
+	m := newTestKanban(t)
+	ctx := context.Background()
+	m.store.CreateTicket(ctx, store.Ticket{Title: "Fix bug in login", Status: "backlog"})
+	m.store.CreateTicket(ctx, store.Ticket{Title: "Add search feature", Status: "backlog"})
+	m.store.CreateTicket(ctx, store.Ticket{Title: "Database migration", Status: "backlog"})
+	m, _ = m.Reload()
+
+	m, _ = m.Update(searchResultsMsg{
+		tickets: []store.Ticket{
+			{Title: "Add search feature", Status: "backlog"},
+		},
+	})
+
+	if len(m.columns[0]) != 1 {
+		t.Fatalf("search filtered to %d tickets, want 1", len(m.columns[0]))
+	}
+	if m.columns[0][0].Title != "Add search feature" {
+		t.Errorf("title = %q, want %q", m.columns[0][0].Title, "Add search feature")
+	}
+}
+
+func TestMonthWindow(t *testing.T) {
+	initDate := time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC)
+	from, to := MonthWindow(initDate, 0)
+	if from.Month() != time.January || from.Day() != 15 {
+		t.Errorf("from = %v, want Jan 15", from)
+	}
+	if to.Month() != time.February || to.Day() != 14 {
+		t.Errorf("to = %v, want Feb 14", to)
+	}
+
+	from2, to2 := MonthWindow(initDate, 1)
+	if from2.Month() != time.February || from2.Day() != 15 {
+		t.Errorf("from2 = %v, want Feb 15", from2)
+	}
+	if to2.Month() != time.March || to2.Day() != 14 {
+		t.Errorf("to2 = %v, want Mar 14", to2)
+	}
+}
+
+func TestKanbanMonthNavigation(t *testing.T) {
+	m := newTestKanban(t)
+	m.projectInitDate = time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC)
+	m.monthOffset = 0
+	m, _ = m.loadMonth()
+
+	m, _ = m.Update(monthNavigateMsg{direction: 1})
+	if m.monthOffset != 1 {
+		t.Errorf("monthOffset = %d, want 1", m.monthOffset)
+	}
+
+	m, _ = m.Update(monthNavigateMsg{direction: -1})
+	if m.monthOffset != 0 {
+		t.Errorf("monthOffset = %d, want 0", m.monthOffset)
+	}
+}
