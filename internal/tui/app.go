@@ -737,8 +737,15 @@ func (a *App) View() string {
 		mainView = a.kanban.View()
 	}
 	header := a.renderHeader()
-	mainView = lipgloss.NewStyle().Height(a.height - 1).Render(mainView)
-	mainView = header + "\n" + mainView
+	t := a.registry.Active()
+	separator := lipgloss.NewStyle().Foreground(t.Border).Render(strings.Repeat("─", a.width))
+
+	mainViewHeight := a.height - 2
+	if mainViewHeight < 0 {
+		mainViewHeight = 0
+	}
+	mainView = lipgloss.NewStyle().Height(mainViewHeight).Render(mainView)
+	mainView = header + "\n" + separator + "\n" + mainView
 
 	if a.palette.Active() {
 		paletteView := a.palette.View()
