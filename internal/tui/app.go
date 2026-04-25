@@ -107,6 +107,10 @@ type searchQueryMsg struct {
 	query string
 }
 
+type searchResultsMsg struct {
+	tickets []store.Ticket
+}
+
 type monthNavigateMsg struct {
 	direction int
 }
@@ -363,6 +367,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case notificationMsg:
 		return a, a.showNotification(msg.title, msg.message, msg.variant)
+	case searchQueryMsg:
+		results, err := a.store.ListTickets(context.Background(), store.TicketFilters{Search: msg.query})
+		if err == nil {
+			a.kanban, _ = a.kanban.Update(searchResultsMsg{tickets: results})
+		}
+		return a, nil
 	}
 
 	if a.kanban.NeedsTick() {

@@ -30,6 +30,7 @@ type TicketFilters struct {
 	Tag      string
 	From     *time.Time
 	To       *time.Time
+	Search   string
 }
 
 type ticketRow struct {
@@ -198,6 +199,11 @@ func (s *Store) ListTickets(ctx context.Context, filters TicketFilters) ([]Ticke
 	if filters.To != nil {
 		query += " AND created_at <= ?"
 		args = append(args, *filters.To)
+	}
+	if filters.Search != "" {
+		query += " AND (title LIKE ? OR description LIKE ?)"
+		pattern := "%" + filters.Search + "%"
+		args = append(args, pattern, pattern)
 	}
 
 	query += " ORDER BY created_at ASC"

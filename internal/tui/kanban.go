@@ -148,6 +148,15 @@ func (m KanbanModel) Update(msg tea.Msg) (KanbanModel, tea.Cmd) {
 			return m, animationTick()
 		}
 		return m, nil
+	case searchResultsMsg:
+		m.columns = groupByStatus(msg.tickets)
+		return m, nil
+	case searchQueryMsg:
+		results, err := m.store.ListTickets(context.Background(), store.TicketFilters{Search: msg.query})
+		if err == nil {
+			m.columns = groupByStatus(results)
+		}
+		return m, nil
 	case tabChangeMsg:
 		m.tab = msg.tab
 		return m, nil
@@ -167,6 +176,23 @@ func (m KanbanModel) Update(msg tea.Msg) (KanbanModel, tea.Cmd) {
 }
 
 func (m KanbanModel) handleKey(msg tea.KeyMsg) (KanbanModel, tea.Cmd) {
+	if m.tab == TabSearch && msg.Type == tea.KeyRunes {
+		r := msg.Runes[0]
+		if r >= 32 && r < 127 {
+			action, _ := m.resolver.Resolve(msg.String())
+			if action == keybinding.ActionNone {
+				m.searchQuery += string(r)
+				return m, m.debouncedSearch()
+			}
+		}
+	}
+	if m.tab == TabSearch && (msg.Type == tea.KeyBackspace || msg.String() == "backspace") {
+		if len(m.searchQuery) > 0 {
+			m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
+			return m, m.debouncedSearch()
+		}
+	}
+
 	key := msg.String()
 	action, _ := m.resolver.Resolve(key)
 
@@ -408,4 +434,24 @@ func (m KanbanModel) anyAgentActive() bool {
 
 func (m KanbanModel) NeedsTick() bool {
 	return m.anyAgentActive()
+}
+
+func (m KanbanModel) debouncedSearch() tea.Cmd {
+	return func() tea.Msg {
+		time.Sleep(400 * time.Millisecond)
+		return searchQueryMsg{query: m.searchQuery}
+	}
+}
+
+func groupByStatus(tickets []store.Ticket) [4][]store.Ticket {
+	cols := [4][]store.Ticket{}
+	statuses := [4]string{"backlog", "in_progress", "review", "done"}
+	for _, t := range tickets {
+		for i, s := range statuses {
+			if t.Status == s {
+				cols[i] = append(cols[i], t)
+			}
+		}
+	}
+	return cols
 }
