@@ -75,67 +75,72 @@ func JoinArgs(args []string) string {
 	return strings.Join(args, " ")
 }
 
+func NewOpenCode() *Config {
+	return &Config{
+		Name:            "opencode",
+		Bin:             "opencode",
+		Args:            []string{},
+		ReadyPattern:    regexp.MustCompile(`Ask\s+anything`),
+		SendPrompt:      SendPromptTyped,
+		FormatPrompt:    DefaultFormatPrompt,
+		IdlePatterns:    []*regexp.Regexp{regexp.MustCompile(`Ask\s+anything`)},
+		GracePeriod:     8 * time.Second,
+		FallbackTimeout: 5 * time.Second,
+		ReadyWait:       800 * time.Millisecond,
+	}
+}
+
+func NewClaudeCode() *Config {
+	return &Config{
+		Name:            "claude-code",
+		Bin:             "claude",
+		Args:            []string{"--no-autocomplete"},
+		ReadyPattern:    regexp.MustCompile(`\?\s+for\s+shortcuts`),
+		SendPrompt:      SendPromptSingleLine,
+		FormatPrompt:    ClaudeFormatPrompt,
+		IdlePatterns:    []*regexp.Regexp{regexp.MustCompile(`Press\s+Ctrl-C\s+again\s+to\s+exit`)},
+		GracePeriod:     10 * time.Second,
+		FallbackTimeout: 10 * time.Second,
+		ReadyWait:       5 * time.Second,
+	}
+}
+
+func NewCodex() *Config {
+	return &Config{
+		Name:            "codex",
+		Bin:             "codex",
+		Args:            []string{},
+		ReadyPattern:    regexp.MustCompile(`(?m)^\s*›\s*$|Run\s+/review\s+on\s+my\s+current\s+changes`),
+		SendPrompt:      SendPromptSingleLine,
+		FormatPrompt:    DefaultFormatPrompt,
+		IdlePatterns:    []*regexp.Regexp{regexp.MustCompile(`Run\s+/review\s+on\s+my\s+current\s+changes`)},
+		GracePeriod:     8 * time.Second,
+		FallbackTimeout: 120 * time.Second,
+		ReadyWait:       5 * time.Second,
+	}
+}
+
+func NewGeminiCode() *Config {
+	return &Config{
+		Name:            "gemini",
+		Bin:             "gemini",
+		Args:            []string{},
+		ReadyPattern:    regexp.MustCompile(`Gemini\s+CLI`),
+		SendPrompt:      SendPromptSingleLine,
+		FormatPrompt:    DefaultFormatPrompt,
+		IdlePatterns:    []*regexp.Regexp{regexp.MustCompile(`Type\s+your\s+message`)},
+		GracePeriod:     8 * time.Second,
+		FallbackTimeout: 120 * time.Second,
+		ReadyWait:       5 * time.Second,
+	}
+}
+
 func NewRegistry() map[string]*Config {
 	return map[string]*Config{
-		"opencode": {
-			Name:            "opencode",
-			Bin:             "opencode",
-			Args:            []string{},
-			ReadyPattern:    regexp.MustCompile(`Ask\s+anything`),
-			SendPrompt:      SendPromptTyped,
-			FormatPrompt:    DefaultFormatPrompt,
-			IdlePatterns:    []*regexp.Regexp{regexp.MustCompile(`Ask\s+anything`)},
-			GracePeriod:     8 * time.Second,
-			FallbackTimeout: 5 * time.Second,
-			ReadyWait:       800 * time.Millisecond,
-		},
-		"claudecode": {
-			Name:            "claudecode",
-			Bin:             "claude",
-			Args:            []string{},
-			ReadyPattern:    regexp.MustCompile(`Press\s+Ctrl-C\s+again\s+to\s+exit`),
-			SendPrompt:      SendPromptSingleLine,
-			FormatPrompt:    ClaudeFormatPrompt,
-			IdlePatterns:    []*regexp.Regexp{regexp.MustCompile(`Press\s+Ctrl-C\s+again\s+to\s+exit`)},
-			GracePeriod:     10 * time.Second,
-			FallbackTimeout: 10 * time.Second,
-			ReadyWait:       2 * time.Second,
-		},
-		"claude-code": {
-			Name:            "claude-code",
-			Bin:             "claude",
-			Args:            []string{},
-			ReadyPattern:    regexp.MustCompile(`Press\s+Ctrl-C\s+again\s+to\s+exit`),
-			SendPrompt:      SendPromptSingleLine,
-			FormatPrompt:    ClaudeFormatPrompt,
-			IdlePatterns:    []*regexp.Regexp{regexp.MustCompile(`Press\s+Ctrl-C\s+again\s+to\s+exit`)},
-			GracePeriod:     10 * time.Second,
-			FallbackTimeout: 10 * time.Second,
-			ReadyWait:       2 * time.Second,
-		},
-		"codex": {
-			Name:            "codex",
-			Bin:             "codex",
-			Args:            []string{},
-			ReadyPattern:    regexp.MustCompile(`(?m)^\s*›\s*$|Run\s+/review\s+on\s+my\s+current\s+changes`),
-			SendPrompt:      SendPromptSingleLine,
-			FormatPrompt:    DefaultFormatPrompt,
-			IdlePatterns:    []*regexp.Regexp{regexp.MustCompile(`Run\s+/review\s+on\s+my\s+current\s+changes`)},
-			GracePeriod:     8 * time.Second,
-			FallbackTimeout: 120 * time.Second,
-			ReadyWait:       5 * time.Second,
-		},
-		"gemini": {
-			Name:            "gemini",
-			Bin:             "gemini",
-			Args:            []string{},
-			ReadyPattern:    regexp.MustCompile(`Gemini\s+CLI`),
-			SendPrompt:      SendPromptSingleLine,
-			FormatPrompt:    DefaultFormatPrompt,
-			IdlePatterns:    []*regexp.Regexp{regexp.MustCompile(`Type\s+your\s+message`)},
-			GracePeriod:     8 * time.Second,
-			FallbackTimeout: 120 * time.Second,
-			ReadyWait:       5 * time.Second,
-		},
+		"opencode":    NewOpenCode(),
+		"claudecode":  NewClaudeCode(),
+		"claude-code": NewClaudeCode(),
+		"codex":       NewCodex(),
+		"gemini":      NewGeminiCode(),
 	}
 }
