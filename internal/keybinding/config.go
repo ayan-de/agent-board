@@ -15,6 +15,8 @@ var actionNames = map[string]Action{
 	"refresh":             ActionRefresh,
 	"toggle_focus":        ActionToggleFocus,
 	"prev_focus":          ActionPrevFocus,
+	"next_tab":            ActionNextTab,
+	"prev_tab":            ActionPrevTab,
 	"jump_col1":           ActionJumpColumn1,
 	"jump_col2":           ActionJumpColumn2,
 	"jump_col3":           ActionJumpColumn3,

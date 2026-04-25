@@ -3,7 +3,9 @@ package tui
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ayan-de/agent-board/internal/keybinding"
 	"github.com/ayan-de/agent-board/internal/store"
@@ -11,6 +13,14 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+)
+
+type KanbanTab int
+
+const (
+	TabBoard KanbanTab = iota
+	TabSearch
+	TabDateFilter
 )
 
 var statusNames = [4]string{"backlog", "in_progress", "review", "done"}
@@ -25,19 +35,29 @@ type KanbanStyles struct {
 	SelectedTicket lipgloss.Style
 	Ticket         lipgloss.Style
 	EmptyColumn    lipgloss.Style
+	TabBar         lipgloss.Style
+	TabActive      lipgloss.Style
+	TabInactive    lipgloss.Style
+	SearchBox      lipgloss.Style
+	SearchCursor   lipgloss.Style
+	SearchBoxActive lipgloss.Style
 }
 
 type KanbanModel struct {
-	store     *store.Store
-	resolver  *keybinding.Resolver
-	width     int
-	height    int
-	colIndex  int
-	cursors   [4]int
-	columns   [4][]store.Ticket
-	styles    KanbanStyles
-	animFrame int
-	theme     *theme.Theme
+	store           *store.Store
+	resolver        *keybinding.Resolver
+	width           int
+	height          int
+	colIndex        int
+	cursors         [4]int
+	columns         [4][]store.Ticket
+	styles          KanbanStyles
+	animFrame       int
+	theme           *theme.Theme
+	tab             KanbanTab
+	searchQuery     string
+	monthOffset     int
+	projectInitDate time.Time
 }
 
 func DefaultKanbanStyles() KanbanStyles {
@@ -62,6 +82,13 @@ func DefaultKanbanStyles() KanbanStyles {
 			Foreground(lipgloss.Color("252")),
 		EmptyColumn: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("240")),
+		TabBar: lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		TabActive: lipgloss.NewStyle().Foreground(lipgloss.Color("69")).Bold(true),
+		TabInactive: lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		SearchBox: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240")),
+		SearchBoxActive: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("69")).Bold(true),
 	}
 }
 
@@ -87,15 +114,25 @@ func NewKanbanStyles(t *theme.Theme) KanbanStyles {
 			Foreground(t.Text),
 		EmptyColumn: lipgloss.NewStyle().
 			Foreground(t.TextMuted),
+		TabBar: lipgloss.NewStyle().Foreground(t.TextMuted),
+		TabActive: lipgloss.NewStyle().Foreground(t.Primary).Bold(true),
+		TabInactive: lipgloss.NewStyle().Foreground(t.TextMuted),
+		SearchBox: lipgloss.NewStyle().
+			Foreground(t.TextMuted),
+		SearchBoxActive: lipgloss.NewStyle().
+			Foreground(t.Primary).Bold(true),
 	}
 }
 
 func NewKanbanModel(s *store.Store, resolver *keybinding.Resolver, t *theme.Theme) (KanbanModel, error) {
 	m := KanbanModel{
-		store:    s,
-		resolver: resolver,
-		styles:   NewKanbanStyles(t),
-		theme:    t,
+		store:       s,
+		resolver:    resolver,
+		styles:      NewKanbanStyles(t),
+		theme:       t,
+		tab:         TabBoard,
+		monthOffset: 0,
+		projectInitDate: time.Now(),
 	}
 	m, err := m.loadColumns()
 	if err != nil {
@@ -125,6 +162,26 @@ func (m KanbanModel) Update(msg tea.Msg) (KanbanModel, tea.Cmd) {
 			return m, animationTick()
 		}
 		return m, nil
+	case searchResultsMsg:
+		m.columns = groupByStatus(msg.tickets)
+		return m, nil
+	case searchQueryMsg:
+		results, err := m.store.ListTickets(context.Background(), store.TicketFilters{Search: msg.query})
+		if err == nil {
+			m.columns = groupByStatus(results)
+		}
+		return m, nil
+	case monthNavigateMsg:
+		if msg.direction == 1 {
+			m.monthOffset++
+		} else if msg.direction == -1 && m.monthOffset > 0 {
+			m.monthOffset--
+		}
+		m, _ = m.loadMonth()
+		return m, nil
+	case tabChangeMsg:
+		m.tab = msg.tab
+		return m, nil
 	case deleteTicketConfirmMsg:
 		return m, nil
 	case deleteTicketRequestMsg:
@@ -141,15 +198,67 @@ func (m KanbanModel) Update(msg tea.Msg) (KanbanModel, tea.Cmd) {
 }
 
 func (m KanbanModel) handleKey(msg tea.KeyMsg) (KanbanModel, tea.Cmd) {
+	// If in search mode, intercept keys for search and disable most board keybindings
+	if m.tab == TabSearch {
+		// Handle backspace
+		if msg.Type == tea.KeyBackspace || msg.String() == "backspace" {
+			if len(m.searchQuery) > 0 {
+				m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
+				return m, m.debouncedSearch()
+			}
+			return m, nil
+		}
+
+		// Handle enter or escape to exit search mode? 
+		// For now, just let it be.
+
+		// Handle typing
+		if msg.Type == tea.KeyRunes {
+			m.searchQuery += string(msg.Runes)
+			return m, m.debouncedSearch()
+		}
+
+		// Block global actions like 'q', 'a', 'd' while in search mode
+		// except for specific ones we might want?
+		key := msg.String()
+		action, _ := m.resolver.Resolve(key)
+		if action != keybinding.ActionNextTab && action != keybinding.ActionPrevTab && action != keybinding.ActionForceQuit {
+			return m, nil
+		}
+	}
+
 	key := msg.String()
 	action, _ := m.resolver.Resolve(key)
 
 	switch action {
+	case keybinding.ActionNextTab:
+		m.tab = (m.tab + 1) % 3
+		return m, nil
+	case keybinding.ActionPrevTab:
+		if m.tab == TabBoard {
+			m.tab = TabDateFilter
+		} else {
+			m.tab--
+		}
+		return m, nil
 	case keybinding.ActionPrevColumn:
+		if m.tab == TabDateFilter {
+			if m.monthOffset > 0 {
+				m.monthOffset--
+				m, _ = m.loadMonth()
+				return m, nil
+			}
+			return m, nil
+		}
 		if m.colIndex > 0 {
 			m.colIndex--
 		}
 	case keybinding.ActionNextColumn:
+		if m.tab == TabDateFilter {
+			m.monthOffset++
+			m, _ = m.loadMonth()
+			return m, nil
+		}
 		if m.colIndex < 3 {
 			m.colIndex++
 		}
@@ -219,7 +328,7 @@ func (m KanbanModel) View() string {
 		}
 	}
 
-	availableHeight := m.height - 6
+	availableHeight := m.height - 7
 	if availableHeight < 1 {
 		availableHeight = 10
 	}
@@ -288,7 +397,73 @@ func (m KanbanModel) View() string {
 		cols[i] = colStyle.Render(content.String())
 	}
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, cols...)
+	tabBar := m.renderTabBar()
+	board := lipgloss.JoinHorizontal(lipgloss.Top, cols...)
+	return lipgloss.JoinVertical(lipgloss.Top, tabBar, board)
+}
+
+func (m KanbanModel) renderMonthHeader() string {
+	from, to := MonthWindow(m.projectInitDate, m.monthOffset)
+	count := len(m.columns[0]) + len(m.columns[1]) + len(m.columns[2]) + len(m.columns[3])
+	return from.Format("Jan 02") + " - " + to.Format("Jan 02 2006") + " (" + strconv.Itoa(count) + " cards)"
+}
+
+func (m KanbanModel) renderSearchBar() string {
+	prompt := "Search: " + m.searchQuery
+	if m.tab == TabSearch {
+		return m.styles.SearchBoxActive.Render(prompt)
+	}
+	return m.styles.SearchBox.Render(prompt)
+}
+
+func (m KanbanModel) renderTabBar() string {
+	w := m.width
+	if w < 10 {
+		return ""
+	}
+
+	boardLabel := " Board "
+	if m.tab == TabBoard {
+		boardLabel = lipgloss.NewStyle().
+			Background(m.theme.Primary).
+			Foreground(m.theme.Text).
+			Bold(true).
+			Render(boardLabel)
+	} else {
+		boardLabel = m.styles.TabInactive.Render(boardLabel)
+	}
+
+	searchBar := m.renderSearchBar()
+	monthHeader := m.renderMonthHeader()
+	if m.tab == TabDateFilter {
+		monthHeader = m.styles.TabActive.Render(monthHeader)
+	} else {
+		monthHeader = m.styles.TabInactive.Render(monthHeader)
+	}
+
+	boardWidth := lipgloss.Width(boardLabel)
+	searchWidth := lipgloss.Width(searchBar)
+	monthWidth := lipgloss.Width(monthHeader)
+
+	leftPad := 2
+	rightPad := 2
+	
+	// Spacing between elements
+	gap1 := 4 // Between Board and Search
+	gap2 := w - boardWidth - searchWidth - monthWidth - leftPad - rightPad - gap1
+	
+	if gap2 < 1 {
+		gap2 = 1
+	}
+
+	return strings.Repeat(" ", leftPad) + 
+		boardLabel + strings.Repeat(" ", gap1) + 
+		searchBar + strings.Repeat(" ", gap2) + 
+		monthHeader + strings.Repeat(" ", rightPad)
+}
+
+func (m KanbanModel) IsSearchActive() bool {
+	return m.tab == TabSearch
 }
 
 func (m KanbanModel) SelectedTicket() *store.Ticket {
@@ -347,4 +522,49 @@ func (m KanbanModel) anyAgentActive() bool {
 
 func (m KanbanModel) NeedsTick() bool {
 	return m.anyAgentActive()
+}
+
+func (m KanbanModel) debouncedSearch() tea.Cmd {
+	return func() tea.Msg {
+		time.Sleep(400 * time.Millisecond)
+		return searchQueryMsg{query: m.searchQuery}
+	}
+}
+
+func groupByStatus(tickets []store.Ticket) [4][]store.Ticket {
+	cols := [4][]store.Ticket{}
+	statuses := [4]string{"backlog", "in_progress", "review", "done"}
+	for _, t := range tickets {
+		for i, s := range statuses {
+			if t.Status == s {
+				cols[i] = append(cols[i], t)
+			}
+		}
+	}
+	return cols
+}
+
+func MonthWindow(initDate time.Time, offset int) (from, to time.Time) {
+	// Start exactly from the init date, no anchor to the 15th
+	from = initDate.AddDate(0, offset, 0)
+	// Set 'from' to the beginning of that day
+	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
+	
+	// 'to' is one month later minus one day, set to the end of that day
+	to = from.AddDate(0, 1, -1)
+	to = time.Date(to.Year(), to.Month(), to.Day(), 23, 59, 59, 0, to.Location())
+	
+	return from, to
+}
+
+func (m KanbanModel) loadMonth() (KanbanModel, error) {
+	from, to := MonthWindow(m.projectInitDate, m.monthOffset)
+	fromPtr := &from
+	toPtr := &to
+	tickets, err := m.store.ListTickets(context.Background(), store.TicketFilters{From: fromPtr, To: toPtr})
+	if err != nil {
+		return m, err
+	}
+	m.columns = groupByStatus(tickets)
+	return m, nil
 }

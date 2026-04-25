@@ -99,6 +99,22 @@ type showDeleteModalMsg struct {
 	ticketID string
 }
 
+type tabChangeMsg struct {
+	tab KanbanTab
+}
+
+type searchQueryMsg struct {
+	query string
+}
+
+type searchResultsMsg struct {
+	tickets []store.Ticket
+}
+
+type monthNavigateMsg struct {
+	direction int
+}
+
 type Orchestrator interface {
 	CreateProposal(ctx context.Context, input orchestrator.CreateProposalInput) (store.Proposal, error)
 	ApproveProposal(ctx context.Context, proposalID string) error
@@ -159,6 +175,14 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry, deps AppDep
 	kanban, err := NewKanbanModel(s, resolver, t)
 	if err != nil {
 		return nil, fmt.Errorf("tui.newApp: %w", err)
+	}
+
+	initDateStr := cfg.Board.ProjectInitDate
+	if initDateStr != "" {
+		initDate, err := time.Parse("2006-01-02", initDateStr)
+		if err == nil {
+			kanban.projectInitDate = initDate
+		}
 	}
 
 	agents := config.DetectAgents()
@@ -351,6 +375,22 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case notificationMsg:
 		return a, a.showNotification(msg.title, msg.message, msg.variant)
+	case searchQueryMsg:
+		results, err := a.store.ListTickets(context.Background(), store.TicketFilters{Search: msg.query})
+		if err == nil {
+			a.kanban, _ = a.kanban.Update(searchResultsMsg{tickets: results})
+		}
+		return a, nil
+	case monthNavigateMsg:
+		m := a.kanban
+		m, _ = m.Update(msg)
+		a.kanban = m
+		return a, nil
+	case tabChangeMsg:
+		m := a.kanban
+		m, _ = m.Update(msg)
+		a.kanban = m
+		return a, nil
 	}
 
 	if a.kanban.NeedsTick() {
@@ -528,6 +568,14 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	key := msg.String()
 	action, _ := a.resolver.Resolve(key)
+
+	if a.view == viewBoard && a.kanban.IsSearchActive() {
+		if action != keybinding.ActionNextTab && action != keybinding.ActionPrevTab && action != keybinding.ActionForceQuit {
+			var cmd tea.Cmd
+			a.kanban, cmd = a.kanban.Update(msg)
+			return a, cmd
+		}
+	}
 
 	if key == "esc" {
 		if a.view == viewTicket && (a.ticketView.mode == ticketEditMode || a.ticketView.mode == ticketAgentSelectMode) {

@@ -532,3 +532,18 @@ func TestGetGitRemote(t *testing.T) {
 	remote := getGitRemote()
 	_ = remote
 }
+
+func TestGetProjectInitDate(t *testing.T) {
+	dir := t.TempDir()
+	projDir := filepath.Join(dir, "projects", "testproj")
+	if err := os.MkdirAll(projDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	date, err := GetProjectInitDate(dir, "testproj")
+	if err != nil {
+		t.Fatalf("GetProjectInitDate error: %v", err)
+	}
+	if date.IsZero() {
+		t.Error("date should not be zero")
+	}
+}

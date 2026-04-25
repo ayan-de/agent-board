@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func openTestDB(t *testing.T) *Store {
@@ -1068,5 +1069,37 @@ func TestTicketIDDoesNotReuseAfterDelete(t *testing.T) {
 	}
 	if t2.ID != "AGT-02" {
 		t.Errorf("new ticket ID = %q, want AGT-02", t2.ID)
+	}
+}
+
+func TestListTicketsDateRange(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+	s, err := Open(dbPath, []string{"backlog", "in_progress", "review", "done"}, "TST-")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+	now := time.Now()
+	yesterday := now.Add(-24 * time.Hour)
+	lastWeek := now.Add(-7 * 24 * time.Hour)
+
+	s.CreateTicket(ctx, Ticket{Title: "Today", Status: "backlog", CreatedAt: now})
+	s.CreateTicket(ctx, Ticket{Title: "Yesterday", Status: "backlog", CreatedAt: yesterday})
+	s.CreateTicket(ctx, Ticket{Title: "LastWeek", Status: "backlog", CreatedAt: lastWeek})
+
+	from := yesterday
+	to := now.Add(time.Hour)
+	tickets, err := s.ListTickets(ctx, TicketFilters{From: &from, To: &to})
+	if err != nil {
+		t.Fatalf("ListTickets error: %v", err)
+	}
+	if len(tickets) != 2 {
+		t.Fatalf("got %d tickets, want 2 (Yesterday and LastWeek)", len(tickets))
+	}
+	if tickets[0].Title != "Yesterday" && tickets[0].Title != "LastWeek" {
+		t.Errorf("first ticket title = %q, want Yesterday or LastWeek", tickets[0].Title)
 	}
 }

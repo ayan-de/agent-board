@@ -28,6 +28,9 @@ type TicketFilters struct {
 	Agent    string
 	Priority string
 	Tag      string
+	From     *time.Time
+	To       *time.Time
+	Search   string
 }
 
 type ticketRow struct {
@@ -55,6 +58,9 @@ func (r ticketRow) toTicket() (Ticket, error) {
 		return Ticket{}, err
 	}
 
+	createdAt, _ := time.Parse(time.RFC3339, r.CreatedAt)
+	updatedAt, _ := time.Parse(time.RFC3339, r.UpdatedAt)
+
 	return Ticket{
 		ID:          r.ID,
 		Title:       r.Title,
@@ -66,6 +72,8 @@ func (r ticketRow) toTicket() (Ticket, error) {
 		Tags:        tags,
 		DependsOn:   dependsOn,
 		AgentActive: r.AgentActive,
+		CreatedAt:   createdAt,
+		UpdatedAt:   updatedAt,
 	}, nil
 }
 
@@ -131,7 +139,9 @@ func (s *Store) CreateTicket(ctx context.Context, t Ticket) (Ticket, error) {
 	}
 
 	now := time.Now()
-	t.CreatedAt = now
+	if t.CreatedAt.IsZero() {
+		t.CreatedAt = now
+	}
 	t.UpdatedAt = now
 
 	_, err = s.db.ExecContext(ctx,
@@ -186,6 +196,19 @@ func (s *Store) ListTickets(ctx context.Context, filters TicketFilters) ([]Ticke
 	if filters.Tag != "" {
 		query += " AND tags LIKE ?"
 		args = append(args, `%"`+filters.Tag+`"%`)
+	}
+	if filters.From != nil {
+		query += " AND created_at >= ?"
+		args = append(args, *filters.From)
+	}
+	if filters.To != nil {
+		query += " AND created_at <= ?"
+		args = append(args, *filters.To)
+	}
+	if filters.Search != "" {
+		query += " AND (title LIKE ? OR description LIKE ?)"
+		pattern := "%" + filters.Search + "%"
+		args = append(args, pattern, pattern)
 	}
 
 	query += " ORDER BY created_at ASC"

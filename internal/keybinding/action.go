@@ -18,6 +18,8 @@ const (
 	ActionRefresh
 	ActionToggleFocus
 	ActionPrevFocus
+	ActionNextTab
+	ActionPrevTab
 	ActionJumpColumn1
 	ActionJumpColumn2
 	ActionJumpColumn3
@@ -62,6 +64,10 @@ func (a Action) String() string {
 		return "toggle_focus"
 	case ActionPrevFocus:
 		return "prev_focus"
+	case ActionNextTab:
+		return "next_tab"
+	case ActionPrevTab:
+		return "prev_tab"
 	case ActionJumpColumn1:
 		return "jump_col1"
 	case ActionJumpColumn2:
