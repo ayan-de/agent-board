@@ -58,6 +58,9 @@ func (r ticketRow) toTicket() (Ticket, error) {
 		return Ticket{}, err
 	}
 
+	createdAt, _ := time.Parse(time.RFC3339, r.CreatedAt)
+	updatedAt, _ := time.Parse(time.RFC3339, r.UpdatedAt)
+
 	return Ticket{
 		ID:          r.ID,
 		Title:       r.Title,
@@ -69,6 +72,8 @@ func (r ticketRow) toTicket() (Ticket, error) {
 		Tags:        tags,
 		DependsOn:   dependsOn,
 		AgentActive: r.AgentActive,
+		CreatedAt:   createdAt,
+		UpdatedAt:   updatedAt,
 	}, nil
 }
 
