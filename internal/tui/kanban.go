@@ -159,9 +159,14 @@ func (m KanbanModel) handleKey(msg tea.KeyMsg) (KanbanModel, tea.Cmd) {
 	case keybinding.ActionJumpColumn4:
 		m.colIndex = 3
 	case keybinding.ActionAddTicket:
+		if m.colIndex != 0 {
+			return m, func() tea.Msg {
+				return notificationMsg{title: "Cannot create ticket", message: "Tickets can only be created in Backlog", variant: NotificationError}
+			}
+		}
 		ticket, err := m.store.CreateTicket(context.Background(), store.Ticket{
 			Title:  "New Ticket",
-			Status: statusNames[m.colIndex],
+			Status: statusNames[0],
 		})
 		if err != nil {
 			return m, nil
