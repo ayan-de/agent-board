@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"io"
 
 	"github.com/ayan-de/agent-board/internal/llm"
 	"github.com/ayan-de/agent-board/internal/store"
@@ -24,16 +25,26 @@ type FinishRunInput struct {
 }
 
 type RunRequest struct {
-	TicketID  string
-	SessionID string
-	Agent     string
-	Prompt    string
+	TicketID   string
+	SessionID  string
+	Agent      string
+	Prompt     string
+	Reporter   func(string)
+	InputChan  chan io.Writer
+	Target     string
+	OnComplete func(outcome, summary string)
 }
-
 
 type RunHandle struct {
 	Outcome string
 	Summary string
+}
+
+type RunCompletion struct {
+	TicketID  string
+	SessionID string
+	Outcome   string
+	Summary   string
 }
 
 type LLMClient interface {

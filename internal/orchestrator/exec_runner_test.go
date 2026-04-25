@@ -1,43 +1,17 @@
 package orchestrator_test
 
 import (
-	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/ayan-de/agent-board/internal/orchestrator"
 )
 
-type fakeCmdOutputRunner struct {
-	stdout   string
-	runError error
-}
-
-func (f fakeCmdOutputRunner) Output() ([]byte, error) {
-	if f.runError != nil {
-		return nil, f.runError
-	}
-	return []byte(f.stdout), nil
-}
-
-func TestExecRunnerParsesStructuredOutcome(t *testing.T) {
-	runner := orchestrator.ExecRunner{
-		LookPath: func(name string) (string, error) {
-			return "/usr/bin/opencode", nil
-		},
-		Command: func(ctx context.Context, name string, args ...string) orchestrator.CmdOutputRunner {
-			return fakeCmdOutputRunner{
-				stdout: `{"type":"text","part":{"text":"Hello!","type":"text"}}
-{"type":"step_finish","part":{"reason":"stop"}}`,
-			}
-		},
-	}
-
-	handle, err := runner.Start(context.Background(), orchestrator.RunRequest{
-		TicketID: "AGE-01",
-		Agent:    "opencode",
-		Prompt:   "say hello",
-	})
+func TestParseOpencodeOutputCompleted(t *testing.T) {
+	input := `{"type":"text","part":{"text":"Hello!","type":"text"}}
+{"type":"step_finish","part":{"reason":"stop"}}`
+	handle, err := orchestrator.ParseOpencodeOutput(strings.NewReader(input))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,26 +23,51 @@ func TestExecRunnerParsesStructuredOutcome(t *testing.T) {
 	}
 }
 
-func TestExecRunnerFailedRun(t *testing.T) {
-	runner := orchestrator.ExecRunner{
-		LookPath: func(name string) (string, error) {
-			return "/usr/bin/opencode", nil
-		},
-		Command: func(ctx context.Context, name string, args ...string) orchestrator.CmdOutputRunner {
-			return fakeCmdOutputRunner{runError: fmt.Errorf("exit status 1")}
-		},
-	}
-
-	handle, err := runner.Start(context.Background(), orchestrator.RunRequest{
-		TicketID: "AGE-01",
-		Agent:    "opencode",
-		Prompt:   "bad task",
-	})
+func TestParseOpencodeOutputFailed(t *testing.T) {
+	input := `{"type":"text","part":{"text":"something went wrong","type":"text"}}
+{"type":"step_finish","part":{"reason":"error"}}`
+	handle, err := orchestrator.ParseOpencodeOutput(strings.NewReader(input))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if handle.Outcome != "failed" {
 		t.Fatalf("Outcome = %q, want failed", handle.Outcome)
+	}
+}
+
+func TestParseOpencodeOutputMultipleTexts(t *testing.T) {
+	input := `{"type":"text","part":{"text":"step 1","type":"text"}}
+{"type":"text","part":{"text":"step 2","type":"text"}}
+{"type":"step_finish","part":{"reason":"stop"}}`
+	handle, err := orchestrator.ParseOpencodeOutput(strings.NewReader(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if handle.Summary != "step 1\nstep 2" {
+		t.Fatalf("Summary = %q, want step 1\\nstep 2", handle.Summary)
+	}
+}
+
+func TestParseOpencodeOutputEmpty(t *testing.T) {
+	handle, err := orchestrator.ParseOpencodeOutput(strings.NewReader(""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if handle.Outcome != "completed" {
+		t.Fatalf("Outcome = %q, want completed", handle.Outcome)
+	}
+	if handle.Summary != "Agent finished its task (UI mode)." {
+		t.Fatalf("Summary = %q, want default", handle.Summary)
+	}
+}
+
+func TestParseOpencodeOutputNonJSON(t *testing.T) {
+	handle, err := orchestrator.ParseOpencodeOutput(strings.NewReader("not json\nalso not json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if handle.Outcome != "completed" {
+		t.Fatalf("Outcome = %q, want completed for non-JSON input", handle.Outcome)
 	}
 }
 
@@ -78,92 +77,11 @@ func TestExecRunnerAgentNotFound(t *testing.T) {
 			return "", fmt.Errorf("not found")
 		},
 	}
-
-	_, err := runner.Start(context.Background(), orchestrator.RunRequest{
-		TicketID: "AGE-01",
-		Agent:    "nonexistent",
-		Prompt:   "do work",
+	_, err := runner.Start(nil, orchestrator.RunRequest{
+		Agent:  "nonexistent",
+		Prompt: "do work",
 	})
 	if err == nil {
 		t.Fatal("expected error for missing agent")
-	}
-}
-
-func TestExecRunnerParsesErrorOutcome(t *testing.T) {
-	runner := orchestrator.ExecRunner{
-		LookPath: func(name string) (string, error) {
-			return "/usr/bin/opencode", nil
-		},
-		Command: func(ctx context.Context, name string, args ...string) orchestrator.CmdOutputRunner {
-			return fakeCmdOutputRunner{
-				stdout: `{"type":"text","part":{"text":"something went wrong","type":"text"}}
-{"type":"step_finish","part":{"reason":"error"}}`,
-			}
-		},
-	}
-
-	handle, err := runner.Start(context.Background(), orchestrator.RunRequest{
-		TicketID: "AGE-01",
-		Agent:    "opencode",
-		Prompt:   "failing task",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if handle.Outcome != "failed" {
-		t.Fatalf("Outcome = %q, want failed", handle.Outcome)
-	}
-}
-
-func TestExecRunnerMultipleTextEvents(t *testing.T) {
-	runner := orchestrator.ExecRunner{
-		LookPath: func(name string) (string, error) {
-			return "/usr/bin/opencode", nil
-		},
-		Command: func(ctx context.Context, name string, args ...string) orchestrator.CmdOutputRunner {
-			return fakeCmdOutputRunner{
-				stdout: `{"type":"text","part":{"text":"step 1","type":"text"}}
-{"type":"text","part":{"text":"step 2","type":"text"}}
-{"type":"step_finish","part":{"reason":"stop"}}`,
-			}
-		},
-	}
-
-	handle, err := runner.Start(context.Background(), orchestrator.RunRequest{
-		TicketID: "AGE-01",
-		Agent:    "opencode",
-		Prompt:   "multi step",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if handle.Summary != "step 1\nstep 2" {
-		t.Fatalf("Summary = %q, want step 1\\nstep 2", handle.Summary)
-	}
-}
-
-func TestExecRunnerEmptyOutput(t *testing.T) {
-	runner := orchestrator.ExecRunner{
-		LookPath: func(name string) (string, error) {
-			return "/usr/bin/opencode", nil
-		},
-		Command: func(ctx context.Context, name string, args ...string) orchestrator.CmdOutputRunner {
-			return fakeCmdOutputRunner{stdout: ""}
-		},
-	}
-
-	handle, err := runner.Start(context.Background(), orchestrator.RunRequest{
-		TicketID: "AGE-01",
-		Agent:    "opencode",
-		Prompt:   "empty",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if handle.Outcome != "completed" {
-		t.Fatalf("Outcome = %q, want completed", handle.Outcome)
-	}
-	if handle.Summary != "agent completed with no text output" {
-		t.Fatalf("Summary = %q, want default", handle.Summary)
 	}
 }

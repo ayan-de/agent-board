@@ -129,3 +129,28 @@ func loadFromFS(dir string, mode string, source string) []*Theme {
 	}
 	return themes
 }
+
+func SaveThemeToFile(dir, jsonContent string) (name string, err error) {
+	var tj themeJSON
+	if err := json.Unmarshal([]byte(jsonContent), &tj); err != nil {
+		return "", fmt.Errorf("theme.SaveThemeToFile: invalid JSON: %w", err)
+	}
+
+	name = tj.Name
+	if name == "" {
+		return "", fmt.Errorf("theme.SaveThemeToFile: theme has no name field")
+	}
+
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", fmt.Errorf("theme.SaveThemeToFile: failed to create directory: %w", err)
+	}
+
+	filename := strings.ReplaceAll(name, " ", "_") + ".json"
+	filePath := filepath.Join(dir, filename)
+
+	if err := os.WriteFile(filePath, []byte(jsonContent), 0644); err != nil {
+		return "", fmt.Errorf("theme.SaveThemeToFile: failed to write file: %w", err)
+	}
+
+	return name, nil
+}

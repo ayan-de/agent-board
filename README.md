@@ -63,6 +63,35 @@ Start the interactive Kanban board:
 
 ---
 
+## 🎨 Themes
+
+AgentBoard ships with several builtin themes. You can also add your own JSON themes.
+
+### Available Themes
+
+| Theme | Description |
+|-------|-------------|
+| `agentboard` | The default AgentBoard theme |
+| `catppuccin` | Soft, warm pastel theme |
+| `dracula` | Dark theme with vibrant colors |
+| `gruvbox` | Retro groove terminal theme |
+| `matrix` | Cyberpunk green-on-black |
+| `nord` | Clean, arctic color palette |
+| `tokyonight` | Tokyo night city lights theme |
+
+### Using Themes
+
+Themes are configured in your project or global `config.toml`:
+
+```toml
+[tui]
+theme = "dracula"
+```
+
+User themes can be placed in `~/.agentboard/themes/` or `<project>/.agentboard/themes/` as JSON files.
+
+---
+
 ## 🛠️ Local Development
 
 ### Prerequisites

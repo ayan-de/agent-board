@@ -11,21 +11,13 @@ import (
 	"strings"
 )
 
-type CmdOutputRunner interface {
-	Output() ([]byte, error)
-}
-
 type ExecRunner struct {
 	LookPath func(string) (string, error)
-	Command  func(context.Context, string, ...string) CmdOutputRunner
 }
 
 func NewExecRunner() *ExecRunner {
 	return &ExecRunner{
 		LookPath: exec.LookPath,
-		Command: func(ctx context.Context, name string, args ...string) CmdOutputRunner {
-			return exec.CommandContext(ctx, name, args...)
-		},
 	}
 }
 
@@ -46,15 +38,61 @@ func (r ExecRunner) Start(ctx context.Context, req RunRequest) (RunHandle, error
 		return RunHandle{}, fmt.Errorf("execRunner.start: %w", err)
 	}
 
-	out, err := r.Command(ctx, path, "run", "--format", "json", req.Prompt).Output()
+	cmd := exec.CommandContext(ctx, path, "run", "--format", "json", req.Prompt)
+
+	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return RunHandle{Outcome: "failed", Summary: err.Error()}, nil
+		return RunHandle{}, err
+	}
+	if req.InputChan != nil {
+		req.InputChan <- stdin
+		close(req.InputChan)
 	}
 
-	return parseOpencodeOutput(bytes.NewReader(out))
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return RunHandle{}, err
+	}
+	cmd.Stderr = cmd.Stdout
+
+	if err := cmd.Start(); err != nil {
+		return RunHandle{}, err
+	}
+
+	var fullOutput bytes.Buffer
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fullOutput.WriteString(line + "\n")
+
+		displayLine := line
+		var evt opencodeEvent
+		if err := json.Unmarshal([]byte(line), &evt); err == nil {
+			if evt.Type == "text" && evt.Part.Text != "" {
+				displayLine = evt.Part.Text
+			} else if evt.Type == "step_start" {
+				displayLine = fmt.Sprintf("Step: %s", evt.Part.Reason)
+			} else {
+				continue // Skip other JSON events from live view
+			}
+		}
+
+		if req.Reporter != nil {
+			req.Reporter(displayLine)
+		}
+	}
+
+	if err := cmd.Wait(); err != nil {
+		// Log the error but continue to parse what we have
+		if req.Reporter != nil {
+			req.Reporter(fmt.Sprintf("Process exited with error: %v", err))
+		}
+	}
+
+	return ParseOpencodeOutput(&fullOutput)
 }
 
-func parseOpencodeOutput(r io.Reader) (RunHandle, error) {
+func ParseOpencodeOutput(r io.Reader) (RunHandle, error) {
 	var texts []string
 	var lastReason string
 	scanner := bufio.NewScanner(r)
@@ -81,7 +119,7 @@ func parseOpencodeOutput(r io.Reader) (RunHandle, error) {
 
 	summary := strings.Join(texts, "\n")
 	if summary == "" {
-		summary = "agent completed with no text output"
+		summary = "Agent finished its task (UI mode)."
 	}
 
 	outcome := "completed"

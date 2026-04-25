@@ -653,3 +653,62 @@ func TestTicketViewModelAgentSelectCancel(t *testing.T) {
 		t.Errorf("mode = %v after cancel, want ticketViewMode", m.mode)
 	}
 }
+
+func TestTicketViewModelRunStartsApprovedProposal(t *testing.T) {
+	m, s := newTestTicketView(t)
+	ctx := context.Background()
+
+	ticket, _ := s.CreateTicket(ctx, store.Ticket{
+		Title:  "Run Approved",
+		Status: "in_progress",
+		Agent:  "opencode",
+	})
+	proposal, _ := s.CreateProposal(ctx, store.Proposal{
+		TicketID: ticket.ID,
+		Agent:    "opencode",
+		Status:   "approved",
+		Prompt:   "do the work",
+	})
+
+	m = m.SetTicket(&ticket)
+	m = m.SetProposal(&proposal)
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	if cmd == nil {
+		t.Fatal("expected run command for approved proposal")
+	}
+
+	msg := cmd()
+	runMsg, ok := msg.(runStartedMsg)
+	if !ok {
+		t.Fatalf("expected runStartedMsg, got %T", msg)
+	}
+	if runMsg.proposalID != proposal.ID {
+		t.Fatalf("proposalID = %q, want %q", runMsg.proposalID, proposal.ID)
+	}
+}
+
+func TestTicketViewModelRunDoesNothingWhenProposalPending(t *testing.T) {
+	m, s := newTestTicketView(t)
+	ctx := context.Background()
+
+	ticket, _ := s.CreateTicket(ctx, store.Ticket{
+		Title:  "Run Pending",
+		Status: "in_progress",
+		Agent:  "opencode",
+	})
+	proposal, _ := s.CreateProposal(ctx, store.Proposal{
+		TicketID: ticket.ID,
+		Agent:    "opencode",
+		Status:   "pending",
+		Prompt:   "wait for approval",
+	})
+
+	m = m.SetTicket(&ticket)
+	m = m.SetProposal(&proposal)
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	if cmd != nil {
+		t.Fatalf("expected no run command for pending proposal, got %T", cmd())
+	}
+}

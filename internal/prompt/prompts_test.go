@@ -25,6 +25,12 @@ func TestGenerateProposalContainsContext(t *testing.T) {
 	if !strings.Contains(got, "prior summary") {
 		t.Error("missing context carry")
 	}
+	if !strings.Contains(got, "Do not include chain-of-thought") {
+		t.Error("missing chain-of-thought suppression instruction")
+	}
+	if !strings.Contains(got, "Use the exact ticket ID above") {
+		t.Error("missing exact ticket ID instruction")
+	}
 }
 
 func TestSummarizeContextContainsOutcome(t *testing.T) {

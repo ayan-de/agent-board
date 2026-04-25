@@ -7,8 +7,10 @@ func GenerateProposal(ticketID, title, description, agent, contextCarry string) 
 		"You are preparing a worker prompt for an AI coding agent.\n\n"+
 			"Ticket ID: %s\nTitle: %s\nDescription: %s\nAssigned agent: %s\n"+
 			"Context from previous runs: %s\n\n"+
-			"Return only the worker prompt that the assigned agent should execute. "+
-			"Include all relevant context and specific instructions.",
+			"Return only the final worker prompt that the assigned agent should execute.\n"+
+			"Do not include chain-of-thought, reasoning, analysis, `<think>` tags, commentary, or markdown fences.\n"+
+			"Use the exact ticket ID above and do not invent or substitute another ticket ID.\n"+
+			"Include all relevant context and specific instructions in plain text.",
 		ticketID,
 		title,
 		description,

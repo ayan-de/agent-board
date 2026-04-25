@@ -89,3 +89,11 @@ func getWorkingDir() string {
 	}
 	return dir
 }
+
+func GetBaseDir() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return ".agentboard"
+	}
+	return filepath.Join(homeDir, ".agentboard")
+}

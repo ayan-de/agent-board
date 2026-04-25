@@ -13,6 +13,7 @@ import (
 	"github.com/ayan-de/agent-board/internal/orchestrator"
 	"github.com/ayan-de/agent-board/internal/store"
 	"github.com/ayan-de/agent-board/internal/theme"
+	"github.com/ayan-de/agent-board/internal/tmux"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -57,6 +58,15 @@ type runStartedMsg struct {
 	proposalID string
 }
 
+type adhocRunStartedMsg struct {
+	agent  string
+	prompt string
+}
+
+type runStartFailedMsg struct {
+	err error
+}
+
 type runCompletedMsg struct {
 	ticketID string
 }
@@ -81,7 +91,14 @@ type Orchestrator interface {
 	CreateProposal(ctx context.Context, input orchestrator.CreateProposalInput) (store.Proposal, error)
 	ApproveProposal(ctx context.Context, proposalID string) error
 	StartApprovedRun(ctx context.Context, proposalID string) (store.Session, error)
+	StartAdHocRun(ctx context.Context, agent, prompt string) (store.Session, error)
 	FinishRun(ctx context.Context, input orchestrator.FinishRunInput) error
+	GetLogs(sessionID string) []string
+	SendInput(sessionID, input string) error
+	GetActiveSessions() []*orchestrator.AgentSession
+	GetPaneContent(sessionID string, lines int) (string, error)
+	SwitchToPane(sessionID string) error
+	CompletionChan() <-chan orchestrator.RunCompletion
 }
 
 type AppDeps struct {
@@ -101,6 +118,7 @@ type App struct {
 	view         viewMode
 	palette      CommandPalette
 	modal        ConfirmModal
+	textInput    TextInputModal
 	notification NotificationStack
 	quit         bool
 	runCommand   tea.Cmd
@@ -111,6 +129,10 @@ type App struct {
 	activeTicket *store.Ticket
 
 	generatingProposals map[string]bool
+	completionCh        <-chan orchestrator.RunCompletion
+	dashboardPaneID     string
+	lastSelectedAgent   string
+	lastSelectedSession string
 }
 
 func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry, deps AppDeps) (*App, error) {
@@ -130,17 +152,18 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry, deps AppDep
 	agents := config.DetectAgents()
 
 	a := &App{
-		store:        s,
-		orchestrator: deps.Orchestrator,
-		resolver:     resolver,
-		config:       cfg,
-		registry:     reg,
-		focus:        focusBoard,
-		view:         viewBoard,
-		kanban:       kanban,
-		ticketView:   NewTicketViewModel(s, resolver, t, agents),
-		dashboard:    NewDashboardModel(s, resolver, agents, t),
+		store:               s,
+		orchestrator:        deps.Orchestrator,
+		resolver:            resolver,
+		config:              cfg,
+		registry:            reg,
+		focus:               focusBoard,
+		view:                viewBoard,
+		kanban:              kanban,
+		ticketView:          NewTicketViewModel(s, resolver, t, agents),
+		dashboard:           NewDashboardModel(s, deps.Orchestrator, resolver, agents, t),
 		generatingProposals: make(map[string]bool),
+		completionCh:        deps.Orchestrator.CompletionChan(),
 	}
 
 	cr := NewCommandRegistry()
@@ -154,6 +177,8 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry, deps AppDep
 
 	a.modal = ConfirmModal{}
 	a.modal.SetTheme(t)
+	a.textInput = TextInputModal{}
+	a.textInput.SetTheme(t)
 	a.notification = NotificationStack{}
 	a.notification.SetTheme(t)
 
@@ -168,6 +193,7 @@ func (a *App) applyTheme() {
 	a.dashboard.styles = NewDashboardStyles(t)
 	a.palette.SetTheme(t)
 	a.modal.SetTheme(t)
+	a.textInput.SetTheme(t)
 	a.notification.SetTheme(t)
 }
 
@@ -185,6 +211,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.dashboard, _ = a.dashboard.Update(msg)
 		a.palette, _ = a.palette.Update(msg)
 		a.modal.SetSize(a.width, a.height)
+		a.textInput.SetSize(a.width, a.height)
 		a.notification.SetSize(a.width, a.height)
 		return a, nil
 	case tea.KeyMsg:
@@ -194,6 +221,27 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		var cmd tea.Cmd
 		a.kanban, cmd = a.kanban.Update(msg)
+		a.dashboard, _ = a.dashboard.Update(msg)
+
+		if a.view == viewDashboard {
+			hasRunning := len(a.dashboard.ActiveSessions) > 0
+			if hasRunning && a.dashboardPaneID == "" && tmux.IsInTmux() && a.config.General.Tmux != "false" {
+				// Start split
+				id, err := tmux.SplitVertical(70, "")
+				if err == nil {
+					a.dashboardPaneID = id
+				}
+			} else if !hasRunning && a.dashboardPaneID != "" {
+				// Kill split
+				_ = tmux.KillPane(a.dashboardPaneID)
+				a.dashboardPaneID = ""
+			}
+
+			if a.dashboardPaneID != "" {
+				a.syncDashboardPane()
+			}
+		}
+
 		return a, cmd
 	case notificationDismissMsg:
 		a.notification = a.notification.HandleDismiss(msg)
@@ -236,10 +284,22 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case runStartedMsg:
 		return a, tea.Batch(
 			a.showNotification("Run started", "Agent is working...", NotificationInfo),
-			a.startRunCmd(msg.proposalID),
+			a.startRunAndListenCmd(msg.proposalID),
+		)
+	case adhocRunStartedMsg:
+		return a, tea.Batch(
+			a.showNotification("Ad-hoc run started", fmt.Sprintf("%s is working...", msg.agent), NotificationInfo),
+			a.startAdHocRunAndListenCmd(msg.agent, msg.prompt),
 		)
 	case runCompletedMsg:
 		a.kanban, _ = a.kanban.Reload()
+		if a.activeTicket != nil && a.activeTicket.ID == msg.ticketID {
+			updated, err := a.store.GetTicket(context.Background(), msg.ticketID)
+			if err == nil {
+				a.activeTicket = &updated
+				a.ticketView = a.ticketView.SetTicket(&updated)
+			}
+		}
 		return a, a.showNotification("Run completed", fmt.Sprintf("Agent finished working on %s", msg.ticketID), NotificationSuccess)
 	case proposalFailedMsg:
 		delete(a.generatingProposals, msg.ticketID)
@@ -247,6 +307,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.ticketView = a.ticketView.SetLoading(false)
 		}
 		return a, a.showNotification("Proposal failed", msg.err.Error(), NotificationError)
+	case runStartFailedMsg:
+		return a, a.showNotification("Run failed", msg.err.Error(), NotificationError)
 	case notificationMsg:
 		return a, a.showNotification(msg.title, msg.message, msg.variant)
 	}
@@ -282,17 +344,70 @@ func (a *App) approveProposalCmd(proposalID string) tea.Cmd {
 	}
 }
 
-func (a *App) startRunCmd(proposalID string) tea.Cmd {
+func (a *App) startRunAndListenCmd(proposalID string) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute) // Runs can take longer
-		defer cancel()
+		ctx := context.Background()
 
-		session, err := a.orchestrator.StartApprovedRun(ctx, proposalID)
+		_, err := a.orchestrator.StartApprovedRun(ctx, proposalID)
 		if err != nil {
-			return notificationMsg{title: "Error", message: err.Error(), variant: NotificationError}
+			return runStartFailedMsg{err: err}
 		}
-		return runCompletedMsg{ticketID: session.TicketID}
+
+		select {
+		case completion := <-a.completionCh:
+			return runCompletedMsg{ticketID: completion.TicketID}
+		case <-time.After(60 * time.Second):
+			return runCompletedMsg{ticketID: ""}
+		}
 	}
+}
+
+func (a *App) startAdHocRunAndListenCmd(agent, prompt string) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+
+		_, err := a.orchestrator.StartAdHocRun(ctx, agent, prompt)
+		if err != nil {
+			return runStartFailedMsg{err: err}
+		}
+
+		select {
+		case completion := <-a.completionCh:
+			return runCompletedMsg{ticketID: completion.TicketID}
+		case <-time.After(60 * time.Second):
+			return runCompletedMsg{ticketID: ""}
+		}
+	}
+}
+
+func (a *App) syncDashboardPane() {
+	agent := a.dashboard.SelectedAgent()
+	sess, running := a.dashboard.ActiveSessions[agent.Binary]
+
+	// Create a stable key for comparison
+	sessID := ""
+	if running {
+		sessID = sess.ID
+	}
+
+	if agent.Binary == a.lastSelectedAgent && sessID == a.lastSelectedSession {
+		return
+	}
+
+	a.lastSelectedAgent = agent.Binary
+	a.lastSelectedSession = sessID
+
+	var cmd string
+	if running {
+		// Use -d to detach from other clients if needed, and sh -c to handle errors gracefully
+		cmd = fmt.Sprintf("sh -c \"tmux attach-session -d -t agentboard-%s || (echo 'Could not attach to session agentboard-%s' && sleep 5)\"", sess.TicketID, sess.TicketID)
+	} else if agent.Found {
+		cmd = fmt.Sprintf("echo 'Agent %s is idle. Assign it to a ticket to begin.'", agent.Name)
+	} else {
+		cmd = fmt.Sprintf("echo 'Agent %s not found in PATH.'", agent.Binary)
+	}
+
+	_ = tmux.RespawnPane(a.dashboardPaneID, cmd)
 }
 
 func (a *App) handleStatusChanged(msg statusChangedMsg) (tea.Model, tea.Cmd) {
@@ -347,6 +462,12 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if a.modal.Active() {
 		var cmd tea.Cmd
 		a.modal, cmd = a.modal.Update(msg)
+		return a, cmd
+	}
+
+	if a.textInput.Active() {
+		var cmd tea.Cmd
+		a.textInput, cmd = a.textInput.Update(msg)
 		return a, cmd
 	}
 
@@ -433,12 +554,24 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case keybinding.ActionShowDashboard:
 		if a.view == viewDashboard {
 			a.view = viewBoard
+			if a.dashboardPaneID != "" {
+				_ = tmux.KillPane(a.dashboardPaneID)
+				a.dashboardPaneID = ""
+			}
 		} else {
 			a.dashboard = a.dashboard.Refresh()
 			a.view = viewDashboard
+			if tmux.IsInTmux() && a.config.General.Tmux != "false" && len(a.dashboard.ActiveSessions) > 0 {
+				id, err := tmux.SplitVertical(70, "")
+				if err == nil {
+					a.dashboardPaneID = id
+				}
+			}
 		}
 	case keybinding.ActionOpenPalette:
 		a.palette.Open()
+	case keybinding.ActionRefresh:
+		a.kanban, _ = a.kanban.Reload()
 	default:
 		var cmd tea.Cmd
 		a.kanban, cmd = a.kanban.Update(msg)
@@ -476,7 +609,7 @@ func (a *App) renderHeader() string {
 	hintStyle := lipgloss.NewStyle().Foreground(muted)
 
 	projectPart := labelStyle.Render("Project: ") + nameStyle.Render(name)
-	hintPart := hintStyle.Render("? for keybindings")
+	hintPart := hintStyle.Render("?: help │ r: refresh")
 
 	projectWidth := lipgloss.Width(projectPart)
 	hintWidth := lipgloss.Width(hintPart)
@@ -585,6 +718,10 @@ func (a *App) View() string {
 			}
 		}
 		return finalView.String()
+	}
+
+	if a.textInput.Active() {
+		return a.textInput.View()
 	}
 
 	if a.notification.Active() {

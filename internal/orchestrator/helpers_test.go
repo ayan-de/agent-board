@@ -94,8 +94,16 @@ func (f fakeRunner) Start(_ context.Context, _ orchestrator.RunRequest) (orchest
 	return orchestrator.RunHandle{Outcome: f.outcome, Summary: f.summary}, nil
 }
 
+type fakeAsyncRunner struct {
+	onComplete func(outcome, summary string)
+}
+
+func (f *fakeAsyncRunner) Start(_ context.Context, req orchestrator.RunRequest) (orchestrator.RunHandle, error) {
+	f.onComplete = req.OnComplete
+	return orchestrator.RunHandle{Outcome: "running", Summary: "async started"}, nil
+}
+
 type fakeCtx struct{}
 
 func (f fakeCtx) LoadContext(ctx context.Context, ticketID string) (string, error) { return "", nil }
 func (f fakeCtx) SaveContext(ctx context.Context, ticketID, outcome string) error  { return nil }
-

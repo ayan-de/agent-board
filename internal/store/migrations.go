@@ -18,7 +18,7 @@ func (s *Store) migrate() error {
 
 	CREATE TABLE IF NOT EXISTS sessions (
 		id          TEXT PRIMARY KEY,
-		ticket_id   TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+		ticket_id   TEXT REFERENCES tickets(id) ON DELETE CASCADE,
 		agent       TEXT NOT NULL,
 		started_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
 		ended_at    DATETIME,
@@ -76,6 +76,40 @@ func (s *Store) migrate() error {
 		_, err = s.db.Exec("ALTER TABLE tickets ADD COLUMN agent_active INTEGER DEFAULT 0")
 		if err != nil {
 			return err
+		}
+	}
+
+	err = s.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name='ticket_id' AND notnull=1").Scan(&hasCol)
+	if err == nil && hasCol {
+		var hasRows bool
+		err = s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM sessions WHERE ticket_id IS NOT NULL AND ticket_id != '')").Scan(&hasRows)
+		if err == nil && !hasRows {
+			_, err = s.db.Exec("ALTER TABLE sessions RENAME TO sessions_old")
+			if err != nil {
+				return err
+			}
+			_, err = s.db.Exec(`
+				CREATE TABLE sessions (
+					id          TEXT PRIMARY KEY,
+					ticket_id   TEXT REFERENCES tickets(id) ON DELETE CASCADE,
+					agent       TEXT NOT NULL,
+					started_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+					ended_at    DATETIME,
+					status      TEXT NOT NULL,
+					context_key TEXT DEFAULT ''
+				)
+			`)
+			if err != nil {
+				return err
+			}
+			_, err = s.db.Exec("INSERT INTO sessions (id, ticket_id, agent, started_at, ended_at, status, context_key) SELECT id, ticket_id, agent, started_at, ended_at, status, context_key FROM sessions_old WHERE ticket_id IS NOT NULL AND ticket_id != ''")
+			if err != nil {
+				return err
+			}
+			_, err = s.db.Exec("DROP TABLE sessions_old")
+			if err != nil {
+				return err
+			}
 		}
 	}
 

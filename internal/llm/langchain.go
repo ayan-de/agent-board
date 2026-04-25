@@ -3,6 +3,8 @@ package llm
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strings"
 
 	"github.com/ayan-de/agent-board/internal/prompt"
 	"github.com/tmc/langchaingo/llms"
@@ -19,7 +21,7 @@ func (c LangChainClient) GenerateProposal(ctx context.Context, in ProposalPrompt
 	if err != nil {
 		return ProposalDraft{}, fmt.Errorf("llm.generateProposal: %w", err)
 	}
-	return ProposalDraft{Prompt: text}, nil
+	return ProposalDraft{Prompt: sanitizeProposal(text)}, nil
 }
 
 func (c LangChainClient) SummarizeContext(ctx context.Context, in SummaryInput) (string, error) {
@@ -29,4 +31,11 @@ func (c LangChainClient) SummarizeContext(ctx context.Context, in SummaryInput) 
 		return "", fmt.Errorf("llm.summarizeContext: %w", err)
 	}
 	return text, nil
+}
+
+var thinkBlockRE = regexp.MustCompile(`(?is)<think>.*?</think>\s*`)
+
+func sanitizeProposal(text string) string {
+	text = thinkBlockRE.ReplaceAllString(text, "")
+	return strings.TrimSpace(text)
 }
