@@ -28,6 +28,8 @@ type TicketFilters struct {
 	Agent    string
 	Priority string
 	Tag      string
+	From     *time.Time
+	To       *time.Time
 }
 
 type ticketRow struct {
@@ -131,7 +133,9 @@ func (s *Store) CreateTicket(ctx context.Context, t Ticket) (Ticket, error) {
 	}
 
 	now := time.Now()
-	t.CreatedAt = now
+	if t.CreatedAt.IsZero() {
+		t.CreatedAt = now
+	}
 	t.UpdatedAt = now
 
 	_, err = s.db.ExecContext(ctx,
@@ -186,6 +190,14 @@ func (s *Store) ListTickets(ctx context.Context, filters TicketFilters) ([]Ticke
 	if filters.Tag != "" {
 		query += " AND tags LIKE ?"
 		args = append(args, `%"`+filters.Tag+`"%`)
+	}
+	if filters.From != nil {
+		query += " AND created_at >= ?"
+		args = append(args, *filters.From)
+	}
+	if filters.To != nil {
+		query += " AND created_at <= ?"
+		args = append(args, *filters.To)
 	}
 
 	query += " ORDER BY created_at ASC"
