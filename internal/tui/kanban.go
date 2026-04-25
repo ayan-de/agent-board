@@ -211,7 +211,9 @@ func (m KanbanModel) handleKey(msg tea.KeyMsg) (KanbanModel, tea.Cmd) {
 			if m.monthOffset > 0 {
 				m.monthOffset--
 				m, _ = m.loadMonth()
+				return m, nil
 			}
+			m.tab = TabSearch
 			return m, nil
 		}
 		if m.tab == TabSearch {
