@@ -569,6 +569,14 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 	action, _ := a.resolver.Resolve(key)
 
+	if a.view == viewBoard && a.kanban.IsSearchActive() {
+		if action != keybinding.ActionNextTab && action != keybinding.ActionPrevTab && action != keybinding.ActionForceQuit {
+			var cmd tea.Cmd
+			a.kanban, cmd = a.kanban.Update(msg)
+			return a, cmd
+		}
+	}
+
 	if key == "esc" {
 		if a.view == viewTicket && (a.ticketView.mode == ticketEditMode || a.ticketView.mode == ticketAgentSelectMode) {
 			var cmd tea.Cmd

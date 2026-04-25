@@ -18,7 +18,8 @@ import (
 type KanbanTab int
 
 const (
-	TabSearch KanbanTab = iota
+	TabBoard KanbanTab = iota
+	TabSearch
 	TabDateFilter
 )
 
@@ -129,7 +130,7 @@ func NewKanbanModel(s *store.Store, resolver *keybinding.Resolver, t *theme.Them
 		resolver:    resolver,
 		styles:      NewKanbanStyles(t),
 		theme:       t,
-		tab:         TabSearch,
+		tab:         TabBoard,
 		monthOffset: 0,
 	}
 	m, err := m.loadColumns()
@@ -196,20 +197,32 @@ func (m KanbanModel) Update(msg tea.Msg) (KanbanModel, tea.Cmd) {
 }
 
 func (m KanbanModel) handleKey(msg tea.KeyMsg) (KanbanModel, tea.Cmd) {
-	if m.tab == TabSearch && msg.Type == tea.KeyRunes {
-		r := msg.Runes[0]
-		if r >= 32 && r < 127 {
-			action, _ := m.resolver.Resolve(msg.String())
-			if action == keybinding.ActionNone {
-				m.searchQuery += string(r)
+	// If in search mode, intercept keys for search and disable most board keybindings
+	if m.tab == TabSearch {
+		// Handle backspace
+		if msg.Type == tea.KeyBackspace || msg.String() == "backspace" {
+			if len(m.searchQuery) > 0 {
+				m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
 				return m, m.debouncedSearch()
 			}
+			return m, nil
 		}
-	}
-	if m.tab == TabSearch && (msg.Type == tea.KeyBackspace || msg.String() == "backspace") {
-		if len(m.searchQuery) > 0 {
-			m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
+
+		// Handle enter or escape to exit search mode? 
+		// For now, just let it be.
+
+		// Handle typing
+		if msg.Type == tea.KeyRunes {
+			m.searchQuery += string(msg.Runes)
 			return m, m.debouncedSearch()
+		}
+
+		// Block global actions like 'q', 'a', 'd' while in search mode
+		// except for specific ones we might want?
+		key := msg.String()
+		action, _ := m.resolver.Resolve(key)
+		if action != keybinding.ActionNextTab && action != keybinding.ActionPrevTab && action != keybinding.ActionForceQuit {
+			return m, nil
 		}
 	}
 
@@ -218,17 +231,13 @@ func (m KanbanModel) handleKey(msg tea.KeyMsg) (KanbanModel, tea.Cmd) {
 
 	switch action {
 	case keybinding.ActionNextTab:
-		if m.tab == TabSearch {
-			m.tab = TabDateFilter
-		} else {
-			m.tab = TabSearch
-		}
+		m.tab = (m.tab + 1) % 3
 		return m, nil
 	case keybinding.ActionPrevTab:
-		if m.tab == TabSearch {
+		if m.tab == TabBoard {
 			m.tab = TabDateFilter
 		} else {
-			m.tab = TabSearch
+			m.tab--
 		}
 		return m, nil
 	case keybinding.ActionPrevColumn:
@@ -408,6 +417,20 @@ func (m KanbanModel) renderSearchBar() string {
 
 func (m KanbanModel) renderTabBar() string {
 	w := m.width
+	if w < 10 {
+		return ""
+	}
+
+	boardLabel := " Board "
+	if m.tab == TabBoard {
+		boardLabel = lipgloss.NewStyle().
+			Background(m.theme.Primary).
+			Foreground(m.theme.Text).
+			Bold(true).
+			Render(boardLabel)
+	} else {
+		boardLabel = m.styles.TabInactive.Render(boardLabel)
+	}
 
 	searchBar := m.renderSearchBar()
 	monthHeader := m.renderMonthHeader()
@@ -417,17 +440,29 @@ func (m KanbanModel) renderTabBar() string {
 		monthHeader = m.styles.TabInactive.Render(monthHeader)
 	}
 
+	boardWidth := lipgloss.Width(boardLabel)
 	searchWidth := lipgloss.Width(searchBar)
 	monthWidth := lipgloss.Width(monthHeader)
 
 	leftPad := 2
 	rightPad := 2
-	gap := w - searchWidth - monthWidth - leftPad - rightPad
-	if gap < 1 {
-		gap = 1
+	
+	// Spacing between elements
+	gap1 := 4 // Between Board and Search
+	gap2 := w - boardWidth - searchWidth - monthWidth - leftPad - rightPad - gap1
+	
+	if gap2 < 1 {
+		gap2 = 1
 	}
 
-	return strings.Repeat(" ", leftPad) + searchBar + strings.Repeat(" ", gap) + monthHeader + strings.Repeat(" ", rightPad)
+	return strings.Repeat(" ", leftPad) + 
+		boardLabel + strings.Repeat(" ", gap1) + 
+		searchBar + strings.Repeat(" ", gap2) + 
+		monthHeader + strings.Repeat(" ", rightPad)
+}
+
+func (m KanbanModel) IsSearchActive() bool {
+	return m.tab == TabSearch
 }
 
 func (m KanbanModel) SelectedTicket() *store.Ticket {
