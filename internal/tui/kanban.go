@@ -37,8 +37,8 @@ type KanbanStyles struct {
 	TabBar         lipgloss.Style
 	TabActive      lipgloss.Style
 	TabInactive    lipgloss.Style
-	SearchBar      lipgloss.Style
-	SearchPrompt   lipgloss.Style
+	SearchBox      lipgloss.Style
+	SearchCursor   lipgloss.Style
 }
 
 type KanbanModel struct {
@@ -83,8 +83,12 @@ func DefaultKanbanStyles() KanbanStyles {
 		TabBar: lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
 		TabActive: lipgloss.NewStyle().Foreground(lipgloss.Color("69")).Bold(true),
 		TabInactive: lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
-		SearchBar: lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Background(lipgloss.Color("236")),
-		SearchPrompt: lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		SearchBox: lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(lipgloss.Color("69")).
+			Foreground(lipgloss.Color("252")),
+		SearchCursor: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("69")),
 	}
 }
 
@@ -113,8 +117,12 @@ func NewKanbanStyles(t *theme.Theme) KanbanStyles {
 		TabBar: lipgloss.NewStyle().Foreground(t.TextMuted),
 		TabActive: lipgloss.NewStyle().Foreground(t.Primary).Bold(true),
 		TabInactive: lipgloss.NewStyle().Foreground(t.TextMuted),
-		SearchBar: lipgloss.NewStyle().Foreground(t.Text).Background(t.BackgroundPanel),
-		SearchPrompt: lipgloss.NewStyle().Foreground(t.TextMuted),
+		SearchBox: lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(t.Primary).
+			Foreground(t.Text),
+		SearchCursor: lipgloss.NewStyle().
+			Foreground(t.Primary),
 	}
 }
 
@@ -432,15 +440,13 @@ func (m KanbanModel) renderMonthHeader() string {
 func (m KanbanModel) renderSearchBar() string {
 	placeholder := "Search by title or description..."
 	query := m.searchQuery
+	cursor := m.styles.SearchCursor.Render("▌")
+	prompt := query + cursor
 	if query == "" {
-		query = placeholder
-		bar := m.styles.SearchBar.Width(m.width - 4).Render("")
-		prompt := m.styles.SearchPrompt.Render(query)
-		return bar + "\n" + m.styles.SearchBar.Width(m.width-4).Render("  "+ prompt)
+		prompt = placeholder + cursor
 	}
-	bar := m.styles.SearchBar.Width(m.width - 4).Render("")
-	prompt := m.styles.SearchPrompt.Render("  " + query + "_")
-	return bar + "\n" + m.styles.SearchBar.Width(m.width-4).Render(prompt)
+	label := m.styles.SearchBox.Width(m.width - 4).Render("  " + prompt)
+	return label
 }
 
 func (m KanbanModel) SelectedTicket() *store.Ticket {
