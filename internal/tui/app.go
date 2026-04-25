@@ -177,6 +177,14 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry, deps AppDep
 		return nil, fmt.Errorf("tui.newApp: %w", err)
 	}
 
+	initDateStr := cfg.Board.ProjectInitDate
+	if initDateStr != "" {
+		initDate, err := time.Parse("2006-01-02", initDateStr)
+		if err == nil {
+			kanban.projectInitDate = initDate
+		}
+	}
+
 	agents := config.DetectAgents()
 
 	a := &App{
@@ -372,6 +380,16 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if err == nil {
 			a.kanban, _ = a.kanban.Update(searchResultsMsg{tickets: results})
 		}
+		return a, nil
+	case monthNavigateMsg:
+		m := a.kanban
+		m, _ = m.Update(msg)
+		a.kanban = m
+		return a, nil
+	case tabChangeMsg:
+		m := a.kanban
+		m, _ = m.Update(msg)
+		a.kanban = m
 		return a, nil
 	}
 
