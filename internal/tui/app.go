@@ -608,11 +608,12 @@ func (a *App) renderHeader() string {
 	nameStyle := lipgloss.NewStyle().Bold(true).Foreground(fg)
 	hintStyle := lipgloss.NewStyle().Foreground(muted)
 
-	projectPart := labelStyle.Render("Project: ") + nameStyle.Render(name)
-	hintPart := hintStyle.Render("?: help │ r: refresh")
+	hintPart := hintStyle.Render("a: add ticket  │  d: delete ticket")
+	projectPart := labelStyle.Render("  Project: ") + nameStyle.Render(name)
+	hintPart2 := hintStyle.Render(" ?: help  │  r: refresh")
 
 	projectWidth := lipgloss.Width(projectPart)
-	hintWidth := lipgloss.Width(hintPart)
+	hintWidth := lipgloss.Width(hintPart) + lipgloss.Width(hintPart2)
 	available := a.width - hintWidth - 1
 	if available < projectWidth {
 		available = projectWidth
@@ -623,11 +624,11 @@ func (a *App) renderHeader() string {
 		leftPad = 0
 	}
 
-	left := strings.Repeat(" ", leftPad) + projectPart
-	right := hintPart
+	left := hintPart + strings.Repeat(" ", leftPad) + projectPart
+	right := hintPart2
 
 	totalLeft := lipgloss.Width(left)
-	gap := a.width - totalLeft - hintWidth
+	gap := a.width - totalLeft - lipgloss.Width(right)
 	if gap < 1 {
 		gap = 1
 	}
