@@ -10,15 +10,16 @@ import (
 )
 
 type ConfirmModal struct {
-	active    bool
-	title     string
-	message   string
-	onConfirm func() tea.Cmd
-	onCancel  func()
-	cursor    int
-	width     int
-	height    int
-	styles    ConfirmModalStyles
+	active      bool
+	infoModal   bool
+	title       string
+	message     string
+	onConfirm   func() tea.Cmd
+	onCancel    func()
+	cursor      int
+	width       int
+	height      int
+	styles      ConfirmModalStyles
 }
 
 type ConfirmModalStyles struct {
@@ -68,11 +69,28 @@ func (m *ConfirmModal) Active() bool {
 
 func (m *ConfirmModal) Open(title, message string, onConfirm func() tea.Cmd, onCancel func()) {
 	m.active = true
+	m.infoModal = false
 	m.title = title
 	m.message = message
 	m.onConfirm = onConfirm
 	m.onCancel = onCancel
 	m.cursor = 1
+}
+
+func (m *ConfirmModal) OpenInfo(title, message string, onClose func()) {
+	m.active = true
+	m.infoModal = true
+	m.title = title
+	m.message = message
+	m.onConfirm = func() tea.Cmd {
+		m.active = false
+		if onClose != nil {
+			onClose()
+		}
+		return nil
+	}
+	m.onCancel = nil
+	m.cursor = 0
 }
 
 func (m *ConfirmModal) Close() {
@@ -92,28 +110,23 @@ func (m ConfirmModal) Update(msg tea.Msg) (ConfirmModal, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "left", "h":
-			if m.cursor > 0 {
+			if !m.infoModal && m.cursor > 0 {
 				m.cursor--
 			}
 		case "right", "l":
-			if m.cursor < 1 {
+			if !m.infoModal && m.cursor < 1 {
 				m.cursor++
 			}
-		case "enter":
+		case "enter", "esc":
 			m.active = false
-			if m.cursor == 0 && m.onConfirm != nil {
+			if m.onConfirm != nil {
 				cmd := m.onConfirm()
 				m.onConfirm = nil
 				m.onCancel = nil
-				return m, cmd
+				if cmd != nil {
+					return m, cmd
+				}
 			}
-			if m.onCancel != nil {
-				m.onCancel()
-			}
-			m.onConfirm = nil
-			m.onCancel = nil
-		case "esc":
-			m.active = false
 			if m.onCancel != nil {
 				m.onCancel()
 			}
@@ -137,22 +150,30 @@ func (m ConfirmModal) View() string {
 }
 
 func (m ConfirmModal) ViewBox() string {
-	yes := "[ Yes ]"
-	no := "[ No ]"
+	var buttons string
 
-	if m.cursor == 0 {
-		yes = m.styles.Highlight.Render(yes)
+	if m.infoModal {
+		ok := "[ OK ]"
+		ok = m.styles.Highlight.Render(ok)
+		buttons = fmt.Sprintf("  %s", ok)
 	} else {
-		yes = m.styles.Confirm.Render(yes)
-	}
+		yes := "[ Yes ]"
+		no := "[ No ]"
 
-	if m.cursor == 1 {
-		no = m.styles.Highlight.Render(no)
-	} else {
-		no = m.styles.Cancel.Render(no)
-	}
+		if m.cursor == 0 {
+			yes = m.styles.Highlight.Render(yes)
+		} else {
+			yes = m.styles.Confirm.Render(yes)
+		}
 
-	buttons := fmt.Sprintf("  %s    %s", yes, no)
+		if m.cursor == 1 {
+			no = m.styles.Highlight.Render(no)
+		} else {
+			no = m.styles.Cancel.Render(no)
+		}
+
+		buttons = fmt.Sprintf("  %s    %s", yes, no)
+	}
 
 	boxWidth := 44
 	messageStyle := m.styles.Message.Width(boxWidth - 4)

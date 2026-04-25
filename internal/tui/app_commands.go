@@ -58,6 +58,16 @@ func (ac *appCommands) registerAll(cr *CommandRegistry) {
 			}
 		},
 	})
+	cr.Register(Command{
+		Name:        "orchestrator",
+		Description: "View orchestrator configuration",
+		Prefix:      "",
+		Items: func() []Item {
+			return []Item{
+				{Label: "orchestrator", Description: "View LLM and agent settings", ID: "ACTION:orchestrator"},
+			}
+		},
+	})
 }
 
 func (ac *appCommands) themeItems() []Item {
@@ -124,6 +134,16 @@ func (ac *appCommands) onConfirm(item Item) {
 			},
 			nil,
 		)
+	case "orchestrator":
+		llm := ac.config.LLM
+		msg := fmt.Sprintf(`[llm]
+provider = %q
+model = %q
+base_url = %q
+coordinator_model = %q
+summarizer_model = %q
+require_approval = %v`, llm.Provider, llm.Model, llm.BaseURL, llm.CoordinatorModel, llm.SummarizerModel, llm.RequireApproval)
+		ac.app.modal.OpenInfo("Orchestrator Configuration", msg, nil)
 	default:
 		ac.registry.Set(id)
 		ac.app.applyTheme()
