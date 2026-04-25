@@ -118,17 +118,20 @@ func (m ConfirmModal) Update(msg tea.Msg) (ConfirmModal, tea.Cmd) {
 				m.cursor++
 			}
 		case "enter", "esc":
+			wasActive := m.active
 			m.active = false
-			if m.onConfirm != nil {
-				cmd := m.onConfirm()
+			if wasActive && m.cursor == 0 && m.onConfirm != nil {
+				cmdFn := m.onConfirm()
 				m.onConfirm = nil
 				m.onCancel = nil
-				if cmd != nil {
-					return m, cmd
+				if cmdFn != nil {
+					return m, cmdFn
 				}
 			}
-			if m.onCancel != nil {
+			if wasActive && m.cursor == 1 && m.onCancel != nil {
 				m.onCancel()
+				m.onConfirm = nil
+				m.onCancel = nil
 			}
 			m.onConfirm = nil
 			m.onCancel = nil
