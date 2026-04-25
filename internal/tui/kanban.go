@@ -396,28 +396,27 @@ func (m KanbanModel) View() string {
 		monthHeader := m.renderMonthHeader()
 		return lipgloss.JoinVertical(lipgloss.Top, tabBar, monthHeader, board)
 	}
-	searchBar := m.renderSearchBar()
-	return lipgloss.JoinVertical(lipgloss.Top, tabBar, searchBar, board)
+	return lipgloss.JoinVertical(lipgloss.Top, tabBar, board)
 }
 
 func (m KanbanModel) renderTabBar() string {
 	filterLabel := "Date Filter"
 	w := m.width
 
+	searchBar := m.renderSearchBar()
 	filterStyle := m.styles.TabInactive
 	if m.tab == TabDateFilter {
 		filterStyle = m.styles.TabActive
 	}
-
 	filterTab := filterStyle.Render("[" + filterLabel + "]")
-	tabs := filterTab
 
-	pad := w - lipgloss.Width(tabs)
-	if pad < 0 {
-		pad = 0
+	totalWidth := lipgloss.Width(searchBar) + 3 + lipgloss.Width(filterTab)
+	leftPad := w - totalWidth - 2
+	if leftPad < 1 {
+		leftPad = 1
 	}
-	leftPad := pad / 2
-	return strings.Repeat(" ", leftPad) + tabs
+
+	return searchBar + strings.Repeat(" ", leftPad) + filterTab
 }
 
 func (m KanbanModel) renderMonthHeader() string {
