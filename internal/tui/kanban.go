@@ -401,21 +401,16 @@ func (m KanbanModel) View() string {
 }
 
 func (m KanbanModel) renderTabBar() string {
-	searchLabel := "Search"
 	filterLabel := "Date Filter"
 	w := m.width
 
-	searchStyle := m.styles.TabActive
 	filterStyle := m.styles.TabInactive
 	if m.tab == TabDateFilter {
-		searchStyle = m.styles.TabInactive
 		filterStyle = m.styles.TabActive
 	}
 
-	searchTab := searchStyle.Render("[" + searchLabel + "]")
 	filterTab := filterStyle.Render("[" + filterLabel + "]")
-	sep := m.styles.TabBar.Render(" | ")
-	tabs := searchTab + sep + filterTab
+	tabs := filterTab
 
 	pad := w - lipgloss.Width(tabs)
 	if pad < 0 {
