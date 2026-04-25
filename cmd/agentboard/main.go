@@ -25,8 +25,6 @@ func main() {
 	}
 
 	if (cfg.General.Tmux == "auto" || cfg.General.Tmux == "true") && !tmux.IsInTmux() {
-		// Launch ourselves in a new tmux session
-		// -A: attach to existing if any, -s: session name
 		cmd := exec.Command("tmux", "new-session", "-A", "-s", "agentboard", os.Args[0])
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
@@ -53,12 +51,10 @@ func main() {
 
 	var runner orchestrator.Runner = orchestrator.NewExecRunner()
 	var ptyRunner *orchestrator.PtyRunner
-	// Only use TmuxRunner if we're actually inside a tmux session
 	if tmux.IsInTmux() {
 		if tmuxRunner, err := orchestrator.NewTmuxRunner(); err == nil {
 			runner = tmuxRunner
 		}
-		// Also create PtyRunner for interactive PTY sessions
 		if pr, err := orchestrator.NewPtyRunner("agentboard"); err == nil {
 			ptyRunner = pr
 		}

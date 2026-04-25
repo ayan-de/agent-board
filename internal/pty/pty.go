@@ -7,7 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
+	"regexp"
 	"sync"
 	"syscall"
 	"time"
@@ -49,7 +49,7 @@ func (p *PtyRunner) Start(sessionID, agentName, prompt string, autoExit bool) er
 	}
 
 	cmd := exec.Command(cfg.Bin, cfg.Args...)
-	cmd.Dir = filepath.Dir(os.Args[0])
+	cmd.Env = os.Environ()
 
 	ptmx, err := pty.Start(cmd)
 	if err != nil {
@@ -79,29 +79,66 @@ func (p *PtyRunner) runStateMachine(sessionID string, ptmx *os.File, cmd *exec.C
 
 	go func() {
 		for range sigwinch {
-			cols, rows, _ := term.GetSize(int(ptmx.Fd()))
-			if cols > 0 && rows > 0 {
-				pty.Setsize(ptmx, &pty.Winsize{Rows: uint16(rows), Cols: uint16(cols)})
+			ws, _ := pty.GetsizeFull(ptmx)
+			if ws != nil {
+				_ = pty.Setsize(ptmx, ws)
 			}
 		}
 	}()
 
+	injectedPrompt := prompt
+	if autoExit && cfg.FormatPrompt != nil {
+		injectedPrompt = cfg.FormatPrompt(prompt)
+	}
+
+	var outputBuf bytes.Buffer
+
+	readyMarker := regexp.MustCompile(cfg.ReadyPattern.String())
+	doneMarkerRe := regexp.MustCompile(regexp.QuoteMeta(DoneMarker))
+	idleRes := make([]*regexp.Regexp, len(cfg.IdlePatterns))
+	for i, p := range cfg.IdlePatterns {
+		idleRes[i] = regexp.MustCompile(p.String())
+	}
+
+	current := stateWaitingReady
 	buf := make([]byte, 4096)
-	var output bytes.Buffer
+	var doneOnce sync.Once
+	canCheckCompletion := false
 
-	s := stateWaitingReady
-	readyTimeout := time.After(cfg.ReadyWait)
+	exit := func() {
+		doneOnce.Do(func() {
+			os.Stderr.WriteString("\n[pty-go] task complete, closing " + cfg.Name + "...\n")
+			time.Sleep(500 * time.Millisecond)
+			ptmx.Write([]byte{0x03})
+			time.Sleep(300 * time.Millisecond)
+			ptmx.Write([]byte{0x03})
+			time.Sleep(300 * time.Millisecond)
+			cmd.Process.Signal(syscall.SIGTERM)
+			time.Sleep(1 * time.Second)
+			cmd.Process.Kill()
+		})
+	}
 
-	for s != stateDone {
-		select {
-		case <-readyTimeout:
-			if s == stateWaitingReady {
-				return
+	transitionToWorking := func() {
+		outputBuf.Reset()
+		current = stateWorking
+		time.AfterFunc(cfg.GracePeriod, func() {
+			canCheckCompletion = true
+		})
+	}
+
+	fallback := time.AfterFunc(cfg.FallbackTimeout, func() {
+		if current == stateWaitingReady {
+			current = stateSendingPrompt
+			cfg.SendPrompt(ptmx, injectedPrompt)
+			if autoExit {
+				transitionToWorking()
 			}
-		default:
 		}
+	})
+	defer fallback.Stop()
 
-		ptmx.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+	for {
 		n, err := ptmx.Read(buf)
 		if err != nil {
 			if err == io.EOF {
@@ -110,58 +147,61 @@ func (p *PtyRunner) runStateMachine(sessionID string, ptmx *os.File, cmd *exec.C
 			continue
 		}
 
-		output.Write(buf[:n])
+		os.Stdout.Write(buf[:n])
+		outputBuf.Write(buf[:n])
 
-		switch s {
+		switch current {
 		case stateWaitingReady:
-			if cfg.ReadyPattern != nil && cfg.ReadyPattern.Match(output.Bytes()) {
-				s = stateSendingPrompt
-				output.Reset()
-			}
-			if len(output.Bytes()) > 0 && readyTimeout != nil {
-				select {
-				case <-readyTimeout:
-					return
-				default:
-				}
+			stripped := StripANSI(outputBuf.String())
+			if readyMarker.MatchString(stripped) {
+				current = stateSendingPrompt
+				fallback.Stop()
+				time.AfterFunc(cfg.ReadyWait, func() {
+					cfg.SendPrompt(ptmx, injectedPrompt)
+					if autoExit {
+						transitionToWorking()
+					}
+				})
 			}
 
 		case stateSendingPrompt:
 			time.Sleep(100 * time.Millisecond)
-			formatted := cfg.FormatPrompt(prompt)
-			if cfg.SendPrompt != nil {
-				cfg.SendPrompt(ptmx, formatted)
-			}
-			s = stateWorking
-			if cfg.GracePeriod > 0 {
+			current = stateWorking
+			if autoExit && cfg.GracePeriod > 0 {
 				time.Sleep(cfg.GracePeriod)
+				canCheckCompletion = true
 			}
 
 		case stateWorking:
-			if bytes.Contains(output.Bytes(), []byte(DoneMarker)) {
-				s = stateDone
-				break
+			if !canCheckCompletion {
+				continue
 			}
-			for _, idle := range cfg.IdlePatterns {
-				if idle.Match(output.Bytes()) {
-					time.Sleep(500 * time.Millisecond)
-					s = stateDone
+			if outputBuf.Len() > 16384 {
+				outputBuf.Next(outputBuf.Len() - 16384)
+			}
+			recent := StripANSI(outputBuf.String())
+
+			if doneMarkerRe.MatchString(recent) {
+				current = stateDone
+				go exit()
+				continue
+			}
+
+			for _, re := range idleRes {
+				matches := re.FindAllStringIndex(recent, -1)
+				if len(matches) >= 3 {
+					current = stateDone
+					go exit()
 					break
 				}
 			}
-			if s == stateDone {
-				break
-			}
 
 			if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
-				s = stateDone
-				break
+				current = stateDone
+				go exit()
 			}
+		case stateDone:
 		}
-	}
-
-	if autoExit {
-		time.Sleep(cfg.FallbackTimeout)
 	}
 }
 
@@ -230,4 +270,11 @@ func (p *PtyRunner) UnregisterAgent(name string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	delete(p.registry, name)
+}
+
+func (p *PtyRunner) GetConfig(agentName string) *Config {
+	if cfg, ok := p.registry[agentName]; ok {
+		return cfg
+	}
+	return nil
 }
