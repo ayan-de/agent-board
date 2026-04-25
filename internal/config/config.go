@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -28,6 +29,11 @@ func LoadFromDir(baseDir, projectName string) (*Config, error) {
 
 	if err := EnsureDirs(baseDir, projectName); err != nil {
 		return nil, err
+	}
+
+	initDate, err := GetProjectInitDate(baseDir, projectName)
+	if err == nil {
+		cfg.Board.ProjectInitDate = initDate.Format("2006-01-02")
 	}
 
 	globalPath := filepath.Join(baseDir, "config.toml")
@@ -96,4 +102,13 @@ func GetBaseDir() string {
 		return ".agentboard"
 	}
 	return filepath.Join(homeDir, ".agentboard")
+}
+
+func GetProjectInitDate(baseDir, projectName string) (time.Time, error) {
+	projDir := filepath.Join(baseDir, "projects", projectName)
+	fi, err := os.Stat(projDir)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return fi.ModTime(), nil
 }
