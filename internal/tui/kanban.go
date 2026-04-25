@@ -392,23 +392,13 @@ func (m KanbanModel) View() string {
 
 	tabBar := m.renderTabBar()
 	board := lipgloss.JoinHorizontal(lipgloss.Top, cols...)
-	if m.tab == TabDateFilter {
-		monthHeader := m.renderMonthHeader()
-		return lipgloss.JoinVertical(lipgloss.Top, tabBar, monthHeader, board)
-	}
 	return lipgloss.JoinVertical(lipgloss.Top, tabBar, board)
 }
 
 func (m KanbanModel) renderMonthHeader() string {
 	from, to := MonthWindow(m.projectInitDate, m.monthOffset)
 	count := len(m.columns[0]) + len(m.columns[1]) + len(m.columns[2]) + len(m.columns[3])
-	label := from.Format("Jan 15") + " - " + to.Format("Feb 14 2006") + " (" + strconv.Itoa(count) + " cards)"
-	pad := m.width - lipgloss.Width(label)
-	if pad < 0 {
-		pad = 0
-	}
-	leftPad := pad / 2
-	return strings.Repeat(" ", leftPad) + m.styles.TabBar.Render(label)
+	return from.Format("Jan 15") + " - " + to.Format("Feb 14 2006") + " (" + strconv.Itoa(count) + " cards)"
 }
 
 func (m KanbanModel) renderSearchBar() string {
@@ -428,15 +418,15 @@ func (m KanbanModel) renderSearchBar() string {
 }
 
 func (m KanbanModel) renderTabBar() string {
-	filterLabel := "Date Filter"
 	w := m.width
 
 	searchBar := m.renderSearchBar()
-	filterStyle := m.styles.TabInactive
+	monthHeader := m.renderMonthHeader()
 	if m.tab == TabDateFilter {
-		filterStyle = m.styles.TabActive
+		monthHeader = m.styles.TabActive.Render(monthHeader)
+	} else {
+		monthHeader = m.styles.TabInactive.Render(monthHeader)
 	}
-	filterTab := filterStyle.Render("[" + filterLabel + "]")
 
 	searchWidth := m.width/2 - 4
 	if searchWidth < 20 {
@@ -445,13 +435,13 @@ func (m KanbanModel) renderTabBar() string {
 	actualSearchWidth := searchWidth + 4
 
 	gap := 3
-	totalWidth := actualSearchWidth + gap + lipgloss.Width(filterTab)
+	totalWidth := actualSearchWidth + gap + lipgloss.Width(monthHeader)
 	leftPad := w - totalWidth
 	if leftPad < 1 {
 		leftPad = 1
 	}
 
-	return searchBar + strings.Repeat(" ", leftPad) + filterTab
+	return searchBar + strings.Repeat(" ", leftPad) + monthHeader
 }
 
 func (m KanbanModel) SelectedTicket() *store.Ticket {
