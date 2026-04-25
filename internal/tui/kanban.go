@@ -88,7 +88,7 @@ func DefaultKanbanStyles() KanbanStyles {
 		SearchBox: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("240")),
 		SearchBoxActive: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("69")).Bold(true),
+			Foreground(lipgloss.Color("211")).Bold(true),
 	}
 }
 
@@ -120,7 +120,7 @@ func NewKanbanStyles(t *theme.Theme) KanbanStyles {
 		SearchBox: lipgloss.NewStyle().
 			Foreground(t.TextMuted),
 		SearchBoxActive: lipgloss.NewStyle().
-			Foreground(t.Primary).Bold(true),
+			Foreground(t.Secondary).Bold(true),
 	}
 }
 
@@ -409,11 +409,19 @@ func (m KanbanModel) renderMonthHeader() string {
 }
 
 func (m KanbanModel) renderSearchBar() string {
-	prompt := "Search: " + m.searchQuery
+	prefix := "Search: "
+	query := m.searchQuery
+
+	var prefixStyle, queryStyle lipgloss.Style
 	if m.tab == TabSearch {
-		return m.styles.SearchBoxActive.Render(prompt)
+		prefixStyle = lipgloss.NewStyle().Foreground(m.theme.Primary).Bold(true)
+		queryStyle = lipgloss.NewStyle().Foreground(m.theme.Text).Bold(true)
+	} else {
+		prefixStyle = m.styles.SearchBox
+		queryStyle = m.styles.SearchBox
 	}
-	return m.styles.SearchBox.Render(prompt)
+
+	return prefixStyle.Render(prefix) + queryStyle.Render(query)
 }
 
 func (m KanbanModel) renderTabBar() string {

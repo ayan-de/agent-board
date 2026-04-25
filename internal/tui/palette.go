@@ -215,17 +215,22 @@ func (p CommandPalette) View() string {
 	}
 
 	primary := lipgloss.Color("69")
+	textColor := lipgloss.Color("252")
 	borderColor := lipgloss.Color("240")
 	if p.theme != nil {
 		primary = p.theme.Primary
+		textColor = p.theme.Text
 		borderColor = p.theme.Border
 	}
 
-	inputStyle := lipgloss.NewStyle().
+	prefixStyle := lipgloss.NewStyle().
 		Foreground(primary).
 		Bold(true)
+	inputStyle := lipgloss.NewStyle().
+		Foreground(textColor).
+		Bold(true)
 
-	inputLine := inputStyle.Render(": " + p.input)
+	inputLine := prefixStyle.Render(": ") + inputStyle.Render(p.input)
 
 	if len(p.filtered) == 0 {
 		return inputLine
