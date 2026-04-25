@@ -132,6 +132,7 @@ func NewKanbanModel(s *store.Store, resolver *keybinding.Resolver, t *theme.Them
 		theme:       t,
 		tab:         TabBoard,
 		monthOffset: 0,
+		projectInitDate: time.Now(),
 	}
 	m, err := m.loadColumns()
 	if err != nil {
@@ -404,7 +405,7 @@ func (m KanbanModel) View() string {
 func (m KanbanModel) renderMonthHeader() string {
 	from, to := MonthWindow(m.projectInitDate, m.monthOffset)
 	count := len(m.columns[0]) + len(m.columns[1]) + len(m.columns[2]) + len(m.columns[3])
-	return from.Format("Jan 15") + " - " + to.Format("Feb 14 2006") + " (" + strconv.Itoa(count) + " cards)"
+	return from.Format("Jan 02") + " - " + to.Format("Jan 02 2006") + " (" + strconv.Itoa(count) + " cards)"
 }
 
 func (m KanbanModel) renderSearchBar() string {
@@ -544,9 +545,15 @@ func groupByStatus(tickets []store.Ticket) [4][]store.Ticket {
 }
 
 func MonthWindow(initDate time.Time, offset int) (from, to time.Time) {
-	base := time.Date(initDate.Year(), initDate.Month(), 15, 0, 0, 0, 0, initDate.Location())
-	from = base.AddDate(0, offset, 0)
-	to = time.Date(from.Year(), from.Month()+1, 14, 23, 59, 59, 0, from.Location())
+	// Start exactly from the init date, no anchor to the 15th
+	from = initDate.AddDate(0, offset, 0)
+	// Set 'from' to the beginning of that day
+	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
+	
+	// 'to' is one month later minus one day, set to the end of that day
+	to = from.AddDate(0, 1, -1)
+	to = time.Date(to.Year(), to.Month(), to.Day(), 23, 59, 59, 0, to.Location())
+	
 	return from, to
 }
 
