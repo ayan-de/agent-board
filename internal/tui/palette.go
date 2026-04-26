@@ -271,9 +271,11 @@ func (p CommandPalette) View() string {
 		}
 	}
 
-	dropdownBg := lipgloss.Color("234") // Slightly lighter than pure black
+	dropdownBg := lipgloss.Color("234")
+	elementBg := lipgloss.Color("236")
 	if p.theme != nil {
 		dropdownBg = p.theme.Background
+		elementBg = p.theme.BackgroundElement
 	}
 
 	dropdown := lipgloss.NewStyle().
@@ -282,6 +284,10 @@ func (p CommandPalette) View() string {
 		Background(dropdownBg).
 		Padding(0, 1).
 		Render(b.String())
+
+	inputBgStyle := lipgloss.NewStyle().Background(elementBg)
+	inputLineBg := inputBgStyle.Render(" ")
+	inputLine = prefixStyle.Render(": ") + inputStyle.Render(p.input) + " " + inputLineBg
 
 	return dropdown + "\n" + inputLine
 }

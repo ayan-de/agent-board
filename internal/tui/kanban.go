@@ -110,7 +110,9 @@ func NewKanbanStyles(t *theme.Theme) KanbanStyles {
 			Foreground(t.Text),
 		SelectedTicket: lipgloss.NewStyle().
 			Bold(true).
-			Foreground(t.Text),
+			Foreground(t.Text).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(t.BorderActive),
 		Ticket: lipgloss.NewStyle().
 			Foreground(t.Text),
 		EmptyColumn: lipgloss.NewStyle().
