@@ -22,6 +22,7 @@ const (
 	ticketEditMode
 	ticketAgentSelectMode
 	ticketPrioritySelectMode
+	ticketDependsOnSelectMode
 	ticketAdHocPromptMode
 )
 
@@ -62,6 +63,10 @@ type TicketViewModel struct {
 
 	priorities  []string
 	priorityCursor int
+
+	dependsOnTickets []store.Ticket
+	dependsOnCursor int
+	dependsOnSelected []string
 
 	styles TicketViewStyles
 
@@ -249,6 +254,9 @@ func (m TicketViewModel) handleKey(msg tea.KeyMsg) (TicketViewModel, tea.Cmd) {
 	if m.mode == ticketPrioritySelectMode {
 		return m.handlePrioritySelectKey(msg)
 	}
+	if m.mode == ticketDependsOnSelectMode {
+		return m.handleDependsOnSelectKey(msg)
+	}
 	if m.mode == ticketAdHocPromptMode {
 		return m.handleAdHocPromptKey(msg)
 	}
@@ -294,6 +302,17 @@ func (m TicketViewModel) handleViewKey(msg tea.KeyMsg) (TicketViewModel, tea.Cmd
 					m.priorityCursor = i
 					break
 				}
+			}
+		}
+	case "d":
+		if m.ticket != nil {
+			m.mode = ticketDependsOnSelectMode
+			m.dependsOnCursor = 0
+			m.dependsOnSelected = m.ticket.DependsOn
+			tickets, _ := m.store.ListTickets(context.Background(), store.TicketFilters{})
+			m.dependsOnTickets = tickets
+			if len(m.dependsOnTickets) > 5 {
+				m.dependsOnTickets = m.dependsOnTickets[:5]
 			}
 		}
 	case "o":
@@ -439,6 +458,67 @@ func (m TicketViewModel) handlePrioritySelectKey(msg tea.KeyMsg) (TicketViewMode
 		case "k":
 			if m.priorityCursor > 0 {
 				m.priorityCursor--
+			}
+		}
+	}
+
+	return m, nil
+}
+
+func (m TicketViewModel) handleDependsOnSelectKey(msg tea.KeyMsg) (TicketViewModel, tea.Cmd) {
+	total := len(m.dependsOnTickets)
+
+	switch msg.Type {
+	case tea.KeyEscape:
+		m.mode = ticketViewMode
+		return m, nil
+	case tea.KeyEnter:
+		if m.ticket != nil {
+			m.ticket.DependsOn = m.dependsOnSelected
+			_, _ = m.store.UpdateTicket(context.Background(), *m.ticket)
+		}
+		m.mode = ticketViewMode
+		return m, nil
+	case tea.KeySpace:
+		if m.dependsOnCursor < len(m.dependsOnTickets) {
+			id := m.dependsOnTickets[m.dependsOnCursor].ID
+			if m.ticket != nil && id == m.ticket.ID {
+				return m, nil
+			}
+			found := false
+			for i, d := range m.dependsOnSelected {
+				if d == id {
+					m.dependsOnSelected = append(m.dependsOnSelected[:i], m.dependsOnSelected[i+1:]...)
+					found = true
+					break
+				}
+			}
+			if !found {
+				m.dependsOnSelected = append(m.dependsOnSelected, id)
+			}
+		}
+		return m, nil
+	case tea.KeyUp:
+		if m.dependsOnCursor > 0 {
+			m.dependsOnCursor--
+		}
+		return m, nil
+	case tea.KeyDown:
+		if m.dependsOnCursor < total-1 {
+			m.dependsOnCursor++
+		}
+		return m, nil
+	}
+
+	if msg.Type == tea.KeyRunes {
+		switch string(msg.Runes) {
+		case "j":
+			if m.dependsOnCursor < total-1 {
+				m.dependsOnCursor++
+			}
+		case "k":
+			if m.dependsOnCursor > 0 {
+				m.dependsOnCursor--
 			}
 		}
 	}
@@ -630,6 +710,41 @@ func (m TicketViewModel) View() string {
 		}
 	}
 
+	if m.mode == ticketDependsOnSelectMode {
+		b.WriteString("\n")
+		b.WriteString(m.styles.Label.Render("Select Dependencies (space to toggle):"))
+		b.WriteString("\n")
+
+		shown := 0
+		for i, t := range m.dependsOnTickets {
+			if m.ticket != nil && t.ID == m.ticket.ID {
+				continue
+			}
+			shown++
+			prefix := "  "
+			if i == m.dependsOnCursor {
+				prefix = "▸ "
+			}
+			selected := ""
+			for _, d := range m.dependsOnSelected {
+				if d == t.ID {
+					selected = " ✓"
+					break
+				}
+			}
+			row := prefix + t.ID + " - " + t.Title + selected
+			if i == m.dependsOnCursor {
+				row = m.styles.SelectedRow.Width(innerWidth - 2).Render(row)
+			}
+			b.WriteString(row)
+			b.WriteString("\n")
+		}
+		if shown == 0 {
+			b.WriteString(m.styles.Empty.Render("No tickets available"))
+			b.WriteString("\n")
+		}
+	}
+
 	if m.mode == ticketAdHocPromptMode {
 		b.WriteString("\n")
 		b.WriteString(m.styles.Title.Render(fmt.Sprintf("Run %s with prompt:", m.adhocAgent)))
@@ -651,10 +766,12 @@ func (m TicketViewModel) View() string {
 		footer = "↑/k: up │ ↓/j: down │ Enter: select │ Esc: cancel"
 	} else if m.mode == ticketPrioritySelectMode {
 		footer = "↑/k: up │ ↓/j: down │ Enter: select │ Esc: cancel"
+	} else if m.mode == ticketDependsOnSelectMode {
+		footer = "↑/k: up │ ↓/j: down │ Space: toggle │ Enter: save │ Esc: cancel"
 	} else if m.mode == ticketAdHocPromptMode {
 		footer = "Enter: run agent │ Esc: cancel"
 	} else {
-		footer = "e: edit │ s: cycle status │ a: assign agent │ p: set priority │ Esc: back"
+		footer = "e: edit │ s: cycle status │ a: assign agent │ p: set priority │ d: set depends on │ Esc: back"
 		if m.activeProposal != nil && m.activeProposal.Status == "pending" {
 			footer += " │ o: approve proposal"
 		} else if m.activeProposal != nil && m.activeProposal.Status == "approved" {
