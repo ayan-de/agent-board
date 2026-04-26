@@ -27,7 +27,7 @@ func main() {
 
 	if cfg.General.Tmux == "auto" || cfg.General.Tmux == "true" {
 		if !tmux.IsInTmux() {
-			sessionName := "agentboard-" + cfg.ProjectName
+			sessionName := cfg.ProjectName
 			cmd := exec.Command("tmux", "new-session", "-A", "-s", sessionName, os.Args[0])
 			cmd.Stdin = os.Stdin
 			cmd.Stdout = os.Stdout
