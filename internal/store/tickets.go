@@ -78,7 +78,7 @@ func (r ticketRow) toTicket() (Ticket, error) {
 }
 
 var validPriorities = map[string]bool{
-	"low": true, "medium": true, "high": true, "critical": true,
+	"low": true, "medium": true, "high": true, "critical": true, "urgent": true,
 }
 
 func (s *Store) isValidStatus(status string) bool {

@@ -471,10 +471,12 @@ func TestTicketViewModelTimestampsDisplayed(t *testing.T) {
 }
 
 func TestTicketViewModelEditNonEditableField(t *testing.T) {
-	m, _ := newTestTicketView(t)
+	m, s := newTestTicketView(t)
 	ctx := context.Background()
+	m.width = 80
+	m.height = 24
 
-	ticket, _ := m.store.CreateTicket(ctx, store.Ticket{
+	ticket, _ := s.CreateTicket(ctx, store.Ticket{
 		Title:  "No Edit ID",
 		Status: "backlog",
 	})
@@ -485,7 +487,7 @@ func TestTicketViewModelEditNonEditableField(t *testing.T) {
 			m.cursor = i
 			m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
 			if m.mode == ticketEditMode {
-				t.Error("should not enter edit mode for non-editable field")
+				t.Error("e key should not enter edit mode for non-editable field")
 			}
 			return
 		}
