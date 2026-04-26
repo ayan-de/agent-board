@@ -12,9 +12,10 @@ import (
 
 // PaneManager manages tmux panes for running agents
 type PaneManager struct {
-	mu    sync.RWMutex
-	panes map[string]*AgentPane // sessionID -> AgentPane
-	tmux  string
+	mu          sync.RWMutex
+	panes       map[string]*AgentPane
+	tmux        string
+	sessionName string
 }
 
 // AgentPane represents a running agent's tmux pane
@@ -34,14 +35,18 @@ type AgentPane struct {
 }
 
 // NewPaneManager creates a new pane manager
-func NewPaneManager() (*PaneManager, error) {
+func NewPaneManager(sessionName string) (*PaneManager, error) {
 	tmuxPath, err := exec.LookPath("tmux")
 	if err != nil {
 		return nil, fmt.Errorf("tmux not found: %w", err)
 	}
+	if sessionName == "" {
+		sessionName = "agentboard"
+	}
 	return &PaneManager{
-		panes: make(map[string]*AgentPane),
-		tmux:  tmuxPath,
+		panes:       make(map[string]*AgentPane),
+		tmux:        tmuxPath,
+		sessionName: sessionName,
 	}, nil
 }
 
@@ -69,7 +74,7 @@ func (pm *PaneManager) CreatePane(ctx context.Context, req RunRequest) (*AgentPa
 	}
 
 	// Get the main agentboard session name
-	mainSession := "agentboard"
+	mainSession := pm.sessionName
 
 	// Find or create a window for agent panes
 	windowName := fmt.Sprintf("agents-%s", req.TicketID)

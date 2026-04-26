@@ -25,16 +25,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	if (cfg.General.Tmux == "auto" || cfg.General.Tmux == "true") && !tmux.IsInTmux() {
-		cmd := exec.Command("tmux", "new-session", "-A", "-s", "agentboard", os.Args[0])
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			fmt.Fprintf(os.Stderr, "error launching tmux: %v\n", err)
-			os.Exit(1)
+	if cfg.General.Tmux == "auto" || cfg.General.Tmux == "true" {
+		if !tmux.IsInTmux() {
+			sessionName := "agentboard-" + cfg.ProjectName
+			cmd := exec.Command("tmux", "new-session", "-A", "-s", sessionName, os.Args[0])
+			cmd.Stdin = os.Stdin
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err != nil {
+				fmt.Fprintf(os.Stderr, "error launching tmux: %v\n", err)
+				os.Exit(1)
+			}
+			return
 		}
-		return
 	}
 
 	s, err := store.Open(cfg.DB.Path, cfg.Board.Statuses, cfg.Board.Prefix)
@@ -53,10 +56,11 @@ func main() {
 	var runner orchestrator.Runner = orchestrator.NewExecRunner()
 	var ptyRunner *orchestrator.PtyRunner
 	if tmux.IsInTmux() {
-		if tmuxRunner, err := orchestrator.NewTmuxRunner(); err == nil {
+		sessionName := cfg.ProjectName
+		if tmuxRunner, err := orchestrator.NewTmuxRunner(sessionName); err == nil {
 			runner = tmuxRunner
 		}
-		if pr, err := orchestrator.NewPtyRunner("agentboard"); err == nil {
+		if pr, err := orchestrator.NewPtyRunner(sessionName); err == nil {
 			ptyRunner = pr
 		}
 	}
