@@ -395,10 +395,10 @@ func (m DashboardModel) renderContent(width int) string {
 		b.WriteString(strings.Repeat("─", width))
 		b.WriteString("\n\n")
 
-		statusVal := "NOT INSTALLED"
-		if agent.Found {
-			statusVal = "READY"
-		}
+statusVal := "NOT INSTALLED"
+	if agent.Found {
+		statusVal = "READY"
+	}
 
 		if sess, running := m.ActiveSessions[agent.Binary]; running {
 			statusVal = "RUNNING"

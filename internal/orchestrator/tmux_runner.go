@@ -11,8 +11,8 @@ type TmuxRunner struct {
 }
 
 // NewTmuxRunner creates a new TmuxRunner with a pane manager
-func NewTmuxRunner() (*TmuxRunner, error) {
-	pm, err := NewPaneManager()
+func NewTmuxRunner(sessionName string) (*TmuxRunner, error) {
+	pm, err := NewPaneManager(sessionName)
 	if err != nil {
 		return nil, err
 	}

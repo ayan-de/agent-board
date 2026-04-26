@@ -50,6 +50,7 @@ type KanbanModel struct {
 	height          int
 	colIndex        int
 	cursors         [4]int
+	scrollOffsets   [4]int
 	columns         [4][]store.Ticket
 	styles          KanbanStyles
 	animFrame       int
@@ -109,7 +110,9 @@ func NewKanbanStyles(t *theme.Theme) KanbanStyles {
 			Foreground(t.Text),
 		SelectedTicket: lipgloss.NewStyle().
 			Bold(true).
-			Foreground(t.Text),
+			Foreground(t.Text).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(t.BorderActive),
 		Ticket: lipgloss.NewStyle().
 			Foreground(t.Text),
 		EmptyColumn: lipgloss.NewStyle().
@@ -265,10 +268,26 @@ func (m KanbanModel) handleKey(msg tea.KeyMsg) (KanbanModel, tea.Cmd) {
 	case keybinding.ActionPrevTicket:
 		if m.cursors[m.colIndex] > 0 {
 			m.cursors[m.colIndex]--
+			if m.cursors[m.colIndex] < m.scrollOffsets[m.colIndex] {
+				m.scrollOffsets[m.colIndex] = m.cursors[m.colIndex]
+			}
 		}
 	case keybinding.ActionNextTicket:
 		if m.cursors[m.colIndex] < len(m.columns[m.colIndex])-1 {
 			m.cursors[m.colIndex]++
+			availH := m.height - 6
+			if availH < 1 {
+				availH = 10
+			}
+			colWidth := m.width / 4
+			innerWidth := colWidth - 4
+			if innerWidth < 1 {
+				innerWidth = 1
+			}
+			maxVisible := m.computeMaxVisible(m.colIndex, m.scrollOffsets[m.colIndex], innerWidth, availH)
+			if m.cursors[m.colIndex] >= m.scrollOffsets[m.colIndex]+maxVisible {
+				m.scrollOffsets[m.colIndex] = m.cursors[m.colIndex] - maxVisible + 1
+			}
 		}
 	case keybinding.ActionJumpColumn1:
 		m.colIndex = 0
@@ -328,7 +347,7 @@ func (m KanbanModel) View() string {
 		}
 	}
 
-	availableHeight := m.height - 7
+	availableHeight := m.height - 6
 	if availableHeight < 1 {
 		availableHeight = 10
 	}
@@ -349,42 +368,57 @@ func (m KanbanModel) View() string {
 		if len(tickets) == 0 {
 			content.WriteString(m.styles.EmptyColumn.Render("(empty)"))
 		} else {
-			cardWidth := innerWidth
-			compactRendered := 2 + 2 + 1
 			expandedIdx := -1
 			if i == m.colIndex && len(tickets) > 0 {
 				expandedIdx = m.cursors[i]
 			}
 
-			maxShow := 0
-			usedLines := 0
-			for j := 0; j < len(tickets); j++ {
-				h := compactRendered
-				if j == expandedIdx {
-					card := NewTicketCardModel(tickets[j], true, true, cardWidth, m.animFrame, m.theme)
-					h = card.ExpandedHeight() + 1
-				}
-				if usedLines+h > availableHeight {
-					break
-				}
-				usedLines += h
-				maxShow = j + 1
+			// Determine if we need a scrollbar
+			cardWidth := innerWidth
+			maxShow := m.computeMaxVisible(i, m.scrollOffsets[i], cardWidth, availableHeight)
+			overflow := len(tickets) > maxShow || m.scrollOffsets[i] > 0
+
+			if overflow {
+				cardWidth = innerWidth - 1
+				// Recalculate with narrower width
+				maxShow = m.computeMaxVisible(i, m.scrollOffsets[i], cardWidth, availableHeight)
 			}
 
-			overflow := len(tickets) > maxShow
+			var cardsContent strings.Builder
+			
+			// Top indicator
+			if m.scrollOffsets[i] > 0 {
+				cardsContent.WriteString(m.styles.EmptyColumn.Italic(true).Render(fmt.Sprintf("↑ %d more", m.scrollOffsets[i])))
+				cardsContent.WriteString("\n")
+			}
 
-			for j := 0; j < len(tickets) && j < maxShow; j++ {
+			for j := m.scrollOffsets[i]; j < len(tickets) && j < m.scrollOffsets[i]+maxShow; j++ {
 				isSelected := i == m.colIndex && j == m.cursors[i]
 				isExpanded := j == expandedIdx
 
 				card := NewTicketCardModel(tickets[j], isSelected, isExpanded, cardWidth, m.animFrame, m.theme)
-				content.WriteString(card.Render())
-				content.WriteString("\n")
+				cardsContent.WriteString(card.Render())
+				
+				// Add spacer if not the last card and there's more content below (either a card or an indicator)
+				if j < m.scrollOffsets[i]+maxShow-1 || len(tickets) > m.scrollOffsets[i]+maxShow {
+					cardsContent.WriteString("\n")
+				}
+			}
+
+			// Bottom indicator
+			if len(tickets) > m.scrollOffsets[i]+maxShow {
+				remaining := len(tickets) - (m.scrollOffsets[i] + maxShow)
+				cardsContent.WriteString(m.styles.EmptyColumn.Italic(true).Render(fmt.Sprintf("↓ %d more", remaining)))
 			}
 
 			if overflow {
-				remaining := len(tickets) - maxShow
-				content.WriteString(fmt.Sprintf("↓ %d more", remaining))
+				scrollBar := m.renderScrollBar(m.scrollOffsets[i], maxShow, len(tickets), availableHeight)
+				content.WriteString(lipgloss.JoinHorizontal(lipgloss.Top,
+					lipgloss.NewStyle().Width(cardWidth).Render(cardsContent.String()),
+					scrollBar,
+				))
+			} else {
+				content.WriteString(lipgloss.NewStyle().Width(cardWidth).Render(cardsContent.String()))
 			}
 		}
 
@@ -575,4 +609,83 @@ func (m KanbanModel) loadMonth() (KanbanModel, error) {
 	}
 	m.columns = groupByStatus(tickets)
 	return m, nil
+}
+
+func (m KanbanModel) computeMaxVisible(colIndex int, startIdx int, width int, availableHeight int) int {
+	tickets := m.columns[colIndex]
+	if len(tickets) == 0 {
+		return 0
+	}
+	expandedIdx := -1
+	if colIndex == m.colIndex {
+		expandedIdx = m.cursors[colIndex]
+	}
+
+	hRemaining := availableHeight
+	if startIdx > 0 {
+		hRemaining-- // Reserve for "↑ X more"
+	}
+
+	count := 0
+	lines := 0
+	for i := startIdx; i < len(tickets); i++ {
+		h := 4 // Default compact height (2 border + 2 content)
+		if i == expandedIdx {
+			card := NewTicketCardModel(tickets[i], false, true, width, 0, m.theme)
+			h = card.ExpandedHeight() + 2 // 2 border + content
+		}
+
+		// Add spacer if not the first card
+		hWithSpacer := h
+		if i > startIdx {
+			hWithSpacer++
+		}
+
+		// Check if this card fits
+		if lines+hWithSpacer > hRemaining {
+			break
+		}
+
+		// If this is NOT the last ticket overall, we must ensure there's room 
+		// for at least the "↓ X more" indicator if we stop after this card.
+		if i+1 < len(tickets) && lines+hWithSpacer+1 > hRemaining {
+			break
+		}
+
+		lines += hWithSpacer
+		count++
+	}
+	if count < 1 && len(tickets) > 0 {
+		count = 1
+	}
+	return count
+}
+
+func (m KanbanModel) renderScrollBar(scrollOff int, maxVisible int, total int, height int) string {
+	if total <= maxVisible || height <= 0 {
+		return ""
+	}
+
+	thumbLen := (maxVisible * height) / total
+	if thumbLen < 1 {
+		thumbLen = 1
+	}
+
+	thumbPos := (scrollOff * height) / total
+	if thumbPos+thumbLen > height {
+		thumbPos = height - thumbLen
+	}
+
+	var sb strings.Builder
+	for i := 0; i < height; i++ {
+		if i >= thumbPos && i < thumbPos+thumbLen {
+			sb.WriteString(m.styles.TabActive.Render("┃"))
+		} else {
+			sb.WriteString(m.styles.TabInactive.Render("│"))
+		}
+		if i < height-1 {
+			sb.WriteString("\n")
+		}
+	}
+	return sb.String()
 }
