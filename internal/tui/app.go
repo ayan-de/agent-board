@@ -81,6 +81,10 @@ type proposalLoadedMsg struct {
 	proposal *store.Proposal
 }
 
+type viewProposalFullMsg struct {
+	proposalID string
+}
+
 type notificationMsg struct {
 	title   string
 	message string
@@ -317,6 +321,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case proposalApprovedMsg:
 		return a, a.approveProposalCmd(msg.proposalID)
+	case viewProposalFullMsg:
+		p, err := a.store.GetProposal(context.Background(), msg.proposalID)
+		if err != nil {
+			return a, nil
+		}
+		a.modal.OpenInfo("Full Proposal for "+p.TicketID, p.Prompt, nil)
+		return a, nil
 	case runStartedMsg:
 		return a, tea.Batch(
 			a.showNotification("Run started", "Agent is working...", NotificationInfo),

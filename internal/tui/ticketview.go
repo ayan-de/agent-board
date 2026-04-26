@@ -12,6 +12,7 @@ import (
 	"github.com/ayan-de/agent-board/internal/theme"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -76,6 +77,8 @@ type TicketViewModel struct {
 	adhocAgent    string
 	adhocPrompt   string
 	adhocPromptCursor int
+
+	viewport viewport.Model
 }
 
 func DefaultTicketViewStyles() TicketViewStyles {
@@ -225,6 +228,7 @@ func NewTicketViewModel(s *store.Store, resolver *keybinding.Resolver, t *theme.
 		mode:     ticketViewMode,
 		agents:   agents,
 		priorities: []string{"", "low", "medium", "high", "critical"},
+		viewport: viewport.New(0, 0),
 	}
 }
 
@@ -237,9 +241,18 @@ func (m TicketViewModel) Update(msg tea.Msg) (TicketViewModel, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		vh := m.height - 7
+		if vh < 0 {
+			vh = 0
+		}
+		m.viewport.Width = m.width - 6
+		m.viewport.Height = vh
 		return m, nil
 	case tea.KeyMsg:
-		return m.handleKey(msg)
+		var cmd tea.Cmd
+		m.viewport, cmd = m.viewport.Update(msg)
+		m, nextCmd := m.handleKey(msg)
+		return m, tea.Batch(cmd, nextCmd)
 	}
 	return m, nil
 }
@@ -326,6 +339,12 @@ func (m TicketViewModel) handleViewKey(msg tea.KeyMsg) (TicketViewModel, tea.Cmd
 		if m.activeProposal != nil && m.activeProposal.Status == "approved" {
 			return m, func() tea.Msg {
 				return runStartedMsg{proposalID: m.activeProposal.ID}
+			}
+		}
+	case "v":
+		if m.activeProposal != nil {
+			return m, func() tea.Msg {
+				return viewProposalFullMsg{proposalID: m.activeProposal.ID}
 			}
 		}
 	}
@@ -638,13 +657,25 @@ func (m TicketViewModel) View() string {
 			prefix = "▸ "
 		}
 
-		label := m.styles.Label.Render(fmt.Sprintf("%-12s", f.label))
+		valWidth := innerWidth - 15
+		if valWidth < 10 {
+			valWidth = 10
+		}
 
-		row := prefix + label + " " + val
+		labelStr := fmt.Sprintf("%-12s", f.label)
+		labelStyle := m.styles.Label
+		prefixStyle := lipgloss.NewStyle()
 
 		if i == m.cursor {
-			row = m.styles.SelectedRow.Width(innerWidth - 2).Render(row)
+			labelStyle = m.styles.Title
+			prefixStyle = m.styles.Cursor
 		}
+
+		renderedPrefix := prefixStyle.Render(prefix)
+		renderedLabel := labelStyle.Render(labelStr)
+		renderedVal := m.styles.Value.Copy().Width(valWidth).Render(val)
+
+		row := lipgloss.JoinHorizontal(lipgloss.Top, renderedPrefix, renderedLabel, " ", renderedVal)
 
 		b.WriteString(row)
 		b.WriteString("\n")
@@ -677,10 +708,14 @@ func (m TicketViewModel) View() string {
 				prefix = "▸ "
 			}
 
-			row := prefix + item
+			pStyle := lipgloss.NewStyle()
+			iStyle := m.styles.Value
 			if i == m.agentCursor {
-				row = m.styles.SelectedRow.Width(innerWidth - 2).Render(row)
+				pStyle = m.styles.Cursor
+				iStyle = m.styles.Title
 			}
+
+			row := pStyle.Render(prefix) + iStyle.Render(item)
 			b.WriteString(row)
 			b.WriteString("\n")
 		}
@@ -701,10 +736,14 @@ func (m TicketViewModel) View() string {
 				prefix = "▸ "
 			}
 
-			row := prefix + display
+			pStyle := lipgloss.NewStyle()
+			iStyle := m.styles.Value
 			if i == m.priorityCursor {
-				row = m.styles.SelectedRow.Width(innerWidth - 2).Render(row)
+				pStyle = m.styles.Cursor
+				iStyle = m.styles.Title
 			}
+
+			row := pStyle.Render(prefix) + iStyle.Render(display)
 			b.WriteString(row)
 			b.WriteString("\n")
 		}
@@ -732,10 +771,15 @@ func (m TicketViewModel) View() string {
 					break
 				}
 			}
-			row := prefix + t.ID + " - " + t.Title + selected
+			
+			pStyle := lipgloss.NewStyle()
+			iStyle := m.styles.Value
 			if i == m.dependsOnCursor {
-				row = m.styles.SelectedRow.Width(innerWidth - 2).Render(row)
+				pStyle = m.styles.Cursor
+				iStyle = m.styles.Title
 			}
+
+			row := pStyle.Render(prefix) + iStyle.Render(t.ID + " - " + t.Title + selected)
 			b.WriteString(row)
 			b.WriteString("\n")
 		}
@@ -760,7 +804,6 @@ func (m TicketViewModel) View() string {
 		b.WriteString("\n")
 	}
 
-	b.WriteString("\n")
 	var footer string
 	if m.mode == ticketAgentSelectMode {
 		footer = "↑/k: up │ ↓/j: down │ Enter: select │ Esc: cancel"
@@ -772,13 +815,15 @@ func (m TicketViewModel) View() string {
 		footer = "Enter: run agent │ Esc: cancel"
 	} else {
 		footer = "e: edit │ s: cycle status │ a: assign agent │ p: set priority │ d: set depends on │ Esc: back"
+		if m.activeProposal != nil {
+			footer += " │ v: view proposal"
+		}
 		if m.activeProposal != nil && m.activeProposal.Status == "pending" {
 			footer += " │ o: approve proposal"
 		} else if m.activeProposal != nil && m.activeProposal.Status == "approved" {
 			footer += " │ r: start run"
 		}
 	}
-	b.WriteString(m.styles.Footer.Render(footer))
 
 	if m.loading || m.activeProposal != nil || m.ticket.Status == "in_progress" {
 		b.WriteString("\n\n")
@@ -798,17 +843,26 @@ func (m TicketViewModel) View() string {
 			b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(statusColor)).Render("Status: " + m.activeProposal.Status))
 			b.WriteString("\n\n")
 			prompt := m.activeProposal.Prompt
-			if len(prompt) > innerWidth*3 {
-				prompt = prompt[:innerWidth*3] + "..."
+			preview := prompt
+			if len(preview) > 300 {
+				preview = preview[:300] + "\n\n[...] Press v to view full proposal"
 			}
-			b.WriteString(m.styles.Value.Width(innerWidth).Render(prompt))
+			b.WriteString(m.styles.Value.Width(innerWidth).Render(preview))
 		} else { // m.ticket.Status == "in_progress"
 			b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render("No active proposal found for this ticket."))
 			b.WriteString("\n")
 		}
 	}
 
-	return m.styles.Border.Render(b.String())
+	m.viewport.SetContent(b.String())
+
+	h := m.height - 6
+	if h < 0 {
+		h = 0
+	}
+	footerRendered := m.styles.Footer.Render(footer)
+	finalView := lipgloss.JoinVertical(lipgloss.Left, m.viewport.View(), footerRendered)
+	return m.styles.Border.Height(h).Render(finalView)
 }
 
 func parseTags(input string) []string {

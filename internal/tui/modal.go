@@ -146,7 +146,11 @@ func (m ConfirmModal) View() string {
 		return ""
 	}
 
-	return lipgloss.Place(m.width, m.height,
+	h := m.height - 6
+	if h < 10 {
+		h = 10
+	}
+	return lipgloss.Place(m.width, h,
 		lipgloss.Center, lipgloss.Center,
 		m.ViewBox(),
 	)
@@ -178,9 +182,19 @@ func (m ConfirmModal) ViewBox() string {
 		buttons = fmt.Sprintf("  %s    %s", yes, no)
 	}
 
-	boxWidth := 44
+	boxWidth := m.width - 6
+	if boxWidth < 44 {
+		boxWidth = 44
+	}
+	if !m.infoModal {
+		boxWidth = 44
+	}
 	messageStyle := m.styles.Message.Width(boxWidth - 4)
-	wrappedMessage := messageStyle.Render(m.message)
+	displayMsg := m.message
+	if len(displayMsg) > 2000 {
+		displayMsg = displayMsg[:2000] + "\n\n[...] (truncated)"
+	}
+	wrappedMessage := messageStyle.Render(displayMsg)
 
 	content := m.styles.Title.Render(m.title) + "\n\n" +
 		wrappedMessage + "\n\n" +
