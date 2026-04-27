@@ -57,6 +57,9 @@ func main() {
 	var ptyRunner *orchestrator.PtyRunner
 	if tmux.IsInTmux() {
 		sessionName := cfg.ProjectName
+		if actualSession, err := tmux.GetCurrentSessionName(); err == nil {
+			sessionName = actualSession
+		}
 		if tmuxRunner, err := orchestrator.NewTmuxRunner(sessionName); err == nil {
 			runner = tmuxRunner
 		}

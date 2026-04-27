@@ -32,12 +32,13 @@ func (r *PtyRunner) Start(ctx context.Context, req RunRequest) (RunHandle, error
 
 	windowName := fmt.Sprintf("agent-%s", shortID(req.SessionID, 8))
 
-	cmd := exec.Command("tmux", "new-window", "-t", sessionName, "-d", "-P", "-F", "#{pane_id}", "-n", windowName)
+	cmd := exec.Command("tmux", "new-window", "-t", sessionName, "-d", "-a", "-P", "-F", "#{window_id}:#{pane_id}", "-n", windowName)
 	output, err := cmd.Output()
 	if err != nil {
 		return RunHandle{}, fmt.Errorf("create tmux window: %w", err)
 	}
-	paneID := strings.TrimSpace(string(output))
+	parts := strings.Split(strings.TrimSpace(string(output)), ":")
+	paneID := parts[len(parts)-1]
 
 	cfg := r.runner.GetConfig(req.Agent)
 	formattedPrompt := req.Prompt
