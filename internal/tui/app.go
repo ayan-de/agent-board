@@ -690,20 +690,24 @@ func (a *App) showNotification(title, message string, variant NotificationVarian
 
 func (a *App) renderHeader() string {
 	t := a.registry.Active()
+	muted := lipgloss.Color("240")
+	if t != nil {
+		muted = t.TextMuted
+	}
 	fg := lipgloss.Color("252")
 	if t != nil {
 		fg = t.Text
 	}
-	muted := lipgloss.Color("240")
+	primary := lipgloss.Color("69")
 	if t != nil {
-		muted = t.TextMuted
+		primary = t.Primary
 	}
 
 	name := a.config.ProjectName
 	if name == "" {
 		name = "AgentBoard"
 	}
-	labelStyle := lipgloss.NewStyle().Foreground(muted)
+	labelStyle := lipgloss.NewStyle().Foreground(primary)
 	nameStyle := lipgloss.NewStyle().Bold(true).Foreground(fg)
 	hintStyle := lipgloss.NewStyle().Foreground(muted)
 
