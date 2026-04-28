@@ -86,7 +86,7 @@ func NewOpenCode() *Config {
 		IdlePatterns:    []*regexp.Regexp{regexp.MustCompile(`Ask\s+anything`)},
 		GracePeriod:     8 * time.Second,
 		FallbackTimeout: 5 * time.Second,
-		ReadyWait:       800 * time.Millisecond,
+		ReadyWait:       5 * time.Second,
 	}
 }
 
