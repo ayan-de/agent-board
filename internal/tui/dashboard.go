@@ -313,6 +313,9 @@ func (m DashboardModel) renderSidebar(width int) string {
 	if len(sessions) == 0 {
 		// Fall back to showing detected agents
 		for i, agent := range m.Agents {
+			if !agent.Found {
+				continue
+			}
 			prefix := "  "
 			style := m.styles.Label
 			if i == m.cursor && len(sessions) == 0 {
