@@ -14,7 +14,7 @@ type Service struct {
 	store      Store
 	llm        LLMClient
 	runner     Runner
-	ptyRunner  *PtyRunner
+	agentRunner  AgentRunner
 	ctx        ContextCarryProvider
 	logs       map[string][]string
 	mu         sync.RWMutex
@@ -46,8 +46,8 @@ func NewService(store Store, llm LLMClient, runner Runner, ctx ContextCarryProvi
 	}
 }
 
-func (s *Service) SetPtyRunner(pr *PtyRunner) {
-	s.ptyRunner = pr
+func (s *Service) SetAgentRunner(pr AgentRunner) {
+	s.agentRunner = pr
 }
 
 func (s *Service) StartAdHocRun(ctx context.Context, agent, prompt string) (store.Session, error) {
@@ -76,8 +76,8 @@ func (s *Service) StartAdHocRun(ctx context.Context, agent, prompt string) (stor
 	}
 
 	var handle RunHandle
-	if s.ptyRunner != nil {
-		handle, err = s.ptyRunner.Start(ctx, RunRequest{
+	if s.agentRunner != nil {
+		handle, err = s.agentRunner.Start(ctx, RunRequest{
 			TicketID:   "",
 			SessionID:  session.ID,
 			Agent:      agent,
@@ -217,8 +217,8 @@ func (s *Service) StartApprovedRun(ctx context.Context, proposalID string) (stor
 	}
 
 	var handle RunHandle
-	if s.ptyRunner != nil {
-		handle, err = s.ptyRunner.Start(ctx, RunRequest{
+	if s.agentRunner != nil {
+		handle, err = s.agentRunner.Start(ctx, RunRequest{
 			TicketID:   proposal.TicketID,
 			SessionID:  session.ID,
 			Agent:      proposal.Agent,
@@ -365,10 +365,10 @@ func (s *Service) SwitchToPane(sessionID string) error {
         return pm.SwitchToPane(sessionID)
     }
     // Try PtyRunner
-    if s.ptyRunner != nil {
-        if paneID, ok := s.ptyRunner.GetPaneID(sessionID); ok {
+    if s.agentRunner != nil {
+        if paneID, ok := s.agentRunner.GetPaneID(sessionID); ok {
             return exec.Command("tmux", "select-pane", "-t", paneID).Run()
         }
     }
-    return fmt.Errorf("pane switching only available with TmuxRunner or PtyRunner")
+    return fmt.Errorf("pane switching only available with TmuxRunner or AgentRunner")
 }
