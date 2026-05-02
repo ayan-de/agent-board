@@ -11,27 +11,101 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-const AnimFrames = 8
+const AnimFrames = 16
 
-var animPatterns = [AnimFrames]string{
-	"░░▒▒▓▓██▓▓▒▒░░",
-	"░▒▒▓▓██▓▓▒▒░░░",
-	"▒▒▓▓██▓▓▒▒░░░░",
-	"▒▓▓██▓▓▒▒░░░░▒",
-	"▓▓██▓▓▒▒░░░░▒▒",
-	"▓██▓▓▒▒░░░░▒▒▓",
-	"██▓▓▒▒░░░░▒▒▓▓",
-	"▓▓▒▒░░░░▒▒▓▓██",
+type AnimationType int
+
+const (
+	AnimationPlasma AnimationType = iota
+	AnimationDual
+	AnimationSpark
+	AnimationDefault = AnimationPlasma
+)
+
+var (
+	plasmaPatterns [AnimFrames]string
+	dualPatterns   [AnimFrames]string
+	sparkPatterns  [AnimFrames]string
+)
+
+func init() {
+	const width = 16
+
+	plasma := []rune{'░', '░', '▒', '▒', '▓', '▓', '█', '█', '▓', '▓', '▒', '▒', '░', '░', '·', '·'}
+	for f := 0; f < AnimFrames; f++ {
+		arr := make([]rune, width)
+		for i := range arr {
+			arr[i] = plasma[(i+f)%len(plasma)]
+		}
+		plasmaPatterns[f] = string(arr)
+	}
+
+	levels := []rune{'░', '▒', '▓', '█'}
+	for f := 0; f < AnimFrames; f++ {
+		arr := make([]rune, width)
+		for i := range arr {
+			arr[i] = '░'
+		}
+		a := f % (width / 2)
+		b := width - 1 - a
+		for i := 0; i <= a; i++ {
+			d := a - i
+			if d < len(levels) {
+				arr[i] = levels[len(levels)-1-d]
+			}
+		}
+		for i := b; i < width; i++ {
+			d := i - b
+			if d < len(levels) {
+				arr[i] = levels[len(levels)-1-d]
+			}
+		}
+		dualPatterns[f] = string(arr)
+	}
+
+	bg := '·'
+	trail := []rune{'░', '▒', '▓', '█'}
+	totalFrames := width + len(trail)
+	for f := 0; f < AnimFrames; f++ {
+		arr := make([]rune, width)
+		for i := range arr {
+			arr[i] = bg
+		}
+		pos := f % totalFrames
+		for t, ch := range trail {
+			p := pos - t
+			if p >= 0 && p < width {
+				arr[p] = ch
+			}
+		}
+		sparkPatterns[f] = string(arr)
+	}
+}
+
+func patternFor(t AnimationType) *[AnimFrames]string {
+	switch t {
+	case AnimationDual:
+		return &dualPatterns
+	case AnimationSpark:
+		return &sparkPatterns
+	default:
+		return &plasmaPatterns
+	}
 }
 
 type tickMsg struct{}
 
 func ActivityBar(frame int, width int, t *theme.Theme) string {
+	return ActivityBarWithType(frame, width, t, AnimationDefault)
+}
+
+func ActivityBarWithType(frame int, width int, t *theme.Theme, animType AnimationType) string {
 	if width < 4 {
 		width = 4
 	}
 
-	pattern := animPatterns[frame%AnimFrames]
+	patterns := patternFor(animType)
+	pattern := patterns[frame%AnimFrames]
 	patternRunes := []rune(pattern)
 	patternLen := utf8.RuneCountInString(pattern)
 
