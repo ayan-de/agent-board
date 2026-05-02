@@ -54,6 +54,11 @@ type Runner interface {
 	Start(ctx context.Context, req RunRequest) (RunHandle, error)
 }
 
+type AgentRunner interface {
+	Start(ctx context.Context, req RunRequest) (RunHandle, error)
+	GetPaneID(sessionID string) (string, bool)
+}
+
 type Store interface {
 	GetTicket(ctx context.Context, id string) (store.Ticket, error)
 	CreateProposal(ctx context.Context, p store.Proposal) (store.Proposal, error)
