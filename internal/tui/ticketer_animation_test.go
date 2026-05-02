@@ -56,10 +56,10 @@ func TestActivityBarMinimumWidth(t *testing.T) {
 	}
 }
 
-func TestActivityBarWrapsTo8Frames(t *testing.T) {
-	bar8 := stripAnsi(ActivityBar(8, 20, nil))
+func TestActivityBarWrapsTo16Frames(t *testing.T) {
+	bar16 := stripAnsi(ActivityBar(16, 20, nil))
 	bar0 := stripAnsi(ActivityBar(0, 20, nil))
-	if bar8 != bar0 {
-		t.Errorf("frame 8 stripped = %q, want frame 0 stripped = %q", bar8, bar0)
+	if bar16 != bar0 {
+		t.Errorf("frame 16 stripped = %q, want frame 0 stripped = %q", bar16, bar0)
 	}
 }
