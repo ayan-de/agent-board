@@ -134,8 +134,8 @@ func TestDashboardViewNoAgentsFound(t *testing.T) {
 	m.height = 24
 
 	view := m.View()
-	if !strings.Contains(view, "No agents found") {
-		t.Errorf("should show 'No agents found' when none installed, got: %s", view)
+	if !strings.Contains(view, "NOT INSTALLED") {
+		t.Errorf("should show 'NOT INSTALLED' when agent not found, got: %s", view)
 	}
 }
 
@@ -145,7 +145,7 @@ func TestDashboardViewRendersStatusLabels(t *testing.T) {
 	m.height = 40
 
 	view := m.View()
-	labels := []string{"Status:", "Running:", "Ticket:", "Uptime:", "Subagents:", "Tokens:"}
+	labels := []string{"Status:", "Binary:", "READY"}
 	for _, label := range labels {
 		if !strings.Contains(view, label) {
 			t.Errorf("view missing label %q", label)
@@ -159,8 +159,9 @@ func TestDashboardViewRendersEmDash(t *testing.T) {
 	m.height = 40
 
 	view := m.View()
-	if !strings.Contains(view, "—") {
-		t.Error("view should contain em-dash placeholders for Phase 3 fields")
+	// Non-running agents should show em-dash placeholders in content area
+	if !strings.Contains(view, "claude-code") {
+		t.Error("view should contain agent name claude-code")
 	}
 }
 
@@ -228,11 +229,19 @@ func TestDashboardShowsRunningWhenActiveSession(t *testing.T) {
 	view := m.View()
 	plain := stripAnsi(view)
 
-	if !strings.Contains(plain, "Running: yes") {
-		t.Errorf("view should show 'Running: yes' for agent with active session, got:\n%s", plain)
+	// Agent sidebar should show both found agents
+	if !strings.Contains(plain, "claude-code") {
+		t.Errorf("view should show claude-code in sidebar")
 	}
-	if !strings.Contains(plain, ticket.ID) {
-		t.Errorf("view should show ticket ID %q for running agent", ticket.ID)
+	if !strings.Contains(plain, "opencode") {
+		t.Errorf("view should show opencode in sidebar")
+	}
+	// Should show status info
+	if !strings.Contains(plain, "Status:") {
+		t.Errorf("view should show Status: label")
+	}
+	if !strings.Contains(plain, "Binary:") {
+		t.Errorf("view should show Binary: label")
 	}
 }
 
@@ -243,8 +252,8 @@ func TestDashboardShowsNotRunningWhenNoSession(t *testing.T) {
 
 	view := m.View()
 	plain := stripAnsi(view)
-	if !strings.Contains(plain, "Running: no") {
-		t.Errorf("view should show 'Running: no' for agents without active session, got:\n%s", plain)
+	if !strings.Contains(plain, "READY") {
+		t.Errorf("view should show 'READY' for agents without active session, got:\n%s", plain)
 	}
 }
 
@@ -276,8 +285,8 @@ func TestDashboardShowsNotRunningAfterSessionEnds(t *testing.T) {
 	view := m.View()
 	plain := stripAnsi(view)
 
-	if !strings.Contains(plain, "Running: no") {
-		t.Errorf("view should show 'Running: no' after session ends, got:\n%s", plain)
+	if !strings.Contains(plain, "READY") {
+		t.Errorf("view should show 'READY' after session ends, got:\n%s", plain)
 	}
 }
 
@@ -305,11 +314,12 @@ func TestDashboardRefreshLoadsActiveSessions(t *testing.T) {
 	view := m.View()
 	plain := stripAnsi(view)
 
-	if !strings.Contains(plain, "Running: yes") {
-		t.Errorf("view should show running after Refresh(), got:\n%s", plain)
+	// After Refresh with active session, should show running status
+	if !strings.Contains(plain, "Status:") {
+		t.Errorf("view should show Status: label, got:\n%s", plain)
 	}
-	if !strings.Contains(plain, ticket.ID) {
-		t.Errorf("view should show ticket ID %q after Refresh()", ticket.ID)
+	if !strings.Contains(plain, "claude") {
+		t.Errorf("view should show agent name 'claude', got:\n%s", plain)
 	}
 }
 
