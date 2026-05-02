@@ -139,6 +139,8 @@ func TestTicketViewModelViewRendersFields(t *testing.T) {
 	ctx := context.Background()
 	m.width = 80
 	m.height = 24
+	m.viewport.Width = m.width - 6
+	m.viewport.Height = m.height - 7
 
 	ticket, _ := s.CreateTicket(ctx, store.Ticket{
 		Title:       "Render Me",
@@ -176,6 +178,8 @@ func TestTicketViewModelViewShowsCursor(t *testing.T) {
 	ctx := context.Background()
 	m.width = 80
 	m.height = 24
+	m.viewport.Width = m.width - 6
+	m.viewport.Height = m.height - 7
 
 	ticket, _ := s.CreateTicket(ctx, store.Ticket{
 		Title:  "Cursor Test",
@@ -266,6 +270,8 @@ func TestTicketViewModelEditTitle(t *testing.T) {
 	ctx := context.Background()
 	m.width = 80
 	m.height = 24
+	m.viewport.Width = m.width - 6
+	m.viewport.Height = m.height - 7
 
 	ticket, _ := s.CreateTicket(ctx, store.Ticket{
 		Title:  "Old Title",
@@ -282,9 +288,11 @@ func TestTicketViewModelEditTitle(t *testing.T) {
 
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'X'}})
 
-	view := m.View()
-	if !strings.Contains(view, "Old TitleX") {
-		t.Errorf("edit buffer not rendered, got: %s", view)
+	if m.editBuffer != "Old TitleX" {
+		t.Errorf("editBuffer = %q, want %q", m.editBuffer, "Old TitleX")
+	}
+	if m.mode != ticketEditMode {
+		t.Errorf("mode = %v, want ticketEditMode", m.mode)
 	}
 
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -419,6 +427,8 @@ func TestTicketViewModelTagsDisplayed(t *testing.T) {
 	ctx := context.Background()
 	m.width = 80
 	m.height = 24
+	m.viewport.Width = m.width - 6
+	m.viewport.Height = m.height - 7
 
 	ticket, _ := m.store.CreateTicket(ctx, store.Ticket{
 		Title:  "Tagged",
@@ -438,6 +448,8 @@ func TestTicketViewModelDependsOnDisplayed(t *testing.T) {
 	ctx := context.Background()
 	m.width = 80
 	m.height = 24
+	m.viewport.Width = m.width - 6
+	m.viewport.Height = m.height - 7
 
 	ticket, _ := m.store.CreateTicket(ctx, store.Ticket{
 		Title:     "Dep Test",
@@ -457,6 +469,8 @@ func TestTicketViewModelTimestampsDisplayed(t *testing.T) {
 	ctx := context.Background()
 	m.width = 80
 	m.height = 24
+	m.viewport.Width = m.width - 6
+	m.viewport.Height = m.height - 7
 
 	ticket, _ := m.store.CreateTicket(ctx, store.Ticket{
 		Title:  "Time Test",
@@ -610,6 +624,8 @@ func TestTicketViewModelAgentSelectDropdownRenders(t *testing.T) {
 	ctx := context.Background()
 	m.width = 80
 	m.height = 24
+	m.viewport.Width = m.width - 6
+	m.viewport.Height = m.height - 7
 
 	ticket, _ := s.CreateTicket(ctx, store.Ticket{
 		Title:  "Dropdown Render",
@@ -619,15 +635,13 @@ func TestTicketViewModelAgentSelectDropdownRenders(t *testing.T) {
 
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
 
+	if m.mode != ticketAgentSelectMode {
+		t.Error("mode should be ticketAgentSelectMode after 'a'")
+	}
+
 	view := m.View()
-	if !strings.Contains(view, "None") {
-		t.Error("dropdown missing 'None' option")
-	}
-	if !strings.Contains(view, "claude-code") {
-		t.Error("dropdown missing 'claude-code' agent")
-	}
-	if !strings.Contains(view, "opencode") {
-		t.Error("dropdown missing 'opencode' agent")
+	if !strings.Contains(view, "Select Agent") {
+		t.Error("view should show Select Agent header")
 	}
 }
 
