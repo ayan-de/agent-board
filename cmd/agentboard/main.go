@@ -57,19 +57,19 @@ func main() {
 	}
 
 	var runner orchestrator.Runner
-	var ptyRunner *orchestrator.PtyRunner
+	var agentRunner orchestrator.AgentRunner
 	tmuxRunner, err := orchestrator.NewTmuxRunner(sessionName)
 	if err == nil {
 		runner = tmuxRunner
 	}
-	if pr, err := orchestrator.NewPtyRunner(sessionName); err == nil {
-		ptyRunner = pr
+	if tr, err := orchestrator.NewTmuxAgentRunner(sessionName); err == nil {
+		agentRunner = tr
 	}
 	mcpManager := mcp.NewManager(cfg.MCP)
 	ctxCarry := mcp.NewContextCarryAdapter(mcpManager, cfg.ProjectName)
 	orch := orchestrator.NewService(s, llmClient, runner, ctxCarry)
-	if ptyRunner != nil {
-		orch.SetPtyRunner(ptyRunner)
+	if agentRunner != nil {
+		orch.SetAgentRunner(agentRunner)
 	}
 
 	reg := theme.NewRegistry("dark")
