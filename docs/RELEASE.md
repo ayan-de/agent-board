@@ -78,7 +78,7 @@ The install script at `https://raw.githubusercontent.com/ayan-de/agent-board/mai
 After the release is published, users run:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/ayan-de/agent-board/main/install.sh | bash
+curl -sSL https://agentboard.ayande.xyz/install.sh | bash
 ```
 
 The script:
