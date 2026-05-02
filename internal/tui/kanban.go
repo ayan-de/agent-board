@@ -225,7 +225,7 @@ func (m KanbanModel) handleKey(msg tea.KeyMsg) (KanbanModel, tea.Cmd) {
 		// except for specific ones we might want?
 		key := msg.String()
 		action, _ := m.resolver.Resolve(key)
-		if action != keybinding.ActionNextTab && action != keybinding.ActionPrevTab && action != keybinding.ActionForceQuit {
+		if action != keybinding.ActionToggleFocus && action != keybinding.ActionPrevFocus && action != keybinding.ActionForceQuit {
 			return m, nil
 		}
 	}
@@ -234,10 +234,10 @@ func (m KanbanModel) handleKey(msg tea.KeyMsg) (KanbanModel, tea.Cmd) {
 	action, _ := m.resolver.Resolve(key)
 
 	switch action {
-	case keybinding.ActionNextTab:
+	case keybinding.ActionToggleFocus:
 		m.tab = (m.tab + 1) % 3
 		return m, nil
-	case keybinding.ActionPrevTab:
+	case keybinding.ActionPrevFocus:
 		if m.tab == TabBoard {
 			m.tab = TabDateFilter
 		} else {
