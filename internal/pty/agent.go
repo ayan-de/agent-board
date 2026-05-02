@@ -144,3 +144,12 @@ func NewRegistry() map[string]*Config {
 		"gemini":      NewGeminiCode(),
 	}
 }
+
+var registry = NewRegistry()
+
+func GetConfig(agentName string) *Config {
+	if cfg, ok := registry[agentName]; ok {
+		return cfg
+	}
+	return nil
+}
