@@ -140,11 +140,14 @@ func TestOllamaDoesNotRequireKey(t *testing.T) {
 	}
 }
 
-func TestFactoryReturnsErrorWhenNoProvider(t *testing.T) {
+func TestFactoryReturnsNilClientWhenNoProvider(t *testing.T) {
 	cfg := config.LLMConfig{}
 
-	_, err := llm.NewFromConfig(cfg)
-	if err == nil {
-		t.Fatal("expected error when no provider configured")
+	client, err := llm.NewFromConfig(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if client != nil {
+		t.Fatal("expected nil client when no provider configured")
 	}
 }

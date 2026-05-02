@@ -12,12 +12,18 @@ func (s Service) FinishRun(ctx context.Context, input FinishRunInput) error {
 	delete(s.activeSessions, input.SessionID)
 	s.mu.Unlock()
 
-	cc, err := s.llm.SummarizeContext(ctx, llm.SummaryInput{
-		TicketID: input.TicketID,
-		Outcome:  input.Outcome,
-		Summary:  input.Summary,
-	})
-	if err != nil {
+	var cc string
+	if s.llm != nil {
+		var err error
+		cc, err = s.llm.SummarizeContext(ctx, llm.SummaryInput{
+			TicketID: input.TicketID,
+			Outcome:  input.Outcome,
+			Summary:  input.Summary,
+		})
+		if err != nil {
+			cc = input.Summary
+		}
+	} else {
 		cc = input.Summary
 	}
 

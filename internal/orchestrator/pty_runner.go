@@ -11,20 +11,17 @@ import (
 	"github.com/ayan-de/agent-board/internal/pty"
 )
 
-type PtyRunner struct {
-	runner      *pty.PtyRunner
+type tmuxAgentRunner struct {
 	sessionName string
 }
 
-func NewPtyRunner(tmuxSession string) (*PtyRunner, error) {
-	runner := pty.NewPtyRunner(tmuxSession)
-	return &PtyRunner{
-		runner:      runner,
+func NewTmuxAgentRunner(tmuxSession string) (*tmuxAgentRunner, error) {
+	return &tmuxAgentRunner{
 		sessionName: tmuxSession,
 	}, nil
 }
 
-func (r *PtyRunner) Start(ctx context.Context, req RunRequest) (RunHandle, error) {
+func (r *tmuxAgentRunner) Start(ctx context.Context, req RunRequest) (RunHandle, error) {
 	sessionName := r.sessionName
 	if sessionName == "" {
 		sessionName = "agentboard-agents"
@@ -32,14 +29,15 @@ func (r *PtyRunner) Start(ctx context.Context, req RunRequest) (RunHandle, error
 
 	windowName := fmt.Sprintf("agent-%s", shortID(req.SessionID, 8))
 
-	cmd := exec.Command("tmux", "new-window", "-t", sessionName, "-d", "-P", "-F", "#{pane_id}", "-n", windowName)
+	cmd := exec.Command("tmux", "new-window", "-t", sessionName, "-d", "-a", "-P", "-F", "#{window_id}:#{pane_id}", "-n", windowName)
 	output, err := cmd.Output()
 	if err != nil {
 		return RunHandle{}, fmt.Errorf("create tmux window: %w", err)
 	}
-	paneID := strings.TrimSpace(string(output))
+	parts := strings.Split(strings.TrimSpace(string(output)), ":")
+	paneID := parts[len(parts)-1]
 
-	cfg := r.runner.GetConfig(req.Agent)
+	cfg := pty.GetConfig(req.Agent)
 	formattedPrompt := req.Prompt
 	if cfg != nil && cfg.FormatPrompt != nil {
 		formattedPrompt = cfg.FormatPrompt(req.Prompt)
@@ -71,7 +69,7 @@ func (r *PtyRunner) Start(ctx context.Context, req RunRequest) (RunHandle, error
 	}, nil
 }
 
-func (r *PtyRunner) injectPrompt(paneID, sessionID string, cfg *pty.Config, promptFile string) {
+func (r *tmuxAgentRunner) injectPrompt(paneID, sessionID string, cfg *pty.Config, promptFile string) {
 	if err := waitForReady(paneID, cfg); err != nil {
 		return
 	}
@@ -117,17 +115,13 @@ func waitForReady(paneID string, cfg *pty.Config) error {
 	}
 }
 
-func (r *PtyRunner) monitorPane(sessionID string, paneID string, onComplete func(outcome, summary string)) {
+func (r *tmuxAgentRunner) monitorPane(sessionID string, paneID string, onComplete func(outcome, summary string)) {
 	_ = sessionID
 	_ = paneID
 	_ = onComplete
 }
 
-func (r *PtyRunner) GetRunner() *pty.PtyRunner {
-	return r.runner
-}
-
-func (r *PtyRunner) GetPaneID(sessionID string) (string, bool) {
+func (r *tmuxAgentRunner) GetPaneID(sessionID string) (string, bool) {
 	return "", false
 }
 
@@ -136,8 +130,4 @@ func shortID(s string, max int) string {
 		return s
 	}
 	return s[:max]
-}
-
-func (r *PtyRunner) RunAgent(sessionID, agentName, prompt string, autoExit bool) error {
-	return r.runner.Start(sessionID, agentName, prompt, autoExit)
 }

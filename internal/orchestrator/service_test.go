@@ -52,8 +52,9 @@ func TestStartApprovedRunCallsFinishRunForBlockingRunner(t *testing.T) {
 		},
 	}
 	fllm := &fakeLLMClient{summary: "summary of run"}
-	runner := &fakeRunner{outcome: "completed", summary: "raw worker output"}
-	svc := orchestrator.NewService(fs, fllm, runner, fakeCtx{})
+	tmuxRunner := &fakeTmuxRunner{outcome: "completed", summary: "raw worker output"}
+	svc := orchestrator.NewService(fs, fllm, nil, fakeCtx{})
+	svc.SetAgentRunner(tmuxRunner)
 
 	_, err := svc.StartApprovedRun(context.Background(), "PRO-01")
 	if err != nil {
@@ -86,8 +87,9 @@ func TestStartApprovedRunCallsFinishRunViaAsyncOnComplete(t *testing.T) {
 		},
 	}
 	fllm := &fakeLLMClient{summary: "summary of async run"}
-	runner := &fakeAsyncRunner{}
-	svc := orchestrator.NewService(fs, fllm, runner, fakeCtx{})
+	tmuxRunner := &fakeAsyncTmuxRunner{}
+	svc := orchestrator.NewService(fs, fllm, nil, fakeCtx{})
+	svc.SetAgentRunner(tmuxRunner)
 
 	_, err := svc.StartApprovedRun(context.Background(), "PRO-01")
 	if err != nil {
@@ -98,7 +100,7 @@ func TestStartApprovedRunCallsFinishRunViaAsyncOnComplete(t *testing.T) {
 		t.Fatal("FinishRun should NOT have been called yet for non-blocking runner")
 	}
 
-	runner.onComplete("completed", "async worker output")
+	tmuxRunner.onComplete("completed", "async worker output")
 
 	if fs.lastMoveStatus != "review" {
 		t.Fatalf("MoveStatus = %q, want review after OnComplete fires", fs.lastMoveStatus)

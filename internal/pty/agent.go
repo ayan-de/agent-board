@@ -86,7 +86,7 @@ func NewOpenCode() *Config {
 		IdlePatterns:    []*regexp.Regexp{regexp.MustCompile(`Ask\s+anything`)},
 		GracePeriod:     8 * time.Second,
 		FallbackTimeout: 5 * time.Second,
-		ReadyWait:       800 * time.Millisecond,
+		ReadyWait:       5 * time.Second,
 	}
 }
 
@@ -143,4 +143,13 @@ func NewRegistry() map[string]*Config {
 		"codex":       NewCodex(),
 		"gemini":      NewGeminiCode(),
 	}
+}
+
+var registry = NewRegistry()
+
+func GetConfig(agentName string) *Config {
+	if cfg, ok := registry[agentName]; ok {
+		return cfg
+	}
+	return nil
 }

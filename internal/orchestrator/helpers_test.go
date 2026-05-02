@@ -103,6 +103,31 @@ func (f *fakeAsyncRunner) Start(_ context.Context, req orchestrator.RunRequest) 
 	return orchestrator.RunHandle{Outcome: "running", Summary: "async started"}, nil
 }
 
+type fakeTmuxRunner struct {
+	outcome string
+	summary string
+}
+
+func (f *fakeTmuxRunner) Start(_ context.Context, req orchestrator.RunRequest) (orchestrator.RunHandle, error) {
+	if req.OnComplete != nil {
+		req.OnComplete(f.outcome, f.summary)
+	}
+	return orchestrator.RunHandle{Outcome: f.outcome, Summary: f.summary}, nil
+}
+
+func (f *fakeTmuxRunner) GetPaneID(_ string) (string, bool) { return "", false }
+
+type fakeAsyncTmuxRunner struct {
+	onComplete func(outcome, summary string)
+}
+
+func (f *fakeAsyncTmuxRunner) Start(_ context.Context, req orchestrator.RunRequest) (orchestrator.RunHandle, error) {
+	f.onComplete = req.OnComplete
+	return orchestrator.RunHandle{Outcome: "running", Summary: "async started"}, nil
+}
+
+func (f *fakeAsyncTmuxRunner) GetPaneID(_ string) (string, bool) { return "", false }
+
 type fakeCtx struct{}
 
 func (f fakeCtx) LoadContext(ctx context.Context, ticketID string) (string, error) { return "", nil }

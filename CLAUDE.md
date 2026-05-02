@@ -44,10 +44,14 @@ agent-board/
 │   │   ├── ticketview.go   # Ticket detail/edit panel
 │   │   └── pane.go         # Embedded agent pane (PTY-in-a-widget)
 │   ├── orchestrator/       # Session and agent lifecycle
-│   │   ├── session.go      # tmux session creation, layout management
-│   │   ├── agent.go        # Agent representation and state tracking
-│   │   ├── spawner.go      # Agent process spawning (tmux pane or PTY)
-│   │   └── pty.go          # PTY allocation and I/O capture
+│   │   ├── service.go      # Orchestrator service, Runners (TmuxRunner, PtyRunner)
+│   │   ├── pane_manager.go # tmux window/pane management for agents
+│   │   ├── pty_runner.go   # PTY-based agent runner
+│   │   ├── tmux_runner.go  # tmux-window-based agent runner
+│   │   ├── types.go        # Interfaces and types (Runner, Store, LLMClient)
+│   │   ├── actions.go      # Run outcome processing
+│   │   ├── approval.go     # Proposal approval logic
+│   │   └── summarizer.go   # Context summarization
 │   ├── mcp/                # MCP server integrations
 │   │   ├── client.go       # Shared MCP client bootstrap and registry
 │   │   ├── contextcarry.go # ContextCarry MCP server integration
@@ -169,56 +173,69 @@ context_key TEXT  (ContextCarry reference)
 
 ## tmux Session Layout
 
-When running in tmux mode, AgentBoard creates a session named `agentboard`:
+AgentBoard creates a tmux session named `{project-name}` when run outside of tmux ([main.go:28-40](cmd/agentboard/main.go#L28-L40)).
 
 ```
-┌──────────────────────────────────────────────────┐
-│  AgentBoard TUI (bubbletea)                      │
-│  ┌─────────┬──────────┬──────────┬──────────┐    │
-│  │ Backlog │  In Prog │  Review  │   Done   │    │
-│  │ ─────── │ ──────── │ ──────── │ ──────── │    │
-│  │ AUTH-1  │ API-3    │ UI-7     │ INIT-1   │    │
-│  │ DB-2    │          │          │ INIT-2   │    │
-│  └─────────┴──────────┴──────────┴──────────┘    │
-├──────────────────────────────────────────────────┤
-│  Agent: claude-code (API-3)                      │
-│  $ claude --agent ...                            │
-│  > Processing ticket API-3...                    │
-├──────────────────────────────────────────────────┤
-│  Agent: opencode (UI-7)                          │
-│  $ opencode                                      │
-│  > Working on UI-7...                            │
-└──────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│  tmux session: {project-name}                            │
+│                                                          │
+│  Window 0: agentboard (TUI - bubbletea kanban)           │
+│  Window 1: agent-{sessionID} (opencode/claude agent)     │
+│  Window 2: agent-{sessionID} (another agent)             │
+│  ...                                                     │
+└──────────────────────────────────────────────────────────┘
 ```
 
-- **Top pane**: AgentBoard TUI (kanban view)
-- **Bottom panes**: One per active agent, auto-created when an agent starts a ticket
-- Pane layout managed by `internal/orchestrator/session.go` using tmux commands
-- Agent panes are destroyed when their ticket moves to Done or is cancelled
-- Pane split: horizontal splits for agents, top pane takes 60% height
+- **Window 0**: AgentBoard TUI (bubbletea kanban view)
+- **Window N (N>0)**: One per active agent, named `agent-{shortSessionID}`
+  - Created by `PaneManager.CreatePane()` or `PtyRunner.Start()`
+  - User switches to these windows to interact with agents directly
+- Dashboard view ([app.go:474-502](internal/tui/app.go#L474-L502)) creates a split pane to show agent output via `tmux attach-session`
+- Agent windows are destroyed when their ticket moves to Done or is cancelled
 
 ---
 
 ## Agent Spawning
 
-Agents are spawned by `internal/orchestrator/spawner.go`:
+When not already in tmux, agentboard creates a new tmux session named `{project-name}` and re-executes inside it ([main.go:28-40](cmd/agentboard/main.go#L28-L40)).
 
-1. **Detection** (`internal/config/detection.go`): At startup, scan `$PATH` for `claude`, `opencode`, `cursor`. Store available agents.
-2. **Spawning**: When a ticket is assigned to an agent:
-   - **tmux mode**: Create a new pane via `tmux split-window`, run the agent CLI with appropriate flags
-   - **Embedded mode**: Allocate a PTY, start the agent process, render output in a bubbletea component (`internal/tui/pane.go`)
-3. **Monitoring**: Capture agent stdout/stderr. Parse status signals. Update ticket state when agent reports completion.
-4. **Lifecycle**: Agents are started, paused (via SIGTSTP), resumed (SIGCONT), or killed. State persisted in SQLite.
+When already in tmux, two runners are initialized ([main.go:58-68](cmd/agentboard/main.go#L58-L68)):
+- `TmuxRunner` ← backed by `PaneManager` → creates tmux **windows** for agents via `tmux new-window`
+- `PtyRunner` ← backed by `pty.PtyRunner` → allocates real PTY and runs agent process; also creates tmux window for display
+
+**Active path**: `service.go:254-273` uses `ptyRunner.Start()` if available, otherwise `TmuxRunner.Start()`.
+
+### TmuxRunner / PaneManager flow
+
+1. `PaneManager.CreatePane()` creates a tmux window named `agents-{ticketID}`
+2. Writes prompt to `~/.agentboard/cache/prompt-{sessionID}.txt`
+3. Sends `agent run "$(cat promptFile)"` via `tmux send-keys`
+4. Monitors pane for completion by polling `tmux list-panes`
+
+### PtyRunner flow
+
+1. Creates a tmux window named `agent-{shortSessionID}` in the session
+2. Starts agent binary in a real PTY via `pty.Start()`
+3. Waits for ready pattern (e.g., "Ask anything" for opencode)
+4. Injects prompt character-by-character via PTY write (with 10ms delays)
+5. Monitors for done marker or idle patterns to detect completion
+
+### Dashboard integration
+
+When viewing dashboard with active sessions ([app.go:474-502](internal/tui/app.go#L474-L502)):
+- Creates a vertical split pane via `tmux split-window -h -p 70`
+- Runs `tmux attach-session -t agentboard-{ticketID}` in the split to show agent output
+- User can interact with the agent directly in that tmux window
 
 ### Agent CLI Commands
 
 | Agent | Spawn Command |
 |-------|---------------|
-| Claude Code | `claude "ticket context here"` |
-| OpenCode | `opencode` then `tmux send-keys -t {pane} "ticket context here" Enter` |
+| Claude Code | `claude --no-autocomplete` then prompt via PTY |
+| OpenCode | `opencode` then prompt via PTY character-by-character |
 | Cursor | Connected via MCP (no direct CLI spawn) |
 
-**Note**: OpenCode is interactive-first — it has no prompt flag. Spawn the process, then inject context via `tmux send-keys` (tmux mode) or PTY write (embedded mode).
+**Note**: OpenCode is interactive-first — it has no prompt flag. The PtyRunner waits for the ready pattern ("Ask anything"), then injects context via PTY write with per-character delays to simulate typing.
 
 ---
 

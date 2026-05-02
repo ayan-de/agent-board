@@ -2,7 +2,6 @@ package orchestrator
 
 import (
 	"context"
-	"io"
 
 	"github.com/ayan-de/agent-board/internal/llm"
 	"github.com/ayan-de/agent-board/internal/store"
@@ -30,7 +29,6 @@ type RunRequest struct {
 	Agent      string
 	Prompt     string
 	Reporter   func(string)
-	InputChan  chan io.Writer
 	Target     string
 	OnComplete func(outcome, summary string)
 }
@@ -54,6 +52,11 @@ type LLMClient interface {
 
 type Runner interface {
 	Start(ctx context.Context, req RunRequest) (RunHandle, error)
+}
+
+type AgentRunner interface {
+	Start(ctx context.Context, req RunRequest) (RunHandle, error)
+	GetPaneID(sessionID string) (string, bool)
 }
 
 type Store interface {

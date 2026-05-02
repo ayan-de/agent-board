@@ -30,23 +30,22 @@ The long-term product direction is full AI agent orchestration:
 
 ### Implemented
 
-- `cmd/agentboard/main.go` starts the TUI
+- `cmd/agentboard/main.go` starts the TUI, creates tmux session if not in one
 - `internal/tui` contains the working Bubble Tea application
 - `internal/store` contains the SQLite-backed ticket, session, proposal, event, and context carry persistence
 - `internal/config` handles defaults, TOML loading, env overlay, project naming, config scaffolding, agent detection, and MCP server config
 - `internal/theme` handles builtin theme embedding, user theme loading, parsing, and runtime selection
 - `internal/keybinding` handles keymap definitions, config overrides, and action resolution
 - `internal/llm` provides provider registry (openai, ollama, claude, zai) with LangChain Go behind a Client interface
-- `internal/orchestrator` implements proposal creation, approval gating, session start, outcome mapping, context carry persistence, and subprocess worker execution
+- `internal/orchestrator` implements proposal creation, approval gating, session start, outcome mapping, context carry persistence, and agent execution via TmuxRunner and PtyRunner
+- `internal/pty` provides agent configs (opencode, claude-code, codex, gemini) with ready patterns, prompt formatting, and PTY state machine
 - `internal/prompt` central repository for all LLM prompt templates
 - `internal/mcp` provides MCP manager, context carry adapter with load/save via MCP protocol
 - `internal/mcpclient` wraps mcp-go stdio client for MCP server communication
 
 ### Partially Implemented
 
-- `internal/tui/dashboard.go` shows detected agents, but it is not connected to live agent processes
-- `internal/orchestrator/exec_runner.go` runs subprocess workers but does not yet call FinishRun after worker completion
-- `internal/mcp/contextcarry.go` has SaveContext/LoadContext but SaveContext is not called from the orchestrator yet
+- `internal/tui/dashboard.go` shows detected agents and active sessions; connected to live agent panes via tmux split
 
 ### Placeholder / Not Yet Implemented
 
@@ -68,11 +67,15 @@ cmd/agentboard/main.go
   -> store.Open()
   -> llm.NewFromConfig()
   -> mcp.NewManager() + mcp.NewContextCarryAdapter()
+  -> if in tmux: NewTmuxRunner(sessionName), NewPtyRunner(sessionName)
   -> orchestrator.NewService(store, llm, runner, ctxCarry)
+  -> orch.SetPtyRunner(ptyRunner)  // if available
   -> theme.Registry setup
   -> tui.NewApp(cfg, store, registry, AppDeps{Orchestrator})
   -> bubbletea.Program.Run()
 ```
+
+When not already in tmux, main.go creates a new tmux session named `{project-name}` and re-executes inside it.
 
 ### Package Responsibilities
 
@@ -153,7 +156,10 @@ TUI <-> Orchestrator <-> Store
 - proposal creation triggered by moving assigned ticket to `in_progress`
 - coordinator LLM shapes worker prompt from ticket context + context carry
 - approval gate with stale proposal rejection
-- subprocess exec runner with structured JSON outcome parsing
+- `TmuxRunner` (PaneManager) and `PtyRunner` for agent execution in tmux windows
+- real PTY allocation with character-by-character prompt injection for interactive agents (opencode)
+- tmux window management: creates `agent-{sessionID}` windows, destroys on completion
+- dashboard split pane shows agent output via `tmux attach-session`
 - outcome-driven board transitions (completed -> review, failed -> stays)
 - context carry persistence and summarization for run continuity
 - event recording for orchestration lifecycle
