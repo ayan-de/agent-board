@@ -1,25 +1,23 @@
 package orchestrator
 
 import (
-    "context"
-    "fmt"
-    "io"
-    "os/exec"
-    "sync"
+	"context"
+	"fmt"
+	"os/exec"
+	"sync"
 
-    "github.com/ayan-de/agent-board/internal/llm"
-    "github.com/ayan-de/agent-board/internal/store"
+	"github.com/ayan-de/agent-board/internal/llm"
+	"github.com/ayan-de/agent-board/internal/store"
 )
 
 type Service struct {
-	store  Store
-	llm    LLMClient
-	runner Runner
-	ptyRunner *PtyRunner
-	ctx    ContextCarryProvider
-	logs   map[string][]string
-	inputs map[string]io.Writer
-	mu     sync.RWMutex
+	store      Store
+	llm        LLMClient
+	runner     Runner
+	ptyRunner  *PtyRunner
+	ctx        ContextCarryProvider
+	logs       map[string][]string
+	mu         sync.RWMutex
 
 	activeSessions map[string]*AgentSession
 	completionCh   chan RunCompletion
@@ -43,7 +41,6 @@ func NewService(store Store, llm LLMClient, runner Runner, ctx ContextCarryProvi
 		runner:         runner,
 		ctx:            ctx,
 		logs:           make(map[string][]string),
-		inputs:         make(map[string]io.Writer),
 		activeSessions: make(map[string]*AgentSession),
 		completionCh:   make(chan RunCompletion, 16),
 	}
@@ -78,15 +75,6 @@ func (s *Service) StartAdHocRun(ctx context.Context, agent, prompt string) (stor
 		}
 	}
 
-	inputChan := make(chan io.Writer, 1)
-	go func() {
-		if w, ok := <-inputChan; ok {
-			s.mu.Lock()
-			s.inputs[session.ID] = w
-			s.mu.Unlock()
-		}
-	}()
-
 	var handle RunHandle
 	if s.ptyRunner != nil {
 		handle, err = s.ptyRunner.Start(ctx, RunRequest{
@@ -95,17 +83,6 @@ func (s *Service) StartAdHocRun(ctx context.Context, agent, prompt string) (stor
 			Agent:      agent,
 			Prompt:     prompt,
 			Reporter:   func(line string) { s.AppendLog(session.ID, line) },
-			InputChan:  inputChan,
-			OnComplete: onComplete,
-		})
-	} else if s.runner != nil {
-		handle, err = s.runner.Start(ctx, RunRequest{
-			TicketID:   "",
-			SessionID:  session.ID,
-			Agent:      agent,
-			Prompt:     prompt,
-			Reporter:   func(line string) { s.AppendLog(session.ID, line) },
-			InputChan:  inputChan,
 			OnComplete: onComplete,
 		})
 	} else {
@@ -224,17 +201,6 @@ func (s *Service) StartApprovedRun(ctx context.Context, proposalID string) (stor
 		return store.Session{}, err
 	}
 
-	// For TmuxRunner, we don't need stdin pipe since it's a pane
-	// For ExecRunner, we might still need it
-	inputChan := make(chan io.Writer, 1)
-	go func() {
-		if w, ok := <-inputChan; ok {
-			s.mu.Lock()
-			s.inputs[session.ID] = w
-			s.mu.Unlock()
-		}
-	}()
-
 	onComplete := func(outcome, summary string) {
 		_ = s.FinishRun(context.Background(), FinishRunInput{
 			TicketID:  proposal.TicketID,
@@ -258,19 +224,10 @@ func (s *Service) StartApprovedRun(ctx context.Context, proposalID string) (stor
 			Agent:      proposal.Agent,
 			Prompt:     proposal.Prompt,
 			Reporter:   func(line string) { s.AppendLog(session.ID, line) },
-			InputChan:  inputChan,
 			OnComplete: onComplete,
 		})
 	} else {
-		handle, err = s.runner.Start(ctx, RunRequest{
-			TicketID:   proposal.TicketID,
-			SessionID:  session.ID,
-			Agent:      proposal.Agent,
-			Prompt:     proposal.Prompt,
-			Reporter:   func(line string) { s.AppendLog(session.ID, line) },
-			InputChan:  inputChan,
-			OnComplete: onComplete,
-		})
+		return store.Session{}, fmt.Errorf("no runner configured")
 	}
 
 	if err != nil {
@@ -379,22 +336,10 @@ func (s *Service) GetLogs(sessionID string) []string {
 }
 
 func (s *Service) SendInput(sessionID, input string) error {
-	// First try the TmuxRunner's SendInput
 	if tmuxRunner, ok := s.runner.(*TmuxRunner); ok {
-		if err := tmuxRunner.SendInput(sessionID, input); err == nil {
-			return nil
-		}
+		return tmuxRunner.SendInput(sessionID, input)
 	}
-
-	// Fall back to stdin pipe for ExecRunner
-	s.mu.RLock()
-	w, ok := s.inputs[sessionID]
-	s.mu.RUnlock()
-	if !ok {
-		return fmt.Errorf("service.sendInput: session %s not found or not interactive", sessionID)
-	}
-	_, err := fmt.Fprintln(w, input)
-	return err
+	return fmt.Errorf("service.sendInput: no tmux runner available for session %s", sessionID)
 }
 
 // GetTmuxRunner returns the runner as a TmuxRunner if it is one

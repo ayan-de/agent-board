@@ -1,14 +1,66 @@
 package orchestrator
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
 	"sync"
 	"time"
 )
+
+type opencodeEvent struct {
+	Type      string `json:"type"`
+	Text      string `json:"text"`
+	SessionID string `json:"sessionID"`
+	Part      struct {
+		Type   string `json:"type"`
+		Text   string `json:"text"`
+		Reason string `json:"reason"`
+	} `json:"part"`
+}
+
+func parseOpencodeOutput(r io.Reader) (RunHandle, error) {
+	var texts []string
+	var lastReason string
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		var evt opencodeEvent
+		if err := json.Unmarshal([]byte(line), &evt); err != nil {
+			continue
+		}
+		switch evt.Type {
+		case "text":
+			if evt.Part.Text != "" {
+				texts = append(texts, evt.Part.Text)
+			}
+		case "step_finish":
+			if evt.Part.Reason != "" {
+				lastReason = evt.Part.Reason
+			}
+		}
+	}
+
+	summary := strings.Join(texts, "\n")
+	if summary == "" {
+		summary = "Agent finished its task."
+	}
+
+	outcome := "completed"
+	if lastReason == "error" {
+		outcome = "failed"
+	}
+
+	return RunHandle{Outcome: outcome, Summary: summary}, nil
+}
 
 // PaneManager manages tmux panes for running agents
 type PaneManager struct {
@@ -167,7 +219,7 @@ func (pm *PaneManager) monitorPane(ctx context.Context, pane *AgentPane, reporte
 
 				captured, capErr := pm.capturePaneOutput(pane.PaneID, 200)
 				if capErr == nil && captured != "" {
-					parsed, parseErr := ParseOpencodeOutput(strings.NewReader(captured))
+					parsed, parseErr := parseOpencodeOutput(strings.NewReader(captured))
 					if parseErr == nil {
 						if parsed.Outcome != "" {
 							outcome = parsed.Outcome

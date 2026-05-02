@@ -25,19 +25,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	if cfg.General.Tmux == "auto" || cfg.General.Tmux == "true" {
-		if !tmux.IsInTmux() {
-			sessionName := cfg.ProjectName
-			cmd := exec.Command("tmux", "new-session", "-A", "-s", sessionName, os.Args[0])
-			cmd.Stdin = os.Stdin
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			if err := cmd.Run(); err != nil {
-				fmt.Fprintf(os.Stderr, "error launching tmux: %v\n", err)
-				os.Exit(1)
-			}
-			return
+	if !tmux.IsInTmux() {
+		sessionName := cfg.ProjectName
+		cmd := exec.Command("tmux", "new-session", "-A", "-s", sessionName, os.Args[0])
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "error launching tmux: %v\n", err)
+			os.Exit(1)
 		}
+		return
+	}
+
+	sessionName := cfg.ProjectName
+	if actualSession, err := tmux.GetCurrentSessionName(); err == nil {
+		sessionName = actualSession
 	}
 
 	s, err := store.Open(cfg.DB.Path, cfg.Board.Statuses, cfg.Board.Prefix)
@@ -53,19 +56,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	var runner orchestrator.Runner = orchestrator.NewExecRunner()
+	var runner orchestrator.Runner
 	var ptyRunner *orchestrator.PtyRunner
-	if tmux.IsInTmux() {
-		sessionName := cfg.ProjectName
-		if actualSession, err := tmux.GetCurrentSessionName(); err == nil {
-			sessionName = actualSession
-		}
-		if tmuxRunner, err := orchestrator.NewTmuxRunner(sessionName); err == nil {
-			runner = tmuxRunner
-		}
-		if pr, err := orchestrator.NewPtyRunner(sessionName); err == nil {
-			ptyRunner = pr
-		}
+	tmuxRunner, err := orchestrator.NewTmuxRunner(sessionName)
+	if err == nil {
+		runner = tmuxRunner
+	}
+	if pr, err := orchestrator.NewPtyRunner(sessionName); err == nil {
+		ptyRunner = pr
 	}
 	mcpManager := mcp.NewManager(cfg.MCP)
 	ctxCarry := mcp.NewContextCarryAdapter(mcpManager, cfg.ProjectName)
