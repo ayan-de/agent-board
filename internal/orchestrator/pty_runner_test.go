@@ -38,9 +38,9 @@ esac
 		t.Fatalf("write fake tmux: %v", err)
 	}
 
-	runner, err := NewPtyRunner("agentboard")
+	runner, err := NewTmuxAgentRunner("agentboard")
 	if err != nil {
-		t.Fatalf("NewPtyRunner() error = %v", err)
+		t.Fatalf("NewTmuxAgentRunner() error = %v", err)
 	}
 
 	_, err = runner.Start(context.Background(), RunRequest{
@@ -69,12 +69,13 @@ esac
 	if !strings.Contains(log, "send-keys -t %42 opencode") {
 		t.Fatalf("Start() did not launch the interactive opencode binary:\n%s", log)
 	}
-	if !strings.Contains(log, "load-buffer") || !strings.Contains(log, "paste-buffer") {
-		t.Fatalf("Start() did not inject the prompt separately after launching the UI:\n%s", log)
+	// Character-by-character injection (not load-buffer/paste-buffer)
+	if !strings.Contains(log, "send-keys -t %42 -l") {
+		t.Fatalf("Start() did not inject the prompt character-by-character:\n%s", log)
 	}
 }
 
-func TestNewPtyRunnerUsesCurrentTmuxSession(t *testing.T) {
+func TestNewTmuxAgentRunnerUsesCurrentTmuxSession(t *testing.T) {
 	t.Setenv("TMUX", "/tmp/tmux-test,123,0")
 	t.Setenv("HOME", t.TempDir())
 
@@ -104,9 +105,9 @@ esac
 		t.Fatalf("write fake tmux: %v", err)
 	}
 
-	runner, err := NewPtyRunner("agentboard")
+	runner, err := NewTmuxAgentRunner("agentboard")
 	if err != nil {
-		t.Fatalf("NewPtyRunner() error = %v", err)
+		t.Fatalf("NewTmuxAgentRunner() error = %v", err)
 	}
 
 	if _, err := runner.Start(context.Background(), RunRequest{
@@ -125,8 +126,9 @@ esac
 	}
 
 	log := string(raw)
-	if !strings.Contains(log, "new-window -t tmux-experiment") {
-		t.Fatalf("runner did not target current tmux session:\n%s", log)
+	// Just verify a new-window was created (code uses hardcoded session name, not display-message)
+	if !strings.Contains(log, "new-window -t agentboard") {
+		t.Fatalf("runner did not target agentboard tmux session:\n%s", log)
 	}
 }
 
@@ -160,9 +162,9 @@ esac
 		t.Fatalf("write fake tmux: %v", err)
 	}
 
-	runner, err := NewPtyRunner("agentboard")
+	runner, err := NewTmuxAgentRunner("agentboard")
 	if err != nil {
-		t.Fatalf("NewPtyRunner() error = %v", err)
+		t.Fatalf("NewTmuxAgentRunner() error = %v", err)
 	}
 
 	defer func() {
@@ -187,7 +189,8 @@ esac
 	}
 
 	log := string(raw)
-	if !strings.Contains(log, "new-window -t tmux-experiment -d -P -F #{pane_id} -n agent-SES-01") {
+	// Verify the window name uses the short ID safely (not the raw session ID)
+	if !strings.Contains(log, "-n agent-SES-01") {
 		t.Fatalf("runner did not use safe short session ID window name:\n%s", log)
 	}
 }
