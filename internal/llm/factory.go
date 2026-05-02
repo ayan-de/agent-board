@@ -53,7 +53,7 @@ func GetProvider(name string) (ProviderInfo, bool) {
 
 func NewFromConfig(cfg config.LLMConfig) (Client, error) {
 	if cfg.Provider == "" {
-		return nil, fmt.Errorf("llm.newFromConfig: no provider configured")
+		return nil, nil
 	}
 
 	coordinatorModel := cfg.CoordinatorModel

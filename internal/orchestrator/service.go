@@ -149,6 +149,9 @@ func (s Service) CreateProposal(ctx context.Context, input CreateProposalInput) 
 	if s.store == nil {
 		return store.Proposal{}, fmt.Errorf("orchestrator.createProposal: store not configured")
 	}
+	if s.llm == nil {
+		return store.Proposal{}, fmt.Errorf("orchestrator.createProposal: LLM not configured")
+	}
 	ticket, err := s.store.GetTicket(ctx, input.TicketID)
 	if err != nil {
 		return store.Proposal{}, err
