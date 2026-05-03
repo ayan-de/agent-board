@@ -1,0 +1,69 @@
+{
+  "$schema": "https://agentboard.dev/theme.json",
+  "name": "Default",
+  "defs": {
+    "background": "#000000",
+    "foreground": "#ffffff",
+    "gray": "#888888",
+    "lightGray": "#333333",
+    "darkGray": "#111111"
+  },
+  "theme": {
+    "primary": {
+      "dark": "foreground",
+      "light": "foreground"
+    },
+    "secondary": {
+      "dark": "gray",
+      "light": "gray"
+    },
+    "accent": {
+      "dark": "foreground",
+      "light": "foreground"
+    },
+    "error": {
+      "dark": "foreground",
+      "light": "foreground"
+    },
+    "warning": {
+      "dark": "foreground",
+      "light": "foreground"
+    },
+    "success": {
+      "dark": "foreground",
+      "light": "foreground"
+    },
+    "info": {
+      "dark": "gray",
+      "light": "gray"
+    },
+    "text": {
+      "dark": "foreground",
+      "light": "background"
+    },
+    "textMuted": {
+      "dark": "gray",
+      "light": "gray"
+    },
+    "background": {
+      "dark": "background",
+      "light": "foreground"
+    },
+    "backgroundPanel": {
+      "dark": "darkGray",
+      "light": "lightGray"
+    },
+    "backgroundElement": {
+      "dark": "lightGray",
+      "light": "gray"
+    },
+    "border": {
+      "dark": "lightGray",
+      "light": "gray"
+    },
+    "borderActive": {
+      "dark": "foreground",
+      "light": "background"
+    }
+  }
+}
