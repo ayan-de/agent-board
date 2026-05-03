@@ -43,7 +43,11 @@ func main() {
 		sessionName = actualSession
 	}
 
-	s, err := store.Open(cfg.DB.Path, cfg.Board.Statuses, cfg.Board.Prefix)
+	statuses := make([]string, len(cfg.Board.Columns))
+	for i, col := range cfg.Board.Columns {
+		statuses[i] = col.Status
+	}
+	s, err := store.Open(cfg.DB.Path, statuses, cfg.Board.Prefix)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error opening store: %v\n", err)
 		os.Exit(1)

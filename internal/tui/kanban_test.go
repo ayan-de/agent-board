@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/keybinding"
 	"github.com/ayan-de/agent-board/internal/store"
 	"github.com/ayan-de/agent-board/internal/theme"
@@ -39,7 +40,7 @@ func newTestKanban(t *testing.T) KanbanModel {
 	km := keybinding.DefaultKeyMap()
 	resolver := keybinding.NewResolver(km)
 
-	model, err := NewKanbanModel(s, resolver, testTheme())
+	model, err := NewKanbanModel(s, resolver, testTheme(), config.DefaultColumns())
 	if err != nil {
 		t.Fatalf("new kanban model: %v", err)
 	}
@@ -282,9 +283,9 @@ func TestKanbanViewRendersColumns(t *testing.T) {
 	m.height = 40
 
 	view := m.View()
-	for _, name := range columnNames {
-		if !strings.Contains(view, name) {
-			t.Errorf("view missing column name %q", name)
+	for _, col := range m.columnDefs {
+		if !strings.Contains(view, col.Name) {
+			t.Errorf("view missing column name %q", col.Name)
 		}
 	}
 }

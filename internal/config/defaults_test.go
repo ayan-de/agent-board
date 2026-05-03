@@ -20,13 +20,13 @@ func TestSetDefaults(t *testing.T) {
 		t.Errorf("General.Tmux = %q, want %q", cfg.General.Tmux, "auto")
 	}
 
-	wantStatuses := []string{"backlog", "in_progress", "review", "done"}
-	if len(cfg.Board.Statuses) != len(wantStatuses) {
-		t.Fatalf("Board.Statuses len = %d, want %d", len(cfg.Board.Statuses), len(wantStatuses))
+	wantColumns := []string{"backlog", "in_progress", "review", "done"}
+	if len(cfg.Board.Columns) != len(wantColumns) {
+		t.Fatalf("Board.Columns len = %d, want %d", len(cfg.Board.Columns), len(wantColumns))
 	}
-	for i, s := range cfg.Board.Statuses {
-		if s != wantStatuses[i] {
-			t.Errorf("Board.Statuses[%d] = %q, want %q", i, s, wantStatuses[i])
+	for i, col := range cfg.Board.Columns {
+		if col.Status != wantColumns[i] {
+			t.Errorf("Board.Columns[%d].Status = %q, want %q", i, col.Status, wantColumns[i])
 		}
 	}
 

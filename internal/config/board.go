@@ -6,10 +6,24 @@ import (
 	"strings"
 )
 
+type Column struct {
+	Status string `toml:"status"`
+	Name   string `toml:"name"`
+}
+
 type BoardConfig struct {
-	Statuses        []string `toml:"statuses"`
-	Prefix          string   `toml:"prefix"`
-	ProjectInitDate string   `toml:"-"` // format: "2006-01-02" — read from dir mtime, not user-editable
+	Columns []Column `toml:"columns"`
+	Prefix          string `toml:"prefix"`
+	ProjectInitDate string `toml:"-"` // format: "2006-01-02" — read from dir mtime, not user-editable
+}
+
+func DefaultColumns() []Column {
+	return []Column{
+		{Status: "backlog", Name: "Backlog"},
+		{Status: "in_progress", Name: "In Progress"},
+		{Status: "review", Name: "Review"},
+		{Status: "done", Name: "Done"},
+	}
 }
 
 func DefaultPrefix(projectName string) string {

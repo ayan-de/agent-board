@@ -176,7 +176,7 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry, deps AppDep
 	resolver := keybinding.NewResolver(km)
 
 	t := reg.Active()
-	kanban, err := NewKanbanModel(s, resolver, t)
+	kanban, err := NewKanbanModel(s, resolver, t, cfg.Board.Columns)
 	if err != nil {
 		return nil, fmt.Errorf("tui.newApp: %w", err)
 	}
@@ -670,7 +670,14 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case keybinding.ActionOpenPalette:
 		a.palette.Open()
 	case keybinding.ActionRefresh:
-		a.kanban, _ = a.kanban.Reload()
+		newCfg, err := config.LoadFromDir(config.GetBaseDir(), a.config.ProjectName)
+		if err == nil {
+			a.config = newCfg
+			a.store.SetTicketPrefix(newCfg.Board.Prefix)
+			a.kanban, _ = a.kanban.UpdateColumnDefs(newCfg.Board.Columns)
+		} else {
+			a.kanban, _ = a.kanban.Reload()
+		}
 	default:
 		var cmd tea.Cmd
 		a.kanban, cmd = a.kanban.Update(msg)

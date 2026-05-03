@@ -52,3 +52,7 @@ func Open(dbPath string, validStatuses []string, ticketPrefix string) (*Store, e
 func (s *Store) Close() error {
 	return s.db.Close()
 }
+
+func (s *Store) SetTicketPrefix(prefix string) {
+	s.ticketPrefix = prefix
+}

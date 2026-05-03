@@ -75,7 +75,11 @@ func TestLoadFromFileProject(t *testing.T) {
 
 	content := []byte(`
 [board]
-statuses = ["todo", "doing", "done"]
+columns = [
+  { status = "todo", name = "Todo" },
+  { status = "doing", name = "Doing" },
+  { status = "done", name = "Done" }
+]
 
 [tui]
 theme = "dracula"
@@ -90,13 +94,13 @@ theme = "dracula"
 		t.Fatalf("loadFromFile: %v", err)
 	}
 
-	wantStatuses := []string{"todo", "doing", "done"}
-	if len(cfg.Board.Statuses) != len(wantStatuses) {
-		t.Fatalf("Board.Statuses len = %d, want %d", len(cfg.Board.Statuses), len(wantStatuses))
+	wantColumns := []string{"todo", "doing", "done"}
+	if len(cfg.Board.Columns) != len(wantColumns) {
+		t.Fatalf("Board.Columns len = %d, want %d", len(cfg.Board.Columns), len(wantColumns))
 	}
-	for i, s := range cfg.Board.Statuses {
-		if s != wantStatuses[i] {
-			t.Errorf("Board.Statuses[%d] = %q, want %q", i, s, wantStatuses[i])
+	for i, col := range cfg.Board.Columns {
+		if col.Status != wantColumns[i] {
+			t.Errorf("Board.Columns[%d].Status = %q, want %q", i, col.Status, wantColumns[i])
 		}
 	}
 	if cfg.TUI.Theme != "dracula" {
@@ -338,7 +342,11 @@ default = "claude-code"
 	}
 	projCfg := []byte(`
 [board]
-statuses = ["todo", "doing", "done"]
+columns = [
+  { status = "todo", name = "Todo" },
+  { status = "doing", name = "Doing" },
+  { status = "done", name = "Done" }
+]
 
 [tui]
 theme = "dracula"
@@ -369,13 +377,13 @@ theme = "dracula"
 		t.Errorf("Agent.Default = %q, want global %q", cfg.Agent.Default, "claude-code")
 	}
 
-	wantStatuses := []string{"todo", "doing", "done"}
-	if len(cfg.Board.Statuses) != len(wantStatuses) {
-		t.Fatalf("Board.Statuses len = %d, want %d", len(cfg.Board.Statuses), len(wantStatuses))
+	wantColumns := []string{"todo", "doing", "done"}
+	if len(cfg.Board.Columns) != len(wantColumns) {
+		t.Fatalf("Board.Columns len = %d, want %d", len(cfg.Board.Columns), len(wantColumns))
 	}
-	for i, s := range cfg.Board.Statuses {
-		if s != wantStatuses[i] {
-			t.Errorf("Board.Statuses[%d] = %q, want %q", i, s, wantStatuses[i])
+	for i, col := range cfg.Board.Columns {
+		if col.Status != wantColumns[i] {
+			t.Errorf("Board.Columns[%d].Status = %q, want %q", i, col.Status, wantColumns[i])
 		}
 	}
 

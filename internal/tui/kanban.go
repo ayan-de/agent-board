@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/keybinding"
 	"github.com/ayan-de/agent-board/internal/store"
 	"github.com/ayan-de/agent-board/internal/theme"
@@ -22,10 +23,6 @@ const (
 	TabSearch
 	TabDateFilter
 )
-
-var statusNames = [4]string{"backlog", "in_progress", "review", "done"}
-
-var columnNames = [4]string{"Backlog", "In Progress", "Review", "Done"}
 
 type KanbanStyles struct {
 	FocusedColumn  lipgloss.Style
@@ -49,9 +46,10 @@ type KanbanModel struct {
 	width           int
 	height          int
 	colIndex        int
-	cursors         [4]int
-	scrollOffsets   [4]int
-	columns         [4][]store.Ticket
+	cursors         []int
+	scrollOffsets   []int
+	columns         [][]store.Ticket
+	columnDefs      []config.Column
 	styles          KanbanStyles
 	animFrame       int
 	theme           *theme.Theme
@@ -127,7 +125,7 @@ func NewKanbanStyles(t *theme.Theme) KanbanStyles {
 	}
 }
 
-func NewKanbanModel(s *store.Store, resolver *keybinding.Resolver, t *theme.Theme) (KanbanModel, error) {
+func NewKanbanModel(s *store.Store, resolver *keybinding.Resolver, t *theme.Theme, columns []config.Column) (KanbanModel, error) {
 	m := KanbanModel{
 		store:       s,
 		resolver:    resolver,
@@ -136,12 +134,24 @@ func NewKanbanModel(s *store.Store, resolver *keybinding.Resolver, t *theme.Them
 		tab:         TabBoard,
 		monthOffset: 0,
 		projectInitDate: time.Now(),
+		columnDefs:  columns,
 	}
+	m.initDynamicState()
 	m, err := m.loadColumns()
 	if err != nil {
 		return m, fmt.Errorf("kanban.newKanbanModel: %w", err)
 	}
 	return m, nil
+}
+
+func (m *KanbanModel) initDynamicState() {
+	numCols := len(m.columnDefs)
+	if numCols == 0 {
+		numCols = 4
+	}
+	m.cursors = make([]int, numCols)
+	m.scrollOffsets = make([]int, numCols)
+	m.columns = make([][]store.Ticket, numCols)
 }
 
 func (m KanbanModel) Init() tea.Cmd {
@@ -166,12 +176,12 @@ func (m KanbanModel) Update(msg tea.Msg) (KanbanModel, tea.Cmd) {
 		}
 		return m, nil
 	case searchResultsMsg:
-		m.columns = groupByStatus(msg.tickets)
+		m.columns = groupByStatusDynamic(msg.tickets, m.columnDefs)
 		return m, nil
 	case searchQueryMsg:
 		results, err := m.store.ListTickets(context.Background(), store.TicketFilters{Search: msg.query})
 		if err == nil {
-			m.columns = groupByStatus(results)
+			m.columns = groupByStatusDynamic(results, m.columnDefs)
 		}
 		return m, nil
 	case monthNavigateMsg:
@@ -188,11 +198,13 @@ func (m KanbanModel) Update(msg tea.Msg) (KanbanModel, tea.Cmd) {
 	case deleteTicketConfirmMsg:
 		return m, nil
 	case deleteTicketRequestMsg:
-		col := m.columns[m.colIndex]
-		if len(col) > 0 {
-			cursor := m.cursors[m.colIndex]
-			return m, func() tea.Msg {
-				return showDeleteModalMsg{ticketID: col[cursor].ID}
+		if m.colIndex < len(m.columns) {
+			col := m.columns[m.colIndex]
+			if len(col) > 0 {
+				cursor := m.cursors[m.colIndex]
+				return m, func() tea.Msg {
+					return showDeleteModalMsg{ticketID: col[cursor].ID}
+				}
 			}
 		}
 		return m, nil
@@ -262,7 +274,7 @@ func (m KanbanModel) handleKey(msg tea.KeyMsg) (KanbanModel, tea.Cmd) {
 			m, _ = m.loadMonth()
 			return m, nil
 		}
-		if m.colIndex < 3 {
+		if m.colIndex < len(m.columnDefs)-1 {
 			m.colIndex++
 		}
 	case keybinding.ActionPrevTicket:
@@ -273,13 +285,17 @@ func (m KanbanModel) handleKey(msg tea.KeyMsg) (KanbanModel, tea.Cmd) {
 			}
 		}
 	case keybinding.ActionNextTicket:
-		if m.cursors[m.colIndex] < len(m.columns[m.colIndex])-1 {
+		if m.colIndex < len(m.columns) && m.cursors[m.colIndex] < len(m.columns[m.colIndex])-1 {
 			m.cursors[m.colIndex]++
 			availH := m.height - 6
 			if availH < 1 {
 				availH = 10
 			}
-			colWidth := m.width / 4
+			numCols := len(m.columnDefs)
+			if numCols == 0 {
+				numCols = 4
+			}
+			colWidth := m.width / numCols
 			innerWidth := colWidth - 4
 			if innerWidth < 1 {
 				innerWidth = 1
@@ -290,22 +306,30 @@ func (m KanbanModel) handleKey(msg tea.KeyMsg) (KanbanModel, tea.Cmd) {
 			}
 		}
 	case keybinding.ActionJumpColumn1:
-		m.colIndex = 0
+		if len(m.columnDefs) > 0 {
+			m.colIndex = 0
+		}
 	case keybinding.ActionJumpColumn2:
-		m.colIndex = 1
+		if len(m.columnDefs) > 1 {
+			m.colIndex = 1
+		}
 	case keybinding.ActionJumpColumn3:
-		m.colIndex = 2
+		if len(m.columnDefs) > 2 {
+			m.colIndex = 2
+		}
 	case keybinding.ActionJumpColumn4:
-		m.colIndex = 3
+		if len(m.columnDefs) > 3 {
+			m.colIndex = 3
+		}
 	case keybinding.ActionAddTicket:
-		if m.colIndex != 0 {
+		if len(m.columnDefs) == 0 || m.colIndex != 0 {
 			return m, func() tea.Msg {
 				return notificationMsg{title: "Cannot create ticket", message: "Tickets can only be created in Backlog", variant: NotificationError}
 			}
 		}
 		ticket, err := m.store.CreateTicket(context.Background(), store.Ticket{
 			Title:  "New Ticket",
-			Status: statusNames[0],
+			Status: m.columnDefs[0].Status,
 		})
 		if err != nil {
 			return m, nil
@@ -332,13 +356,17 @@ func (m KanbanModel) View() string {
 		return ""
 	}
 
-	colWidth := m.width / 4
-	remainder := m.width % 4
+	numCols := len(m.columnDefs)
+	if numCols == 0 {
+		numCols = 4
+	}
+	colWidth := m.width / numCols
+	remainder := m.width % numCols
 
-	colInnerWidths := [4]int{}
-	for i := 0; i < 4; i++ {
+	colInnerWidths := make([]int, numCols)
+	for i := 0; i < numCols; i++ {
 		w := colWidth
-		if i >= 4-remainder {
+		if i >= numCols-remainder {
 			w++
 		}
 		colInnerWidths[i] = w - 4
@@ -352,16 +380,21 @@ func (m KanbanModel) View() string {
 		availableHeight = 10
 	}
 
-	cols := make([]string, 4)
-	for i := 0; i < 4; i++ {
+	cols := make([]string, numCols)
+	for i := 0; i < numCols; i++ {
 		innerWidth := colInnerWidths[i]
 		var content strings.Builder
+
+		colName := m.columnDefs[i].Name
+		if colName == "" {
+			colName = m.columnDefs[i].Status
+		}
 
 		titleStyle := m.styles.FocusedTitle
 		if i != m.colIndex {
 			titleStyle = m.styles.BlurredTitle
 		}
-		content.WriteString(titleStyle.Width(innerWidth).Render(columnNames[i]))
+		content.WriteString(titleStyle.Width(innerWidth).Render(colName))
 		content.WriteString("\n")
 
 		tickets := m.columns[i]
@@ -438,7 +471,10 @@ func (m KanbanModel) View() string {
 
 func (m KanbanModel) renderMonthHeader() string {
 	from, to := MonthWindow(m.projectInitDate, m.monthOffset)
-	count := len(m.columns[0]) + len(m.columns[1]) + len(m.columns[2]) + len(m.columns[3])
+	count := 0
+	for _, col := range m.columns {
+		count += len(col)
+	}
 	return from.Format("Jan 02") + " - " + to.Format("Jan 02 2006") + " (" + strconv.Itoa(count) + " cards)"
 }
 
@@ -521,6 +557,9 @@ func (m KanbanModel) SelectedTicket() *store.Ticket {
 }
 
 func (m KanbanModel) Column() []store.Ticket {
+	if m.colIndex >= len(m.columns) {
+		return []store.Ticket{}
+	}
 	return m.columns[m.colIndex]
 }
 
@@ -532,9 +571,21 @@ func (m KanbanModel) Reload() (KanbanModel, error) {
 	return m.loadColumns()
 }
 
+func (m KanbanModel) UpdateColumnDefs(columns []config.Column) (KanbanModel, error) {
+	m.columnDefs = columns
+	numCols := len(m.columnDefs)
+	if numCols == 0 {
+		numCols = 4
+	}
+	m.cursors = make([]int, numCols)
+	m.scrollOffsets = make([]int, numCols)
+	m.columns = make([][]store.Ticket, numCols)
+	return m.loadColumns()
+}
+
 func (m KanbanModel) loadColumns() (KanbanModel, error) {
-	for i, status := range statusNames {
-		tickets, err := m.store.ListTickets(context.Background(), store.TicketFilters{Status: status})
+	for i, col := range m.columnDefs {
+		tickets, err := m.store.ListTickets(context.Background(), store.TicketFilters{Status: col.Status})
 		if err != nil {
 			return m, fmt.Errorf("kanban.loadColumns: %w", err)
 		}
@@ -544,7 +595,7 @@ func (m KanbanModel) loadColumns() (KanbanModel, error) {
 		m.columns[i] = tickets
 	}
 	for i := range m.cursors {
-		if m.cursors[i] >= len(m.columns[i]) && len(m.columns[i]) > 0 {
+		if i < len(m.columns) && m.cursors[i] >= len(m.columns[i]) && len(m.columns[i]) > 0 {
 			m.cursors[i] = len(m.columns[i]) - 1
 		}
 	}
@@ -571,6 +622,23 @@ func (m KanbanModel) debouncedSearch() tea.Cmd {
 		time.Sleep(400 * time.Millisecond)
 		return searchQueryMsg{query: m.searchQuery}
 	}
+}
+
+func groupByStatusDynamic(tickets []store.Ticket, columnDefs []config.Column) [][]store.Ticket {
+	if len(columnDefs) == 0 {
+		columnDefs = config.DefaultColumns()
+	}
+	cols := make([][]store.Ticket, len(columnDefs))
+	statusMap := make(map[string]int)
+	for i, col := range columnDefs {
+		statusMap[col.Status] = i
+	}
+	for _, t := range tickets {
+		if idx, ok := statusMap[t.Status]; ok {
+			cols[idx] = append(cols[idx], t)
+		}
+	}
+	return cols
 }
 
 func groupByStatus(tickets []store.Ticket) [4][]store.Ticket {
@@ -607,7 +675,7 @@ func (m KanbanModel) loadMonth() (KanbanModel, error) {
 	if err != nil {
 		return m, err
 	}
-	m.columns = groupByStatus(tickets)
+	m.columns = groupByStatusDynamic(tickets, m.columnDefs)
 	return m, nil
 }
 

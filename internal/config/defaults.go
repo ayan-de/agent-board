@@ -9,8 +9,8 @@ func SetDefaults() *Config {
 			Tmux: "auto",
 		},
 		Board: BoardConfig{
-			Statuses: []string{"backlog", "in_progress", "review", "done"},
-			Prefix:   "",
+			Columns: DefaultColumns(),
+			Prefix:  "",
 		},
 		Agent: AgentConfig{
 			Default: "opencode",
