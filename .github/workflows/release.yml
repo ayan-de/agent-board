@@ -42,9 +42,25 @@ jobs:
         run: |
           go build -ldflags="-s -w" -o "agentboard-${GOOS}-${GOARCH}" ./cmd/agentboard
 
-      - name: Upload release asset
+      - name: Upload artifact
+        uses: actions/upload-release-artifact@v4
+        with:
+          name: agentboard-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: agentboard-${{ matrix.goos }}-${{ matrix.goarch }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-release-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: ls -la artifacts/
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: agentboard-*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          files: artifacts/**
