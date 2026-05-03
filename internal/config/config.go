@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"golang.org/x/sys/unix"
 )
 
 type Config struct {
@@ -108,14 +106,6 @@ func GetBaseDir() string {
 
 func GetProjectInitDate(baseDir, projectName string) (time.Time, error) {
 	projDir := filepath.Join(baseDir, "projects", projectName)
-
-	// Try to get actual birth time (creation time) using statx on Linux
-	var stat unix.Statx_t
-	// We use AT_FDCWD for a relative or absolute path, and request STATX_BTIME specifically.
-	err := unix.Statx(unix.AT_FDCWD, projDir, unix.AT_STATX_SYNC_AS_STAT, unix.STATX_BTIME, &stat)
-	if err == nil && (stat.Mask&unix.STATX_BTIME) != 0 {
-		return time.Unix(stat.Btime.Sec, int64(stat.Btime.Nsec)), nil
-	}
 
 	// Fallback: Check multiple files to find the oldest one (proxy for creation date)
 	files := []string{
