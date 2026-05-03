@@ -44,6 +44,12 @@ tmux = "auto"
 
 [board]
 # prefix = "AGB-"  # Ticket ID prefix. Default: first 3 letters of project name.
+columns = [
+  { status = "backlog",     name = "Backlog" },
+  { status = "in_progress", name = "In Progress" },
+  { status = "review",      name = "Review" },
+  { status = "done",        name = "Done" },
+]
 
 [tui]
 theme = "default"
