@@ -213,6 +213,9 @@ case "$1" in
   has-session)
     exit 1
     ;;
+  new-window)
+    printf '%%42\n'
+    ;;
   new-session)
     printf '%%42\n'
     ;;
@@ -228,9 +231,9 @@ esac
 		t.Fatalf("write fake tmux: %v", err)
 	}
 
-	runner, err := NewPtyRunner("project-board")
+	runner, err := NewTmuxAgentRunner("project-board")
 	if err != nil {
-		t.Fatalf("NewPtyRunner() error = %v", err)
+		t.Fatalf("NewTmuxAgentRunner() error = %v", err)
 	}
 
 	if _, err := runner.Start(context.Background(), RunRequest{
@@ -249,7 +252,7 @@ esac
 		t.Fatalf("read tmux log: %v", err)
 	}
 	log := string(raw)
-	if !strings.Contains(log, "new-session -d -s agentboard-AGT-01 -n opencode -P -F #{pane_id}") {
+	if !strings.Contains(log, "new-window") {
 		t.Fatalf("Start() did not create the ticket agent session:\n%s", log)
 	}
 	if strings.Contains(log, "opencode run") {
@@ -258,7 +261,10 @@ esac
 	if !strings.Contains(log, "send-keys -t %42 opencode Enter") {
 		t.Fatalf("Start() did not launch the interactive opencode UI:\n%s", log)
 	}
-	if !strings.Contains(log, "load-buffer") || !strings.Contains(log, "paste-buffer") {
-		t.Fatalf("Start() did not stream the approved prompt into the UI:\n%s", log)
+	if !strings.Contains(log, "send-keys -t %42 -l") {
+		t.Fatalf("Start() did not inject the prompt character-by-character:\n%s", log)
+	}
+	if !strings.Contains(log, "send-keys -t %42 Enter") {
+		t.Fatalf("Start() did not send Enter after prompt:\n%s", log)
 	}
 }
