@@ -21,11 +21,36 @@
 
 ---
 
+## 🌐 Marketing Website
+
+For more information about AgentBoard, including feature showcases, screenshots, and project updates, visit the official website:
+
+**https://agentboard.ayande.xyz/**
+
+---
+
 ## 🚀 Getting Started
+
+### Prerequisites
+
+- **Go**: 1.21 or higher
+- **git**: For cloning the repository
+- **tmux**: Required for tmux-mode agent spawning (Linux/macOS)
+- **Node.js/npm**: Required for MCP server integrations
 
 ### Installation
 
-Ensure you have [Go](https://go.dev/doc/install) 1.21+ installed.
+#### From Binary (All Platforms)
+
+Run the automated installer:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/ayan-de/agent-board/main/install.sh | bash
+```
+
+This will detect your OS and architecture, install dependencies, and place the binary in `~/.local/bin`.
+
+#### From Source
 
 ```bash
 # Clone the repository
@@ -35,15 +60,31 @@ cd agent-board
 # Build the binary
 go build -o agentboard ./cmd/agentboard
 
+# Add to PATH (optional)
+export PATH="$HOME/.local/bin:$PATH"
+
 # Initialize configuration
 ./agentboard init
 ```
+
+#### Platform-Specific Notes
+
+| Platform | Package Manager | Install Command |
+|----------|-----------------|-----------------|
+| Linux (apt) | `apt-get install golang git tmux npm` | Binary or source |
+| macOS (brew) | `brew install go git tmux npm node` | Binary or source |
+| Android (Termux) | `pkg install golang git tmux nodejs` | Binary or source |
 
 ### Basic Usage
 
 Start the interactive Kanban board:
 ```bash
 ./agentboard
+```
+
+Or if installed via binary:
+```bash
+agentboard
 ```
 
 ### Keybindings
@@ -150,7 +191,3 @@ Distributed under the MIT License. See `LICENSE` for more information.
 <p align="center">
   Built with ❤️ for the AI-First Engineering community.
 </p>
-
-heelo from agent board
-
-tmux integration
