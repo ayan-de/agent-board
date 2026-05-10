@@ -325,11 +325,17 @@ func (s *Store) SetAgentActive(ctx context.Context, id string, active bool) erro
 }
 
 func (s *Store) SetResumeCommand(ctx context.Context, id, cmd string) error {
-	_, err := s.db.ExecContext(ctx, "UPDATE tickets SET resume_command = ?, updated_at = ? WHERE id = ?",
+	result, err := s.db.ExecContext(ctx, "UPDATE tickets SET resume_command = ?, updated_at = ? WHERE id = ?",
 		cmd, time.Now().Format(time.RFC3339), id)
 	if err != nil {
-		return fmt.Errorf("set resume command: %w", err)
+		return fmt.Errorf("store.setResumeCommand: %w", err)
 	}
+
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return fmt.Errorf("store.setResumeCommand %s: %w", id, ErrNotFound)
+	}
+
 	return nil
 }
 
