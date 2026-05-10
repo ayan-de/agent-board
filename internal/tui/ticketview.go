@@ -216,6 +216,16 @@ func ticketFields() []ticketField {
 			},
 			editable: false,
 		},
+		{
+			label: "Resume",
+			value: func(t *store.Ticket) string {
+				if t.ResumeCommand == "" {
+					return ""
+				}
+				return t.ResumeCommand
+			},
+			editable: false,
+		},
 	}
 }
 
