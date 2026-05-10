@@ -194,3 +194,71 @@ esac
 		t.Fatalf("runner did not use safe short session ID window name:\n%s", log)
 	}
 }
+
+func TestPtyRunnerStartTicketRunCreatesInteractiveTicketSession(t *testing.T) {
+	t.Setenv("TMUX", "/tmp/tmux-test,123,0")
+	t.Setenv("HOME", t.TempDir())
+
+	tmuxDir := t.TempDir()
+	logFile := filepath.Join(tmuxDir, "tmux.log")
+	t.Setenv("FAKE_TMUX_LOG", logFile)
+	t.Setenv("PATH", tmuxDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	fakeTmux := `#!/bin/sh
+printf '%s\n' "$*" >> "$FAKE_TMUX_LOG"
+case "$1" in
+  display-message)
+    printf 'project-board\n'
+    ;;
+  has-session)
+    exit 1
+    ;;
+  new-session)
+    printf '%%42\n'
+    ;;
+  capture-pane)
+    printf 'Ask anything\n'
+    ;;
+  list-panes)
+    exit 1
+    ;;
+esac
+`
+	if err := os.WriteFile(filepath.Join(tmuxDir, "tmux"), []byte(fakeTmux), 0755); err != nil {
+		t.Fatalf("write fake tmux: %v", err)
+	}
+
+	runner, err := NewPtyRunner("project-board")
+	if err != nil {
+		t.Fatalf("NewPtyRunner() error = %v", err)
+	}
+
+	if _, err := runner.Start(context.Background(), RunRequest{
+		TicketID:  "AGT-01",
+		SessionID: "SES-01",
+		Agent:     "opencode",
+		Prompt:    "Approved prompt",
+	}); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+
+	time.Sleep(300 * time.Millisecond)
+
+	raw, err := os.ReadFile(logFile)
+	if err != nil {
+		t.Fatalf("read tmux log: %v", err)
+	}
+	log := string(raw)
+	if !strings.Contains(log, "new-session -d -s agentboard-AGT-01 -n opencode -P -F #{pane_id}") {
+		t.Fatalf("Start() did not create the ticket agent session:\n%s", log)
+	}
+	if strings.Contains(log, "opencode run") {
+		t.Fatalf("Start() launched non-interactive run mode:\n%s", log)
+	}
+	if !strings.Contains(log, "send-keys -t %42 opencode Enter") {
+		t.Fatalf("Start() did not launch the interactive opencode UI:\n%s", log)
+	}
+	if !strings.Contains(log, "load-buffer") || !strings.Contains(log, "paste-buffer") {
+		t.Fatalf("Start() did not stream the approved prompt into the UI:\n%s", log)
+	}
+}

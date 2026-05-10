@@ -18,10 +18,11 @@ type ApplyRunOutcomeInput struct {
 }
 
 type FinishRunInput struct {
-	TicketID  string
-	SessionID string
-	Outcome   string
-	Summary   string
+	TicketID      string
+	SessionID     string
+	Outcome       string
+	Summary       string
+	ResumeCommand string
 }
 
 type RunRequest struct {

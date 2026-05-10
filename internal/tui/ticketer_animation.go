@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-const AnimFrames = 16
+const AnimFrames = 8
 
 type AnimationType int
 

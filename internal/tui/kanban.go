@@ -25,18 +25,18 @@ const (
 )
 
 type KanbanStyles struct {
-	FocusedColumn  lipgloss.Style
-	BlurredColumn  lipgloss.Style
-	FocusedTitle   lipgloss.Style
-	BlurredTitle   lipgloss.Style
-	SelectedTicket lipgloss.Style
-	Ticket         lipgloss.Style
-	EmptyColumn    lipgloss.Style
-	TabBar         lipgloss.Style
-	TabActive      lipgloss.Style
-	TabInactive    lipgloss.Style
-	SearchBox      lipgloss.Style
-	SearchCursor   lipgloss.Style
+	FocusedColumn   lipgloss.Style
+	BlurredColumn   lipgloss.Style
+	FocusedTitle    lipgloss.Style
+	BlurredTitle    lipgloss.Style
+	SelectedTicket  lipgloss.Style
+	Ticket          lipgloss.Style
+	EmptyColumn     lipgloss.Style
+	TabBar          lipgloss.Style
+	TabActive       lipgloss.Style
+	TabInactive     lipgloss.Style
+	SearchBox       lipgloss.Style
+	SearchCursor    lipgloss.Style
 	SearchBoxActive lipgloss.Style
 }
 
@@ -81,8 +81,8 @@ func DefaultKanbanStyles() KanbanStyles {
 			Foreground(lipgloss.Color("252")),
 		EmptyColumn: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("240")),
-		TabBar: lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
-		TabActive: lipgloss.NewStyle().Foreground(lipgloss.Color("69")).Bold(true),
+		TabBar:      lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		TabActive:   lipgloss.NewStyle().Foreground(lipgloss.Color("69")).Bold(true),
 		TabInactive: lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
 		SearchBox: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("240")),
@@ -115,8 +115,8 @@ func NewKanbanStyles(t *theme.Theme) KanbanStyles {
 			Foreground(t.Text),
 		EmptyColumn: lipgloss.NewStyle().
 			Foreground(t.TextMuted),
-		TabBar: lipgloss.NewStyle().Foreground(t.TextMuted),
-		TabActive: lipgloss.NewStyle().Foreground(t.Primary).Bold(true),
+		TabBar:      lipgloss.NewStyle().Foreground(t.TextMuted),
+		TabActive:   lipgloss.NewStyle().Foreground(t.Primary).Bold(true),
 		TabInactive: lipgloss.NewStyle().Foreground(t.TextMuted),
 		SearchBox: lipgloss.NewStyle().
 			Foreground(t.TextMuted),
@@ -127,12 +127,12 @@ func NewKanbanStyles(t *theme.Theme) KanbanStyles {
 
 func NewKanbanModel(s *store.Store, resolver *keybinding.Resolver, t *theme.Theme, columns []config.Column) (KanbanModel, error) {
 	m := KanbanModel{
-		store:       s,
-		resolver:    resolver,
-		styles:      NewKanbanStyles(t),
-		theme:       t,
-		tab:         TabBoard,
-		monthOffset: 0,
+		store:           s,
+		resolver:        resolver,
+		styles:          NewKanbanStyles(t),
+		theme:           t,
+		tab:             TabBoard,
+		monthOffset:     0,
 		projectInitDate: time.Now(),
 		columnDefs:  columns,
 	}
@@ -213,6 +213,19 @@ func (m KanbanModel) Update(msg tea.Msg) (KanbanModel, tea.Cmd) {
 }
 
 func (m KanbanModel) handleKey(msg tea.KeyMsg) (KanbanModel, tea.Cmd) {
+	if msg.Type == tea.KeyTab {
+		m.tab = (m.tab + 1) % 3
+		return m, nil
+	}
+	if msg.Type == tea.KeyShiftTab {
+		if m.tab == TabBoard {
+			m.tab = TabDateFilter
+		} else {
+			m.tab--
+		}
+		return m, nil
+	}
+
 	// If in search mode, intercept keys for search and disable most board keybindings
 	if m.tab == TabSearch {
 		// Handle backspace
@@ -224,7 +237,7 @@ func (m KanbanModel) handleKey(msg tea.KeyMsg) (KanbanModel, tea.Cmd) {
 			return m, nil
 		}
 
-		// Handle enter or escape to exit search mode? 
+		// Handle enter or escape to exit search mode?
 		// For now, just let it be.
 
 		// Handle typing
@@ -418,7 +431,7 @@ func (m KanbanModel) View() string {
 			}
 
 			var cardsContent strings.Builder
-			
+
 			// Top indicator
 			if m.scrollOffsets[i] > 0 {
 				cardsContent.WriteString(m.styles.EmptyColumn.Italic(true).Render(fmt.Sprintf("↑ %d more", m.scrollOffsets[i])))
@@ -431,7 +444,7 @@ func (m KanbanModel) View() string {
 
 				card := NewTicketCardModel(tickets[j], isSelected, isExpanded, cardWidth, m.animFrame, m.theme)
 				cardsContent.WriteString(card.Render())
-				
+
 				// Add spacer if not the last card and there's more content below (either a card or an indicator)
 				if j < m.scrollOffsets[i]+maxShow-1 || len(tickets) > m.scrollOffsets[i]+maxShow {
 					cardsContent.WriteString("\n")
@@ -525,18 +538,18 @@ func (m KanbanModel) renderTabBar() string {
 
 	leftPad := 2
 	rightPad := 2
-	
+
 	// Spacing between elements
 	gap1 := 4 // Between Board and Search
 	gap2 := w - boardWidth - searchWidth - monthWidth - leftPad - rightPad - gap1
-	
+
 	if gap2 < 1 {
 		gap2 = 1
 	}
 
-	return strings.Repeat(" ", leftPad) + 
-		boardLabel + strings.Repeat(" ", gap1) + 
-		searchBar + strings.Repeat(" ", gap2) + 
+	return strings.Repeat(" ", leftPad) +
+		boardLabel + strings.Repeat(" ", gap1) +
+		searchBar + strings.Repeat(" ", gap2) +
 		monthHeader + strings.Repeat(" ", rightPad)
 }
 
@@ -659,11 +672,11 @@ func MonthWindow(initDate time.Time, offset int) (from, to time.Time) {
 	from = initDate.AddDate(0, offset, 0)
 	// Set 'from' to the beginning of that day
 	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
-	
+
 	// 'to' is one month later minus one day, set to the end of that day
 	to = from.AddDate(0, 1, -1)
 	to = time.Date(to.Year(), to.Month(), to.Day(), 23, 59, 59, 0, to.Location())
-	
+
 	return from, to
 }
 
@@ -714,7 +727,7 @@ func (m KanbanModel) computeMaxVisible(colIndex int, startIdx int, width int, av
 			break
 		}
 
-		// If this is NOT the last ticket overall, we must ensure there's room 
+		// If this is NOT the last ticket overall, we must ensure there's room
 		// for at least the "↓ X more" indicator if we stop after this card.
 		if i+1 < len(tickets) && lines+hWithSpacer+1 > hRemaining {
 			break

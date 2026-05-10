@@ -11,8 +11,8 @@ import (
 	"github.com/ayan-de/agent-board/internal/store"
 	"github.com/ayan-de/agent-board/internal/theme"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -62,11 +62,11 @@ type TicketViewModel struct {
 	agents      []config.DetectedAgent
 	agentCursor int
 
-	priorities  []string
+	priorities     []string
 	priorityCursor int
 
-	dependsOnTickets []store.Ticket
-	dependsOnCursor int
+	dependsOnTickets  []store.Ticket
+	dependsOnCursor   int
 	dependsOnSelected []string
 
 	styles TicketViewStyles
@@ -74,8 +74,8 @@ type TicketViewModel struct {
 	activeProposal *store.Proposal
 	loading        bool
 
-	adhocAgent    string
-	adhocPrompt   string
+	adhocAgent        string
+	adhocPrompt       string
 	adhocPromptCursor int
 
 	viewport viewport.Model
@@ -221,14 +221,14 @@ func ticketFields() []ticketField {
 
 func NewTicketViewModel(s *store.Store, resolver *keybinding.Resolver, t *theme.Theme, agents []config.DetectedAgent) TicketViewModel {
 	return TicketViewModel{
-		store:    s,
-		resolver: resolver,
-		styles:   NewTicketViewStyles(t),
-		fields:   ticketFields(),
-		mode:     ticketViewMode,
-		agents:   agents,
+		store:      s,
+		resolver:   resolver,
+		styles:     NewTicketViewStyles(t),
+		fields:     ticketFields(),
+		mode:       ticketViewMode,
+		agents:     agents,
 		priorities: []string{"", "low", "medium", "high", "critical"},
-		viewport: viewport.New(0, 0),
+		viewport:   viewport.New(0, 0),
 	}
 }
 
@@ -771,7 +771,7 @@ func (m TicketViewModel) View() string {
 					break
 				}
 			}
-			
+
 			pStyle := lipgloss.NewStyle()
 			iStyle := m.styles.Value
 			if i == m.dependsOnCursor {
@@ -779,7 +779,7 @@ func (m TicketViewModel) View() string {
 				iStyle = m.styles.Title
 			}
 
-			row := pStyle.Render(prefix) + iStyle.Render(t.ID + " - " + t.Title + selected)
+			row := pStyle.Render(prefix) + iStyle.Render(t.ID+" - "+t.Title+selected)
 			b.WriteString(row)
 			b.WriteString("\n")
 		}
@@ -854,15 +854,25 @@ func (m TicketViewModel) View() string {
 		}
 	}
 
-	m.viewport.SetContent(b.String())
+	content := b.String()
+	m.viewport.SetContent(content)
 
 	h := m.height - 6
 	if h < 0 {
 		h = 0
 	}
+	if m.viewport.Width == 0 {
+		m.viewport.Width = innerWidth
+	}
+	if m.viewport.Height == 0 {
+		m.viewport.Height = h
+	}
+	if m.mode != ticketViewMode {
+		m.viewport.Height = strings.Count(content, "\n") + 1
+	}
 	footerRendered := m.styles.Footer.Render(footer)
 	finalView := lipgloss.JoinVertical(lipgloss.Left, m.viewport.View(), footerRendered)
-	return m.styles.Border.Height(h).Render(finalView)
+	return m.styles.Border.Render(finalView)
 }
 
 func parseTags(input string) []string {

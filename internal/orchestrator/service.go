@@ -66,12 +66,14 @@ func (s *Service) StartAdHocRun(ctx context.Context, agent, prompt string) (stor
 			SessionID: session.ID,
 			Outcome:   outcome,
 			Summary:   summary,
+			ResumeCommand: resumeCommand,
 		})
 		s.completionCh <- RunCompletion{
 			TicketID:  "",
 			SessionID: session.ID,
 			Outcome:   outcome,
 			Summary:   summary,
+			ResumeCommand: resumeCommand,
 		}
 	}
 
@@ -207,12 +209,14 @@ func (s *Service) StartApprovedRun(ctx context.Context, proposalID string) (stor
 			SessionID: session.ID,
 			Outcome:   outcome,
 			Summary:   summary,
+			ResumeCommand: resumeCommand,
 		})
 		s.completionCh <- RunCompletion{
 			TicketID:  proposal.TicketID,
 			SessionID: session.ID,
 			Outcome:   outcome,
 			Summary:   summary,
+			ResumeCommand: resumeCommand,
 		}
 	}
 
