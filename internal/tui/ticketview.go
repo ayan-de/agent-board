@@ -220,7 +220,7 @@ func ticketFields() []ticketField {
 			label: "Resume",
 			value: func(t *store.Ticket) string {
 				if t.ResumeCommand == "" {
-					return ""
+					return "—"
 				}
 				return t.ResumeCommand
 			},
