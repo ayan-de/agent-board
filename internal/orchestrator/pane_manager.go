@@ -244,7 +244,8 @@ func (pm *PaneManager) monitorPane(ctx context.Context, pane *AgentPane, reporte
 					reporter(summary)
 				}
 				if pane.onComplete != nil {
-					pane.onComplete(outcome, summary, "")
+					resumeCmd := ExtractResumeCommand(captured)
+					pane.onComplete(outcome, summary, resumeCmd)
 				}
 				return
 			}
