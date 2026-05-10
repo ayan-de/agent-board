@@ -72,6 +72,7 @@ type Store interface {
 	EndSession(ctx context.Context, id, status string) error
 	HasActiveSession(ctx context.Context, ticketID string) bool
 	SetAgentActive(ctx context.Context, id string, active bool) error
+	SetResumeCommand(ctx context.Context, id, cmd string) error
 	MoveStatus(ctx context.Context, id, status string) error
 	CreateEvent(ctx context.Context, e store.Event) (store.Event, error)
 }
