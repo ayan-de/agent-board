@@ -116,9 +116,52 @@ func waitForReady(paneID string, cfg *pty.Config) error {
 }
 
 func (r *tmuxAgentRunner) monitorPane(sessionID string, paneID string, onComplete func(outcome, summary, resumeCommand string)) {
-	_ = sessionID
-	_ = paneID
-	_ = onComplete
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-context.Background().Done():
+			return
+		case <-ticker.C:
+			checkCmd := exec.Command("tmux", "list-panes", "-t", paneID, "-F", "#{pane_pid}")
+			output, err := checkCmd.Output()
+
+			if err != nil || len(output) == 0 {
+				outcome := "completed"
+				summary := fmt.Sprintf("Agent session %s finished", sessionID)
+
+				captured, capErr := r.capturePaneOutput(paneID, 200)
+				if capErr == nil && captured != "" {
+					parsed, parseErr := parseOpencodeOutput(strings.NewReader(captured))
+					if parseErr == nil {
+						if parsed.Outcome != "" {
+							outcome = parsed.Outcome
+						}
+						if parsed.Summary != "" {
+							summary = parsed.Summary
+						}
+					}
+				}
+
+				if onComplete != nil {
+					resumeCmd := ExtractResumeCommand(captured)
+					onComplete(outcome, summary, resumeCmd)
+				}
+				return
+			}
+		}
+	}
+}
+
+func (r *tmuxAgentRunner) capturePaneOutput(paneID string, lines int) (string, error) {
+	captureCmd := exec.Command("tmux", "capture-pane", "-t", paneID, "-p", "-e", "-J", "-C", "-P",
+		"-S", fmt.Sprintf("-%d", lines))
+	output, err := captureCmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to capture pane output: %w", err)
+	}
+	return string(output), nil
 }
 
 func (r *tmuxAgentRunner) GetPaneID(sessionID string) (string, bool) {
