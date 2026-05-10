@@ -37,6 +37,8 @@ func (r *tmuxAgentRunner) Start(ctx context.Context, req RunRequest) (RunHandle,
 	parts := strings.Split(strings.TrimSpace(string(output)), ":")
 	paneID := parts[len(parts)-1]
 
+	_ = exec.Command("tmux", "set-option", "-p", "-t", paneID, "remain-on-exit", "on").Run()
+
 	cfg := pty.GetConfig(req.Agent)
 	formattedPrompt := req.Prompt
 	if cfg != nil && cfg.FormatPrompt != nil {
@@ -116,23 +118,35 @@ func waitForReady(paneID string, cfg *pty.Config) error {
 }
 
 func (r *tmuxAgentRunner) monitorPane(sessionID string, paneID string, onComplete func(outcome, summary, resumeCommand string)) {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
+	var lastCaptured string
 	for {
 		select {
 		case <-context.Background().Done():
 			return
 		case <-ticker.C:
-			checkCmd := exec.Command("tmux", "list-panes", "-t", paneID, "-F", "#{pane_pid}")
+			// Capture output continuously so we always have the latest content
+			if out, err := r.capturePaneOutput(paneID, 5000); err == nil && out != "" {
+				lastCaptured = out
+			}
+
+			checkCmd := exec.Command("tmux", "list-panes", "-t", paneID, "-F", "#{pane_pid}:#{pane_dead}")
 			output, err := checkCmd.Output()
 
-			if err != nil || len(output) == 0 {
+			outStr := strings.TrimSpace(string(output))
+			isDead := strings.HasSuffix(outStr, ":1")
+
+			if err != nil || len(outStr) == 0 || isDead {
 				outcome := "completed"
 				summary := fmt.Sprintf("Agent session %s finished", sessionID)
 
-				captured, capErr := r.capturePaneOutput(paneID, 200)
-				if capErr == nil && captured != "" {
+				captured := captureFinalPaneOutput(lastCaptured, func() (string, error) {
+					return r.capturePaneOutput(paneID, 5000)
+				}, time.Sleep)
+
+				if captured != "" {
 					parsed, parseErr := parseOpencodeOutput(strings.NewReader(captured))
 					if parseErr == nil {
 						if parsed.Outcome != "" {
@@ -142,6 +156,10 @@ func (r *tmuxAgentRunner) monitorPane(sessionID string, paneID string, onComplet
 							summary = parsed.Summary
 						}
 					}
+				}
+
+				if isDead {
+					_ = exec.Command("tmux", "kill-pane", "-t", paneID).Run()
 				}
 
 				if onComplete != nil {
@@ -155,13 +173,11 @@ func (r *tmuxAgentRunner) monitorPane(sessionID string, paneID string, onComplet
 }
 
 func (r *tmuxAgentRunner) capturePaneOutput(paneID string, lines int) (string, error) {
-	captureCmd := exec.Command("tmux", "capture-pane", "-t", paneID, "-p", "-e", "-J", "-C", "-P",
-		"-S", fmt.Sprintf("-%d", lines))
-	output, err := captureCmd.Output()
+	output, err := captureTmuxPaneOutput("tmux", paneID, lines)
 	if err != nil {
 		return "", fmt.Errorf("failed to capture pane output: %w", err)
 	}
-	return string(output), nil
+	return output, nil
 }
 
 func (r *tmuxAgentRunner) GetPaneID(sessionID string) (string, bool) {
