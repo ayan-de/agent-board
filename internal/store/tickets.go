@@ -45,7 +45,7 @@ type ticketRow struct {
 	Tags          string
 	DependsOn     string
 	AgentActive   bool
-	ResumeCommand string
+	ResumeCommand sql.NullString
 	CreatedAt     string
 	UpdatedAt     string
 }
@@ -74,7 +74,7 @@ func (r ticketRow) toTicket() (Ticket, error) {
 		Tags:          tags,
 		DependsOn:     dependsOn,
 		AgentActive:   r.AgentActive,
-		ResumeCommand: r.ResumeCommand,
+		ResumeCommand: r.ResumeCommand.String,
 		CreatedAt:     createdAt,
 		UpdatedAt:     updatedAt,
 	}, nil
