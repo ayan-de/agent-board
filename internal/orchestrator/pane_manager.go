@@ -83,7 +83,7 @@ type AgentPane struct {
 	Summary    string
 	cancelFunc context.CancelFunc
 	promptFile string
-	onComplete func(outcome, summary string)
+	onComplete func(outcome, summary, resumeCommand string)
 }
 
 // NewPaneManager creates a new pane manager
@@ -244,7 +244,7 @@ func (pm *PaneManager) monitorPane(ctx context.Context, pane *AgentPane, reporte
 					reporter(summary)
 				}
 				if pane.onComplete != nil {
-					pane.onComplete(outcome, summary)
+					pane.onComplete(outcome, summary, "")
 				}
 				return
 			}

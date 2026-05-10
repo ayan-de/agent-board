@@ -60,7 +60,7 @@ func (s *Service) StartAdHocRun(ctx context.Context, agent, prompt string) (stor
 		return store.Session{}, err
 	}
 
-	onComplete := func(outcome, summary string) {
+	onComplete := func(outcome, summary, resumeCommand string) {
 		_ = s.FinishRun(context.Background(), FinishRunInput{
 			TicketID:  "",
 			SessionID: session.ID,
@@ -112,7 +112,7 @@ func (s *Service) StartAdHocRun(ctx context.Context, agent, prompt string) (stor
 	})
 
 	if handle.Outcome != "running" {
-		onComplete(handle.Outcome, handle.Summary)
+		onComplete(handle.Outcome, handle.Summary, "")
 	}
 
 	return session, nil
@@ -201,7 +201,7 @@ func (s *Service) StartApprovedRun(ctx context.Context, proposalID string) (stor
 		return store.Session{}, err
 	}
 
-	onComplete := func(outcome, summary string) {
+	onComplete := func(outcome, summary, resumeCommand string) {
 		_ = s.FinishRun(context.Background(), FinishRunInput{
 			TicketID:  proposal.TicketID,
 			SessionID: session.ID,
@@ -254,7 +254,7 @@ func (s *Service) StartApprovedRun(ctx context.Context, proposalID string) (stor
 	})
 
 	if handle.Outcome != "running" {
-		onComplete(handle.Outcome, handle.Summary)
+		onComplete(handle.Outcome, handle.Summary, "")
 	}
 
 	return session, nil

@@ -115,7 +115,7 @@ func waitForReady(paneID string, cfg *pty.Config) error {
 	}
 }
 
-func (r *tmuxAgentRunner) monitorPane(sessionID string, paneID string, onComplete func(outcome, summary string)) {
+func (r *tmuxAgentRunner) monitorPane(sessionID string, paneID string, onComplete func(outcome, summary, resumeCommand string)) {
 	_ = sessionID
 	_ = paneID
 	_ = onComplete

@@ -100,7 +100,7 @@ func TestStartApprovedRunCallsFinishRunViaAsyncOnComplete(t *testing.T) {
 		t.Fatal("FinishRun should NOT have been called yet for non-blocking runner")
 	}
 
-	tmuxRunner.onComplete("completed", "async worker output")
+	tmuxRunner.onComplete("completed", "async worker output", "")
 
 	if fs.lastMoveStatus != "review" {
 		t.Fatalf("MoveStatus = %q, want review after OnComplete fires", fs.lastMoveStatus)

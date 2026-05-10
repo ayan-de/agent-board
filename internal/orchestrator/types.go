@@ -12,8 +12,9 @@ type CreateProposalInput struct {
 }
 
 type ApplyRunOutcomeInput struct {
-	TicketID string
-	Outcome  string
+	TicketID      string
+	Outcome       string
+	ResumeCommand string
 }
 
 type FinishRunInput struct {
@@ -30,7 +31,7 @@ type RunRequest struct {
 	Prompt     string
 	Reporter   func(string)
 	Target     string
-	OnComplete func(outcome, summary string)
+	OnComplete func(outcome, summary, resumeCommand string)
 }
 
 type RunHandle struct {
@@ -39,10 +40,11 @@ type RunHandle struct {
 }
 
 type RunCompletion struct {
-	TicketID  string
-	SessionID string
-	Outcome   string
-	Summary   string
+	TicketID      string
+	SessionID     string
+	Outcome       string
+	Summary       string
+	ResumeCommand string
 }
 
 type LLMClient interface {
