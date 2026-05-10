@@ -79,6 +79,14 @@ func (s *Store) migrate() error {
 		}
 	}
 
+	err = s.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('tickets') WHERE name='resume_command'").Scan(&hasCol)
+	if err == nil && !hasCol {
+		_, err = s.db.Exec("ALTER TABLE tickets ADD COLUMN resume_command TEXT")
+		if err != nil {
+			return err
+		}
+	}
+
 	err = s.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name='ticket_id' AND notnull=1").Scan(&hasCol)
 	if err == nil && hasCol {
 		var hasRows bool
