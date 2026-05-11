@@ -12,15 +12,17 @@ type CreateProposalInput struct {
 }
 
 type ApplyRunOutcomeInput struct {
-	TicketID string
-	Outcome  string
+	TicketID      string
+	Outcome       string
+	ResumeCommand string
 }
 
 type FinishRunInput struct {
-	TicketID  string
-	SessionID string
-	Outcome   string
-	Summary   string
+	TicketID      string
+	SessionID     string
+	Outcome       string
+	Summary       string
+	ResumeCommand string
 }
 
 type RunRequest struct {
@@ -30,7 +32,7 @@ type RunRequest struct {
 	Prompt     string
 	Reporter   func(string)
 	Target     string
-	OnComplete func(outcome, summary string)
+	OnComplete func(outcome, summary, resumeCommand string)
 }
 
 type RunHandle struct {
@@ -39,10 +41,11 @@ type RunHandle struct {
 }
 
 type RunCompletion struct {
-	TicketID  string
-	SessionID string
-	Outcome   string
-	Summary   string
+	TicketID      string
+	SessionID     string
+	Outcome       string
+	Summary       string
+	ResumeCommand string
 }
 
 type LLMClient interface {
@@ -70,6 +73,7 @@ type Store interface {
 	EndSession(ctx context.Context, id, status string) error
 	HasActiveSession(ctx context.Context, ticketID string) bool
 	SetAgentActive(ctx context.Context, id string, active bool) error
+	SetResumeCommand(ctx context.Context, id, cmd string) error
 	MoveStatus(ctx context.Context, id, status string) error
 	CreateEvent(ctx context.Context, e store.Event) (store.Event, error)
 }

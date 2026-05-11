@@ -7,7 +7,7 @@ import (
 	"github.com/ayan-de/agent-board/internal/store"
 )
 
-func (s Service) FinishRun(ctx context.Context, input FinishRunInput) error {
+func (s *Service) FinishRun(ctx context.Context, input FinishRunInput) error {
 	s.mu.Lock()
 	delete(s.activeSessions, input.SessionID)
 	s.mu.Unlock()
@@ -42,7 +42,8 @@ func (s Service) FinishRun(ctx context.Context, input FinishRunInput) error {
 	})
 
 	return s.ApplyRunOutcome(ctx, ApplyRunOutcomeInput{
-		TicketID: input.TicketID,
-		Outcome:  input.Outcome,
+		TicketID:      input.TicketID,
+		Outcome:       input.Outcome,
+		ResumeCommand: input.ResumeCommand,
 	})
 }

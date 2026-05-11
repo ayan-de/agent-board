@@ -7,7 +7,7 @@ import (
 	"github.com/ayan-de/agent-board/internal/store"
 )
 
-func (s Service) ApproveProposal(ctx context.Context, proposalID string) error {
+func (s *Service) ApproveProposal(ctx context.Context, proposalID string) error {
 	proposal, err := s.store.GetProposal(ctx, proposalID)
 	if err != nil {
 		return err
