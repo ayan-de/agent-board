@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/store"
 )
 
@@ -140,7 +141,24 @@ func TicketSaveDependsOn(b *BoardService) BoardViewState {
 }
 
 func TicketOpenAgentSelect(b *BoardService) BoardViewState {
+	if b.state.Ticket == nil {
+		return *b.state
+	}
 	b.state.Ticket.Mode = ModeTicketAgentSelect
+	b.state.Ticket.Agents = config.DetectAgents()
+	b.state.Ticket.Cursor = 0
+	return *b.state
+}
+
+func TicketSelectAgentAtCursor(b *BoardService) BoardViewState {
+	if b.state.Ticket == nil {
+		return *b.state
+	}
+	agents := b.state.Ticket.Agents
+	cursor := b.state.Ticket.Cursor
+	if cursor >= 0 && cursor < len(agents) {
+		return TicketAssignAgent(b, agents[cursor].Name)
+	}
 	return *b.state
 }
 
@@ -160,8 +178,50 @@ func TicketOpenDependsOnSelect(b *BoardService) BoardViewState {
 }
 
 func TicketCancelEdit(b *BoardService) BoardViewState {
-	b.state.Ticket.Mode = ModeTicketView
-	b.state.Ticket.EditBuffer = ""
+	if b.state.Ticket == nil {
+		return *b.state
+	}
+	if b.state.Ticket.Mode == ModeTicketAgentSelect ||
+		b.state.Ticket.Mode == ModeTicketPrioritySelect ||
+		b.state.Ticket.Mode == ModeTicketDependsOnSelect {
+		b.state.Ticket.Mode = ModeTicketView
+	} else if b.state.Ticket.Mode == ModeTicketEdit {
+		b.state.Ticket.Mode = ModeTicketView
+		b.state.Ticket.EditBuffer = ""
+	}
+	return *b.state
+}
+
+func TicketViewProposal(b *BoardService) BoardViewState {
+	if b.state.Ticket == nil || b.state.Ticket.Proposal == nil {
+		return *b.state
+	}
+	b.SetNotification("Proposal", b.state.Ticket.Proposal.Prompt, NotificationInfo)
+	return *b.state
+}
+
+func TicketMoveCursor(b *BoardService, direction int) BoardViewState {
+	if b.state.Ticket == nil {
+		return *b.state
+	}
+	maxCursor := 6
+	switch b.state.Ticket.Mode {
+	case ModeTicketAgentSelect:
+		maxCursor = len(b.state.Ticket.Agents) - 1
+	case ModeTicketDependsOnSelect:
+		maxCursor = len(b.state.Ticket.DependsOnTickets) - 1
+	}
+	if maxCursor < 0 {
+		maxCursor = 0
+	}
+	if b.state.Ticket.Cursor > maxCursor {
+		b.state.Ticket.Cursor = maxCursor
+	}
+	if direction > 0 && b.state.Ticket.Cursor < maxCursor {
+		b.state.Ticket.Cursor++
+	} else if direction < 0 && b.state.Ticket.Cursor > 0 {
+		b.state.Ticket.Cursor--
+	}
 	return *b.state
 }
 

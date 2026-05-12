@@ -33,6 +33,14 @@ func NewCommandPalette(cr *CommandRegistry, onSelect func(Item)) CommandPalette 
 	}
 }
 
+func (p *CommandPalette) SetOnConfirm(fn func(Item)) {
+	p.onConfirm = fn
+}
+
+func (p *CommandPalette) SetOnSelect(fn func(Item)) {
+	p.onSelect = fn
+}
+
 func (p *CommandPalette) SetTheme(t *theme.Theme) {
 	p.theme = t
 }

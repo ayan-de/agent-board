@@ -6,7 +6,6 @@ import (
 	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/orchestrator"
 	"github.com/ayan-de/agent-board/internal/store"
-	"github.com/ayan-de/agent-board/internal/theme"
 )
 
 type Orchestrator interface {
@@ -24,21 +23,19 @@ type Orchestrator interface {
 }
 
 type BoardService struct {
-	store    *store.Store
+	store        *store.Store
 	orchestrator Orchestrator
-	config   *config.Config
-	registry *theme.Registry
+	config       *config.Config
 
 	state *BoardViewState
 }
 
-func NewBoardService(s *store.Store, orch Orchestrator, cfg *config.Config, reg *theme.Registry) *BoardService {
+func NewBoardService(s *store.Store, orch Orchestrator, cfg *config.Config) *BoardService {
 	b := &BoardService{
 		store:        s,
-		orchestrator:  orch,
-		config:        cfg,
-		registry:      reg,
-		state:         &BoardViewState{},
+		orchestrator: orch,
+		config:       cfg,
+		state:        &BoardViewState{},
 	}
 
 	b.state.Kanban.ColumnDefs = cfg.Board.Columns
@@ -80,8 +77,20 @@ func (b *BoardService) ProcessIntent(intent Intent) BoardViewState {
 		return KanbanDeleteTicket(b, i.TicketID)
 	case IntentMoveTicket:
 		return KanbanMoveTicket(b, i.TicketID, i.NewStatus)
+	case IntentPrevColumn:
+		return KanbanPrevColumn(b)
+	case IntentNextColumn:
+		return KanbanNextColumn(b)
+	case IntentPrevTicket:
+		return KanbanPrevTicket(b)
+	case IntentNextTicket:
+		return KanbanNextTicket(b)
+	case IntentJumpColumn:
+		return KanbanJumpColumn(b, i.Index)
 	case IntentEditField:
 		return TicketSelectField(b, i.Field)
+	case IntentCommitField:
+		return TicketCommitField(b, i.Field, i.Value)
 	case IntentCycleStatus:
 		return TicketCycleStatus(b)
 	case IntentAssignAgent:
@@ -109,8 +118,32 @@ func (b *BoardService) ProcessIntent(intent Intent) BoardViewState {
 	case IntentOpenView:
 		b.state.ActiveView = i.View
 		return *b.state
-	case IntentShowPalette, IntentCloseModal, IntentConfirmModal:
+	case IntentShowPalette:
+		b.state.ShowPalette = true
 		return *b.state
+	case IntentCloseModal:
+		b.state.ShowPalette = false
+		return *b.state
+	case IntentConfirmModal:
+		return *b.state
+	case IntentOpenAgentSelect:
+		return TicketOpenAgentSelect(b)
+	case IntentOpenPrioritySelect:
+		return TicketOpenPrioritySelect(b)
+	case IntentOpenDependsOnSelect:
+		return TicketOpenDependsOnSelect(b)
+	case IntentToggleDependsOn:
+		return TicketToggleDependsOn(b, i.DependsOnID)
+	case IntentCancelEdit:
+		return TicketCancelEdit(b)
+	case IntentMoveCursor:
+		return TicketMoveCursor(b, i.Direction)
+	case IntentReturnToBoard:
+		return TicketReturnToBoard(b)
+	case IntentSelectAgentAtCursor:
+		return TicketSelectAgentAtCursor(b)
+	case IntentViewProposal:
+		return TicketViewProposal(b)
 	default:
 		return *b.state
 	}
@@ -132,36 +165,17 @@ func (b *BoardService) ClearNotification() {
 	b.state.Notification = nil
 }
 
-func (b *BoardService) GetActiveTheme() *theme.Theme {
-	return b.registry.Active()
-}
-
-// SetKanbanTheme sets the kanban theme. Styles should be set via SetKanbanStyles.
-func (b *BoardService) SetKanbanTheme(t *theme.Theme) {
-	b.state.Kanban.Theme = t
-}
-
-// SetKanbanStyles sets the kanban styles from a theme and styles struct.
-func (b *BoardService) SetKanbanStyles(t *theme.Theme, styles KanbanStyles) {
-	b.state.Kanban.Theme = t
-	b.state.Kanban.Styles = styles
-}
-
 func (b *BoardService) Config() *config.Config {
 	return b.config
 }
 
-func (b *BoardService) Registry() *theme.Registry {
-	return b.registry
-}
-
 func (b *BoardService) OpenModal(title, body string, onConfirm, onCancel func()) {
 	b.state.Modal = &ModalState{
-		Title:    title,
-		Body:     body,
+		Title:     title,
+		Body:      body,
 		OnConfirm: onConfirm,
 		OnCancel:  onCancel,
-		Active:   true,
+		Active:    true,
 	}
 }
 

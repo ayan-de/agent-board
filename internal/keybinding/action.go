@@ -30,6 +30,12 @@ const (
 	ActionOpenPalette
 	ActionInteract
 	ActionSwitchToPane
+	ActionApproveProposal
+	ActionStartRun
+	ActionViewProposal
+	ActionOpenAgentSelect
+	ActionCancelEdit
+	ActionReturnToBoard
 )
 
 func (a Action) String() string {
@@ -88,6 +94,18 @@ func (a Action) String() string {
 		return "interact"
 	case ActionSwitchToPane:
 		return "switch_to_pane"
+	case ActionApproveProposal:
+		return "approve_proposal"
+	case ActionStartRun:
+		return "start_run"
+	case ActionViewProposal:
+		return "view_proposal"
+	case ActionOpenAgentSelect:
+		return "open_agent_select"
+	case ActionCancelEdit:
+		return "cancel_edit"
+	case ActionReturnToBoard:
+		return "return_to_board"
 	default:
 		return "unknown"
 	}

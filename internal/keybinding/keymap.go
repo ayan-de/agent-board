@@ -50,6 +50,7 @@ func DefaultKeyMap() KeyMap {
 			{Key: "e", Action: ActionInteract},
 			{Key: "v", Action: ActionSwitchToPane},
 			{Key: ":", Action: ActionOpenPalette},
+			{Key: "escape", Action: ActionReturnToBoard},
 		},
 	}
 }

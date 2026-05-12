@@ -84,6 +84,11 @@ func (m *TextInputModal) Open(title, placeholder string, onConfirm func(string) 
 	m.onCancel = onCancel
 }
 
+func (m *TextInputModal) OpenBuffer(initial string) {
+	m.active = true
+	m.input = initial
+}
+
 func (m *TextInputModal) Close() {
 	m.active = false
 	m.title = ""
@@ -91,6 +96,10 @@ func (m *TextInputModal) Close() {
 	m.input = ""
 	m.onConfirm = nil
 	m.onCancel = nil
+}
+
+func (m TextInputModal) Input() string {
+	return m.input
 }
 
 func (m TextInputModal) Update(msg tea.Msg) (TextInputModal, tea.Cmd) {

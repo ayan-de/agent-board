@@ -85,7 +85,7 @@ func main() {
 		_ = reg.Set("agentboard")
 	}
 
-	boardSvc := board.NewBoardService(s, orch, cfg, reg)
+	boardSvc := board.NewBoardService(s, orch, cfg)
 
 	app, err := tui.NewApp(cfg, s, reg, tui.AppDeps{
 		Board: boardSvc,

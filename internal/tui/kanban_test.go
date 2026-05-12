@@ -81,13 +81,13 @@ func TestDefaultKanbanStyles(t *testing.T) {
 		name  string
 		style lipgloss.Style
 	}{
-		{"FocusedColumn", s.FocusedColumn},
-		{"BlurredColumn", s.BlurredColumn},
-		{"FocusedTitle", s.FocusedTitle},
-		{"BlurredTitle", s.BlurredTitle},
-		{"SelectedTicket", s.SelectedTicket},
-		{"Ticket", s.Ticket},
-		{"EmptyColumn", s.EmptyColumn},
+		{"FocusedColumn", s.FocusedColumn()},
+		{"BlurredColumn", s.BlurredColumn()},
+		{"FocusedTitle", s.FocusedTitle()},
+		{"BlurredTitle", s.BlurredTitle()},
+		{"SelectedTicket", s.SelectedTicket()},
+		{"Ticket", s.Ticket()},
+		{"EmptyColumn", s.EmptyColumn()},
 	}
 	for _, tt := range styles {
 		rendered := tt.style.Render("test")

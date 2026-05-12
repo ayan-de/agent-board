@@ -14,13 +14,14 @@ import (
 )
 
 type App struct {
-	board     *board.BoardService
-	renderer  *Renderer
-	state     board.BoardViewState
-	resolver  *keybinding.Resolver
-	palette   CommandPalette
-	modal     ConfirmModal
-	textInput TextInputModal
+	board        *board.BoardService
+	renderer     *Renderer
+	registry     *theme.Registry
+	state        board.BoardViewState
+	resolver     *keybinding.Resolver
+	palette      CommandPalette
+	modal        ConfirmModal
+	textInput    TextInputModal
 	notification NotificationStack
 
 	width  int
@@ -38,13 +39,10 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry, deps AppDep
 	if deps.Board != nil {
 		boardSvc = deps.Board
 	} else {
-		boardSvc = board.NewBoardService(s, deps.Orchestrator, cfg, reg)
+		boardSvc = board.NewBoardService(s, deps.Orchestrator, cfg)
 	}
 
-	boardSvc.SetKanbanTheme(reg.Active())
-	boardSvc.SetKanbanStyles(reg.Active(), board.NewKanbanStyles(reg.Active()))
-
-	renderer := NewRenderer(0, 0)
+	renderer := NewRenderer(0, 0, reg.Active())
 
 	km := keybinding.DefaultKeyMap()
 	if len(cfg.TUI.Keybindings) > 0 {
@@ -52,16 +50,24 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry, deps AppDep
 	}
 	resolver := keybinding.NewResolver(km)
 
+	registry := NewCommandRegistry()
+
 	a := &App{
-		board:     boardSvc,
-		renderer:  renderer,
-		state:     boardSvc.GetState(),
-		resolver:  resolver,
-		palette:   NewCommandPalette(nil, nil),
-		modal:     ConfirmModal{},
-		textInput: TextInputModal{},
+		board:        boardSvc,
+		renderer:     renderer,
+		registry:     reg,
+		state:        boardSvc.GetState(),
+		resolver:     resolver,
+		palette:      NewCommandPalette(registry, nil),
+		modal:        ConfirmModal{},
+		textInput:    TextInputModal{},
 		notification: NotificationStack{},
 	}
+
+	appCmds := newAppCommands(a, reg, cfg)
+	appCmds.registerAll(registry)
+	a.palette = NewCommandPalette(registry, nil)
+	a.palette.SetOnConfirm(appCmds.onConfirm)
 
 	a.palette.SetTheme(reg.Active())
 	a.modal.SetTheme(reg.Active())
@@ -71,12 +77,19 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry, deps AppDep
 	return a, nil
 }
 
+func (a *App) RegisterCommands(cmd Command) {
+	if a.palette.commands != nil {
+		a.palette.commands.Register(cmd)
+	}
+}
+
 func (a *App) Init() tea.Cmd {
 	return tea.EnterAltScreen
 }
 
 func (a *App) propagateTheme() {
-	t := a.board.GetActiveTheme()
+	t := a.registry.Active()
+	a.renderer.SetTheme(t)
 	a.palette.SetTheme(t)
 	a.modal.SetTheme(t)
 	a.textInput.SetTheme(t)
@@ -100,25 +113,60 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case tea.KeyMsg:
+		action, _ := a.resolver.Resolve(msg.String())
+		if action == keybinding.ActionForceQuit {
+			return a, tea.Quit
+		}
 		if a.modal.Active() {
 			var cmd tea.Cmd
 			a.modal, cmd = a.modal.Update(msg)
 			return a, cmd
 		}
 		if a.textInput.Active() {
-			var cmd tea.Cmd
-			a.textInput, cmd = a.textInput.Update(msg)
-			return a, cmd
+			a.textInput, _ = a.textInput.Update(msg)
+			if msg.Type == tea.KeyEnter || msg.Type == tea.KeyCtrlJ {
+				field := a.ticketFieldAtCursor()
+				a.state = a.board.ProcessIntent(board.IntentCommitField{Field: field, Value: a.textInput.Input()})
+				a.textInput.Close()
+			}
+			return a, nil
 		}
 		if a.palette.Active() {
 			a.palette, _ = a.palette.Update(msg)
+			if !a.palette.Active() {
+				a.state.ShowPalette = false
+			}
 			return a, nil
 		}
 
-		intent := a.resolveIntent(msg)
-		if intent != nil {
-			a.state = a.board.ProcessIntent(intent)
+		intents := a.resolveIntent(msg)
+		if intents != nil {
+			for _, intent := range intents {
+				a.state = a.board.ProcessIntent(intent)
+			}
 		}
+
+		if a.state.ShowPalette && !a.palette.Active() {
+			a.palette.Open()
+		}
+		if a.state.Ticket != nil && a.state.Ticket.Mode == board.ModeTicketEdit && !a.textInput.Active() {
+			a.textInput.OpenBuffer(a.state.Ticket.EditBuffer)
+		}
+		if a.state.Notification != nil {
+			var variant NotificationVariant
+			switch a.state.Notification.Variant {
+			case board.NotificationSuccess:
+				variant = NotificationSuccess
+			case board.NotificationError:
+				variant = NotificationError
+			case board.NotificationInfo:
+				variant = NotificationInfo
+			}
+			cmd := a.notification.Show(a.state.Notification.Title, a.state.Notification.Message, variant, 0)
+			a.board.ClearNotification()
+			return a, cmd
+		}
+
 		return a, nil
 
 	case boardIntentMsg:
@@ -137,66 +185,135 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
-func (a *App) resolveIntent(msg tea.KeyMsg) board.Intent {
+func (a *App) isQuitting() bool {
+	return a.quit
+}
+
+func (a *App) resolveIntent(msg tea.KeyMsg) []board.Intent {
 	key := msg.String()
 	action, _ := a.resolver.Resolve(key)
+
+	if a.state.ActiveView == board.ViewTicket && a.state.Ticket != nil {
+		switch key {
+		case "a":
+			if a.state.Ticket.Mode == board.ModeTicketAgentSelect {
+				return []board.Intent{board.IntentSelectAgentAtCursor{}}
+			}
+			return []board.Intent{board.IntentOpenAgentSelect{}}
+		case "r":
+			return []board.Intent{board.IntentStartRun{}}
+		case "o":
+			if a.state.Ticket.Proposal != nil {
+				return []board.Intent{board.IntentViewProposal{}}
+			}
+		case "p":
+			if a.state.Ticket.Proposal != nil && a.state.Ticket.Proposal.Status == "pending" {
+				return []board.Intent{board.IntentApproveProposal{}}
+			}
+			return []board.Intent{board.IntentOpenPrioritySelect{}}
+		case "s":
+			return []board.Intent{board.IntentCycleStatus{}}
+		case "x":
+			return []board.Intent{board.IntentCancelEdit{}}
+		case "ctrl+h", "escape":
+			return []board.Intent{board.IntentReturnToBoard{}}
+		case "enter":
+			if a.state.Ticket.Mode == board.ModeTicketAgentSelect {
+				return []board.Intent{board.IntentSelectAgentAtCursor{}}
+			}
+		}
+	}
 
 	switch action {
 	case keybinding.ActionQuit:
 		a.modal.Open("Quit AgentBoard", "Are you sure you want to quit?", func() tea.Cmd { return tea.Quit }, nil)
 		return nil
-	case keybinding.ActionForceQuit:
-		return nil
 	case keybinding.ActionOpenTicket:
 		ticket := a.selectedTicket()
 		if ticket != nil {
-			return board.IntentSelectTicket{TicketID: ticket.ID}
+			return []board.Intent{board.IntentSelectTicket{TicketID: ticket.ID}}
 		}
 		return nil
 	case keybinding.ActionAddTicket:
-		return board.IntentCreateTicket{ColumnIndex: a.state.Kanban.ColIndex}
+		return []board.Intent{board.IntentCreateTicket{ColumnIndex: a.state.Kanban.ColIndex}}
 	case keybinding.ActionDeleteTicket:
 		ticket := a.selectedTicket()
 		if ticket != nil {
-			return board.IntentDeleteTicket{TicketID: ticket.ID}
+			return []board.Intent{board.IntentDeleteTicket{TicketID: ticket.ID}}
 		}
 		return nil
 	case keybinding.ActionPrevColumn:
 		if a.state.Kanban.ColIndex > 0 {
-			return board.IntentOpenView{View: board.ViewBoard}
+			return []board.Intent{board.IntentPrevColumn{}}
 		}
 		return nil
 	case keybinding.ActionNextColumn:
 		if a.state.Kanban.ColIndex < len(a.state.Kanban.ColumnDefs)-1 {
-			return board.IntentOpenView{View: board.ViewBoard}
+			return []board.Intent{board.IntentNextColumn{}}
 		}
 		return nil
 	case keybinding.ActionPrevTicket:
-		return board.IntentOpenView{View: board.ViewBoard}
+		if a.state.ActiveView == board.ViewTicket {
+			return []board.Intent{board.IntentMoveCursor{Direction: -1}}
+		}
+		return []board.Intent{board.IntentPrevTicket{}}
 	case keybinding.ActionNextTicket:
-		return board.IntentOpenView{View: board.ViewBoard}
+		if a.state.ActiveView == board.ViewTicket {
+			return []board.Intent{board.IntentMoveCursor{Direction: 1}}
+		}
+		return []board.Intent{board.IntentNextTicket{}}
 	case keybinding.ActionJumpColumn1:
-		return board.IntentOpenView{View: board.ViewBoard}
+		return []board.Intent{board.IntentJumpColumn{Index: 0}}
 	case keybinding.ActionJumpColumn2:
-		return board.IntentOpenView{View: board.ViewBoard}
+		return []board.Intent{board.IntentJumpColumn{Index: 1}}
 	case keybinding.ActionJumpColumn3:
-		return board.IntentOpenView{View: board.ViewBoard}
+		return []board.Intent{board.IntentJumpColumn{Index: 2}}
 	case keybinding.ActionJumpColumn4:
-		return board.IntentOpenView{View: board.ViewBoard}
+		return []board.Intent{board.IntentJumpColumn{Index: 3}}
 	case keybinding.ActionShowHelp:
 		if a.state.ActiveView == board.ViewHelp {
-			return board.IntentOpenView{View: board.ViewBoard}
+			return []board.Intent{board.IntentOpenView{View: board.ViewBoard}}
 		}
-		return board.IntentOpenView{View: board.ViewHelp}
+		return []board.Intent{board.IntentOpenView{View: board.ViewHelp}}
 	case keybinding.ActionShowDashboard:
 		if a.state.ActiveView == board.ViewDashboard {
-			return board.IntentOpenView{View: board.ViewBoard}
+			return []board.Intent{board.IntentOpenView{View: board.ViewBoard}}
 		}
-		return board.IntentRefreshDashboard{}
+		return []board.Intent{board.IntentRefreshDashboard{}, board.IntentOpenView{View: board.ViewDashboard}}
 	case keybinding.ActionOpenPalette:
-		return board.IntentShowPalette{}
+		return []board.Intent{board.IntentShowPalette{}}
+	case keybinding.ActionInteract:
+		if a.state.ActiveView == board.ViewTicket && a.state.Ticket != nil {
+			return []board.Intent{board.IntentEditField{Field: a.ticketFieldAtCursor()}}
+		}
+		return nil
 	case keybinding.ActionRefresh:
-		return board.IntentRefreshDashboard{}
+		return []board.Intent{board.IntentRefreshDashboard{}}
+	case keybinding.ActionApproveProposal:
+		if a.state.ActiveView == board.ViewTicket && a.state.Ticket != nil {
+			return []board.Intent{board.IntentApproveProposal{}}
+		}
+		return nil
+	case keybinding.ActionStartRun:
+		if a.state.ActiveView == board.ViewTicket && a.state.Ticket != nil {
+			return []board.Intent{board.IntentStartRun{}}
+		}
+		return nil
+	case keybinding.ActionOpenAgentSelect:
+		if a.state.ActiveView == board.ViewTicket && a.state.Ticket != nil {
+			return []board.Intent{board.IntentOpenAgentSelect{}}
+		}
+		return nil
+	case keybinding.ActionCancelEdit:
+		if a.state.ActiveView == board.ViewTicket {
+			return []board.Intent{board.IntentCancelEdit{}}
+		}
+		return nil
+	case keybinding.ActionReturnToBoard:
+		if a.state.ActiveView == board.ViewTicket {
+			return []board.Intent{board.IntentReturnToBoard{}}
+		}
+		return nil
 	default:
 		return nil
 	}
@@ -216,6 +333,22 @@ func (a *App) selectedTicket() *store.Ticket {
 		}
 	}
 	return nil
+}
+
+func (a *App) ticketFieldAtCursor() string {
+	if a.state.Ticket == nil {
+		return ""
+	}
+	idx := a.state.Ticket.Cursor
+	switch idx {
+	case 1:
+		return "title"
+	case 2:
+		return "description"
+	case 6:
+		return "branch"
+	}
+	return ""
 }
 
 func (a *App) View() string {

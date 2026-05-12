@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ayan-de/agent-board/internal/board"
 	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/keybinding"
 	"github.com/ayan-de/agent-board/internal/store"
@@ -17,6 +16,108 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+type kanbanStylesImpl struct {
+	focusedColumn   lipgloss.Style
+	blurredColumn   lipgloss.Style
+	focusedTitle    lipgloss.Style
+	blurredTitle    lipgloss.Style
+	selectedTicket  lipgloss.Style
+	ticket          lipgloss.Style
+	emptyColumn     lipgloss.Style
+	tabBar          lipgloss.Style
+	tabActive       lipgloss.Style
+	tabInactive     lipgloss.Style
+	searchBox       lipgloss.Style
+	searchBoxActive lipgloss.Style
+}
+
+func (s *kanbanStylesImpl) FocusedColumn() lipgloss.Style   { return s.focusedColumn }
+func (s *kanbanStylesImpl) BlurredColumn() lipgloss.Style   { return s.blurredColumn }
+func (s *kanbanStylesImpl) FocusedTitle() lipgloss.Style    { return s.focusedTitle }
+func (s *kanbanStylesImpl) BlurredTitle() lipgloss.Style    { return s.blurredTitle }
+func (s *kanbanStylesImpl) SelectedTicket() lipgloss.Style  { return s.selectedTicket }
+func (s *kanbanStylesImpl) Ticket() lipgloss.Style          { return s.ticket }
+func (s *kanbanStylesImpl) EmptyColumn() lipgloss.Style     { return s.emptyColumn }
+func (s *kanbanStylesImpl) TabBar() lipgloss.Style          { return s.tabBar }
+func (s *kanbanStylesImpl) TabActive() lipgloss.Style       { return s.tabActive }
+func (s *kanbanStylesImpl) TabInactive() lipgloss.Style     { return s.tabInactive }
+func (s *kanbanStylesImpl) SearchBox() lipgloss.Style       { return s.searchBox }
+func (s *kanbanStylesImpl) SearchBoxActive() lipgloss.Style { return s.searchBoxActive }
+
+func DefaultKanbanStylesImpl() *kanbanStylesImpl {
+	return &kanbanStylesImpl{
+		focusedColumn: lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(lipgloss.Color("69")).
+			Padding(0, 1),
+		blurredColumn: lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(lipgloss.Color("240")).
+			Padding(0, 1),
+		focusedTitle: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("69")),
+		blurredTitle: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("240")),
+		selectedTicket: lipgloss.NewStyle().
+			Background(lipgloss.Color("69")).
+			Foreground(lipgloss.Color("15")),
+		ticket: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("252")),
+		emptyColumn: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240")),
+		tabBar: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("252")),
+		tabActive: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("69")),
+		tabInactive: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240")),
+		searchBox: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("252")),
+		searchBoxActive: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("69")),
+	}
+}
+
+func NewKanbanStylesImpl(t *theme.Theme) *kanbanStylesImpl {
+	return &kanbanStylesImpl{
+		focusedColumn: lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(t.Primary).
+			Padding(0, 1),
+		blurredColumn: lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(t.TextMuted).
+			Padding(0, 1),
+		focusedTitle: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(t.Primary),
+		blurredTitle: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(t.TextMuted),
+		selectedTicket: lipgloss.NewStyle().
+			Background(t.Primary).
+			Foreground(t.Background),
+		ticket: lipgloss.NewStyle().
+			Foreground(t.Text),
+		emptyColumn: lipgloss.NewStyle().
+			Foreground(t.TextMuted),
+		tabBar: lipgloss.NewStyle().
+			Foreground(t.Text),
+		tabActive: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(t.Primary),
+		tabInactive: lipgloss.NewStyle().
+			Foreground(t.TextMuted),
+		searchBox: lipgloss.NewStyle().
+			Foreground(t.Text),
+		searchBoxActive: lipgloss.NewStyle().
+			Foreground(t.Primary),
+	}
+}
+
 type KanbanTab int
 
 const (
@@ -25,6 +126,9 @@ const (
 	TabDateFilter
 )
 
+// KanbanModel is the old standalone Kanban model.
+// Deprecated: The new App architecture uses board.BoardService and Renderer instead.
+// This model is retained for reference and will be removed in a future refactor.
 type KanbanModel struct {
 	store           *store.Store
 	resolver        *keybinding.Resolver
@@ -35,7 +139,7 @@ type KanbanModel struct {
 	scrollOffsets   []int
 	columns         [][]store.Ticket
 	columnDefs      []config.Column
-	styles          board.KanbanStyles
+	styles          *kanbanStylesImpl
 	animFrame       int
 	theme           *theme.Theme
 	tab             KanbanTab
@@ -44,12 +148,12 @@ type KanbanModel struct {
 	projectInitDate time.Time
 }
 
-func DefaultKanbanStyles() board.KanbanStyles {
-	return board.DefaultKanbanStyles()
+func DefaultKanbanStyles() *kanbanStylesImpl {
+	return DefaultKanbanStylesImpl()
 }
 
-func NewKanbanStyles(t *theme.Theme) board.KanbanStyles {
-	return board.NewKanbanStyles(t)
+func NewKanbanStyles(t *theme.Theme) *kanbanStylesImpl {
+	return NewKanbanStylesImpl(t)
 }
 
 func NewKanbanModel(s *store.Store, resolver *keybinding.Resolver, t *theme.Theme, columns []config.Column) (KanbanModel, error) {
@@ -61,7 +165,7 @@ func NewKanbanModel(s *store.Store, resolver *keybinding.Resolver, t *theme.Them
 		tab:             TabBoard,
 		monthOffset:     0,
 		projectInitDate: time.Now(),
-		columnDefs:  columns,
+		columnDefs:      columns,
 	}
 	m.initDynamicState()
 	m, err := m.loadColumns()
@@ -330,16 +434,16 @@ func (m KanbanModel) View() string {
 			colName = m.columnDefs[i].Status
 		}
 
-		titleStyle := m.styles.FocusedTitle
+		titleStyle := m.styles.FocusedTitle()
 		if i != m.colIndex {
-			titleStyle = m.styles.BlurredTitle
+			titleStyle = m.styles.BlurredTitle()
 		}
 		content.WriteString(titleStyle.Width(innerWidth).Render(colName))
 		content.WriteString("\n")
 
 		tickets := m.columns[i]
 		if len(tickets) == 0 {
-			content.WriteString(m.styles.EmptyColumn.Render("(empty)"))
+			content.WriteString(m.styles.EmptyColumn().Render("(empty)"))
 		} else {
 			expandedIdx := -1
 			if i == m.colIndex && len(tickets) > 0 {
@@ -361,7 +465,7 @@ func (m KanbanModel) View() string {
 
 			// Top indicator
 			if m.scrollOffsets[i] > 0 {
-				cardsContent.WriteString(m.styles.EmptyColumn.Italic(true).Render(fmt.Sprintf("↑ %d more", m.scrollOffsets[i])))
+				cardsContent.WriteString(m.styles.EmptyColumn().Italic(true).Render(fmt.Sprintf("↑ %d more", m.scrollOffsets[i])))
 				cardsContent.WriteString("\n")
 			}
 
@@ -381,7 +485,7 @@ func (m KanbanModel) View() string {
 			// Bottom indicator
 			if len(tickets) > m.scrollOffsets[i]+maxShow {
 				remaining := len(tickets) - (m.scrollOffsets[i] + maxShow)
-				cardsContent.WriteString(m.styles.EmptyColumn.Italic(true).Render(fmt.Sprintf("↓ %d more", remaining)))
+				cardsContent.WriteString(m.styles.EmptyColumn().Italic(true).Render(fmt.Sprintf("↓ %d more", remaining)))
 			}
 
 			if overflow {
@@ -395,9 +499,9 @@ func (m KanbanModel) View() string {
 			}
 		}
 
-		colStyle := m.styles.FocusedColumn
+		colStyle := m.styles.FocusedColumn()
 		if i != m.colIndex {
-			colStyle = m.styles.BlurredColumn
+			colStyle = m.styles.BlurredColumn()
 		}
 		colStyle = colStyle.Width(innerWidth+2).Padding(0, 1)
 
@@ -427,8 +531,8 @@ func (m KanbanModel) renderSearchBar() string {
 		prefixStyle = lipgloss.NewStyle().Foreground(m.theme.Primary).Bold(true)
 		queryStyle = lipgloss.NewStyle().Foreground(m.theme.Text).Bold(true)
 	} else {
-		prefixStyle = m.styles.SearchBox
-		queryStyle = m.styles.SearchBox
+		prefixStyle = m.styles.SearchBox()
+		queryStyle = m.styles.SearchBox()
 	}
 
 	return prefixStyle.Render(prefix) + queryStyle.Render(query)
@@ -448,15 +552,15 @@ func (m KanbanModel) renderTabBar() string {
 			Bold(true).
 			Render(boardLabel)
 	} else {
-		boardLabel = m.styles.TabInactive.Render(boardLabel)
+		boardLabel = m.styles.TabInactive().Render(boardLabel)
 	}
 
 	searchBar := m.renderSearchBar()
 	monthHeader := m.renderMonthHeader()
 	if m.tab == TabDateFilter {
-		monthHeader = m.styles.TabActive.Render(monthHeader)
+		monthHeader = m.styles.TabActive().Render(monthHeader)
 	} else {
-		monthHeader = m.styles.TabInactive.Render(monthHeader)
+		monthHeader = m.styles.TabInactive().Render(monthHeader)
 	}
 
 	boardWidth := lipgloss.Width(boardLabel)
@@ -687,9 +791,9 @@ func (m KanbanModel) renderScrollBar(scrollOff int, maxVisible int, total int, h
 	var sb strings.Builder
 	for i := 0; i < height; i++ {
 		if i >= thumbPos && i < thumbPos+thumbLen {
-			sb.WriteString(m.styles.TabActive.Render("┃"))
+			sb.WriteString(m.styles.TabActive().Render("┃"))
 		} else {
-			sb.WriteString(m.styles.TabInactive.Render("│"))
+			sb.WriteString(m.styles.TabInactive().Render("│"))
 		}
 		if i < height-1 {
 			sb.WriteString("\n")

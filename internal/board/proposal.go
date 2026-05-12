@@ -8,7 +8,9 @@ import (
 )
 
 func ProposalCreate(b *BoardService, ticketID string) BoardViewState {
-	b.state.Ticket.Loading = true
+	if b.state.Ticket != nil {
+		b.state.Ticket.Loading = true
+	}
 
 	proposal, err := b.orchestrator.CreateProposal(context.Background(), orchestrator.CreateProposalInput{
 		TicketID: ticketID,
@@ -20,12 +22,16 @@ func ProposalCreate(b *BoardService, ticketID string) BoardViewState {
 			Message: err.Error(),
 			Variant: NotificationError,
 		}
-		b.state.Ticket.Loading = false
+		if b.state.Ticket != nil {
+			b.state.Ticket.Loading = false
+		}
 		return *b.state
 	}
 
-	b.state.Ticket.Proposal = &proposal
-	b.state.Ticket.Loading = false
+	if b.state.Ticket != nil {
+		b.state.Ticket.Proposal = &proposal
+		b.state.Ticket.Loading = false
+	}
 	b.state.Notification = &NotificationState{
 		Title:   "Proposal created",
 		Message: "AI proposed work for " + ticketID,

@@ -5,16 +5,22 @@ import (
 	"strings"
 
 	"github.com/ayan-de/agent-board/internal/board"
+	"github.com/ayan-de/agent-board/internal/theme"
 	"github.com/charmbracelet/lipgloss"
 )
 
 type Renderer struct {
 	width  int
 	height int
+	theme  *theme.Theme
 }
 
-func NewRenderer(width, height int) *Renderer {
-	return &Renderer{width: width, height: height}
+func NewRenderer(width, height int, t *theme.Theme) *Renderer {
+	return &Renderer{width: width, height: height, theme: t}
+}
+
+func (r *Renderer) SetTheme(t *theme.Theme) {
+	r.theme = t
 }
 
 func (r *Renderer) SetSize(width, height int) {
@@ -42,6 +48,7 @@ func (r *Renderer) renderKanban(state board.KanbanViewState) string {
 	if r.width == 0 || len(state.Columns) == 0 {
 		return ""
 	}
+	styles := NewKanbanStyles(r.theme)
 
 	numCols := len(state.Columns)
 	if numCols == 0 {
@@ -77,16 +84,16 @@ func (r *Renderer) renderKanban(state board.KanbanViewState) string {
 			colName = state.ColumnDefs[i].Status
 		}
 
-		titleStyle := state.Styles.FocusedTitle
+		titleStyle := styles.FocusedTitle()
 		if i != state.ColIndex {
-			titleStyle = state.Styles.BlurredTitle
+			titleStyle = styles.BlurredTitle()
 		}
 		content.WriteString(titleStyle.Width(innerWidth).Render(colName))
 		content.WriteString("\n")
 
 		tickets := state.Columns[i].Tickets
 		if len(tickets) == 0 {
-			content.WriteString(state.Styles.EmptyColumn.Render("(empty)"))
+			content.WriteString(styles.EmptyColumn().Render("(empty)"))
 		} else {
 			expandedIdx := -1
 			if i == state.ColIndex && len(tickets) > 0 {
@@ -105,7 +112,7 @@ func (r *Renderer) renderKanban(state board.KanbanViewState) string {
 			var cardsContent strings.Builder
 
 			if state.ScrollOff[i] > 0 {
-				cardsContent.WriteString(state.Styles.EmptyColumn.Italic(true).Render(fmt.Sprintf("↑ %d more", state.ScrollOff[i])))
+				cardsContent.WriteString(styles.EmptyColumn().Italic(true).Render(fmt.Sprintf("↑ %d more", state.ScrollOff[i])))
 				cardsContent.WriteString("\n")
 			}
 
@@ -113,7 +120,7 @@ func (r *Renderer) renderKanban(state board.KanbanViewState) string {
 				isSelected := i == state.ColIndex && j == state.Cursors[i]
 				isExpanded := j == expandedIdx
 
-				card := NewTicketCardModel(tickets[j], isSelected, isExpanded, cardWidth, 0, state.Theme)
+				card := NewTicketCardModel(tickets[j], isSelected, isExpanded, cardWidth, 0, r.theme)
 				cardsContent.WriteString(card.Render())
 
 				if j < state.ScrollOff[i]+maxShow-1 || len(tickets) > state.ScrollOff[i]+maxShow {
@@ -123,11 +130,11 @@ func (r *Renderer) renderKanban(state board.KanbanViewState) string {
 
 			if len(tickets) > state.ScrollOff[i]+maxShow {
 				remaining := len(tickets) - (state.ScrollOff[i] + maxShow)
-				cardsContent.WriteString(state.Styles.EmptyColumn.Italic(true).Render(fmt.Sprintf("↓ %d more", remaining)))
+				cardsContent.WriteString(styles.EmptyColumn().Italic(true).Render(fmt.Sprintf("↓ %d more", remaining)))
 			}
 
 			if overflow {
-				scrollBar := renderScrollBarKanban(state.ScrollOff[i], maxShow, len(tickets), availableHeight, state.Styles)
+				scrollBar := renderScrollBarKanban(state.ScrollOff[i], maxShow, len(tickets), availableHeight, styles)
 				content.WriteString(lipgloss.JoinHorizontal(lipgloss.Top,
 					lipgloss.NewStyle().Width(cardWidth).Render(cardsContent.String()),
 					scrollBar,
@@ -137,11 +144,11 @@ func (r *Renderer) renderKanban(state board.KanbanViewState) string {
 			}
 		}
 
-		colStyle := state.Styles.FocusedColumn
+		colStyle := styles.FocusedColumn()
 		if i != state.ColIndex {
-			colStyle = state.Styles.BlurredColumn
+			colStyle = styles.BlurredColumn()
 		}
-		colStyle = colStyle.Width(innerWidth + 2).Padding(0, 1)
+		colStyle = colStyle.Width(innerWidth+2).Padding(0, 1)
 
 		cols[i] = colStyle.Render(content.String())
 	}
@@ -152,6 +159,7 @@ func (r *Renderer) renderKanban(state board.KanbanViewState) string {
 }
 
 func (r *Renderer) renderKanbanTabBar(state board.KanbanViewState) string {
+	styles := NewKanbanStyles(r.theme)
 	w := r.width
 	if w < 10 {
 		return ""
@@ -160,19 +168,19 @@ func (r *Renderer) renderKanbanTabBar(state board.KanbanViewState) string {
 	boardLabel := " Board "
 	if state.Tab == board.TabBoard {
 		boardLabel = lipgloss.NewStyle().
-			Background(state.Theme.Primary).
-			Foreground(state.Theme.Text).
+			Background(r.theme.Primary).
+			Foreground(r.theme.Text).
 			Bold(true).
 			Render(boardLabel)
 	} else {
-		boardLabel = state.Styles.TabInactive.Render(boardLabel)
+		boardLabel = styles.TabInactive().Render(boardLabel)
 	}
 
-	searchPrefix := state.Styles.SearchBox.Render("Search: ")
-	searchQuery := state.Styles.SearchBox.Render(state.SearchQuery)
+	searchPrefix := styles.SearchBox().Render("Search: ")
+	searchQuery := styles.SearchBox().Render(state.SearchQuery)
 	if state.Tab == board.TabSearch {
-		searchPrefix = lipgloss.NewStyle().Foreground(state.Theme.Primary).Bold(true).Render("Search: ")
-		searchQuery = lipgloss.NewStyle().Foreground(state.Theme.Text).Bold(true).Render(state.SearchQuery)
+		searchPrefix = lipgloss.NewStyle().Foreground(r.theme.Primary).Bold(true).Render("Search: ")
+		searchQuery = lipgloss.NewStyle().Foreground(r.theme.Text).Bold(true).Render(state.SearchQuery)
 	}
 
 	boardWidth := lipgloss.Width(boardLabel)
@@ -204,6 +212,10 @@ func (r *Renderer) renderTicket(state board.TicketViewState) string {
 		innerWidth = 20
 	}
 
+	if state.Mode == board.ModeTicketAgentSelect {
+		return r.renderTicketAgentSelect(state, innerWidth)
+	}
+
 	agentActiveColor := lipgloss.Color("240")
 	if state.Ticket.AgentActive {
 		agentActiveColor = lipgloss.Color("69")
@@ -223,6 +235,10 @@ func (r *Renderer) renderTicket(state board.TicketViewState) string {
 	b.WriteString("\n")
 	b.WriteString(strings.Repeat("─", min(innerWidth, 60)))
 	b.WriteString("\n\n")
+
+	if state.Mode == board.ModeTicketEdit {
+		return r.renderTicketEditMode(state, borderStyle, b, innerWidth)
+	}
 
 	fields := []struct {
 		label string
@@ -276,9 +292,57 @@ func (r *Renderer) renderTicket(state board.TicketViewState) string {
 		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("208")).Render("Loading..."))
 	}
 
-	footer := lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render("↑/k: up │ ↓/j: down │ e: edit │ s: cycle status │ a: assign agent │ Esc: back")
+	footer := lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render("↑/k: up │ ↓/j: down │ e: edit │ a: assign agent │ p: approve │ o: view proposal │ r: start run │ Esc: back")
 	final := lipgloss.JoinVertical(lipgloss.Left, b.String(), footer)
 
+	return borderStyle.Render(final)
+}
+
+func (r *Renderer) renderTicketAgentSelect(state board.TicketViewState, innerWidth int) string {
+	agentActiveColor := lipgloss.Color("69")
+	borderStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(agentActiveColor).
+		Padding(1, 2).
+		Width(r.width)
+
+	var b strings.Builder
+	b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("69")).Render("Select Agent"))
+	b.WriteString("\n")
+	b.WriteString(strings.Repeat("─", min(innerWidth, 60)))
+	b.WriteString("\n\n")
+
+	if len(state.Agents) == 0 {
+		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render("No agents detected"))
+	} else {
+		for i, agent := range state.Agents {
+			prefix := "  "
+			if i == state.Cursor {
+				prefix = "▸ "
+			}
+			agentName := agent.Name
+			if agentName == "" {
+				agentName = "(none)"
+			}
+			row := prefix + agentName
+			if i == state.Cursor {
+				row = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("69")).Render(row)
+			}
+			b.WriteString(row)
+			b.WriteString("\n")
+		}
+	}
+
+	footer := lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render("↑/k: up │ ↓/j: down │ Enter: select │ Esc: cancel")
+	return borderStyle.Render(lipgloss.JoinVertical(lipgloss.Left, b.String(), footer))
+}
+
+func (r *Renderer) renderTicketEditMode(state board.TicketViewState, borderStyle lipgloss.Style, b strings.Builder, innerWidth int) string {
+	b.WriteString("\nEdit: ")
+	b.WriteString(state.EditBuffer)
+	b.WriteString("▌\n")
+	footer := lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render("Enter/Ctrl+J: confirm │ Esc: cancel")
+	final := lipgloss.JoinVertical(lipgloss.Left, b.String(), footer)
 	return borderStyle.Render(final)
 }
 
@@ -412,8 +476,8 @@ func (r *Renderer) renderHelp() string {
 	b.WriteString("\n\n")
 
 	shortcuts := []struct {
-		key     string
-		action  string
+		key    string
+		action string
 	}{
 		{"h/l or ←/→", "Move between columns"},
 		{"j/k or ↑/↓", "Move between tickets"},
@@ -481,7 +545,7 @@ func computeMaxVisibleKanban(total int, scrollOff int, width int, height int, ex
 	return count
 }
 
-func renderScrollBarKanban(scrollOff int, maxVisible int, total int, height int, styles board.KanbanStyles) string {
+func renderScrollBarKanban(scrollOff int, maxVisible int, total int, height int, styles *kanbanStylesImpl) string {
 	if total <= maxVisible || height <= 0 {
 		return ""
 	}
@@ -499,9 +563,9 @@ func renderScrollBarKanban(scrollOff int, maxVisible int, total int, height int,
 	var sb strings.Builder
 	for i := 0; i < height; i++ {
 		if i >= thumbPos && i < thumbPos+thumbLen {
-			sb.WriteString(styles.TabActive.Render("┃"))
+			sb.WriteString(styles.TabActive().Render("┃"))
 		} else {
-			sb.WriteString(styles.TabInactive.Render("│"))
+			sb.WriteString(styles.TabInactive().Render("│"))
 		}
 		if i < height-1 {
 			sb.WriteString("\n")

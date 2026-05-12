@@ -58,8 +58,56 @@ func KanbanMoveTicket(b *BoardService, ticketID, newStatus string) BoardViewStat
 	if b.state.Ticket != nil && b.state.Ticket.Ticket != nil && b.state.Ticket.Ticket.ID == ticketID {
 		b.state.Ticket.Ticket.Status = newStatus
 	}
-	if newStatus == "in_progress" && b.state.Ticket != nil {
-		b.state.Ticket.Loading = true
+	if newStatus == "in_progress" {
+		if b.state.Ticket != nil {
+			b.state.Ticket.Loading = true
+		}
+		return ProposalCreate(b, ticketID)
+	}
+	return *b.state
+}
+
+func KanbanPrevColumn(b *BoardService) BoardViewState {
+	if b.state.Kanban.ColIndex > 0 {
+		b.state.Kanban.ColIndex--
+	}
+	return *b.state
+}
+
+func KanbanNextColumn(b *BoardService) BoardViewState {
+	if b.state.Kanban.ColIndex < len(b.state.Kanban.ColumnDefs)-1 {
+		b.state.Kanban.ColIndex++
+	}
+	return *b.state
+}
+
+func KanbanPrevTicket(b *BoardService) BoardViewState {
+	colIdx := b.state.Kanban.ColIndex
+	if colIdx >= 0 && colIdx < len(b.state.Kanban.Cursors) {
+		if b.state.Kanban.Cursors[colIdx] > 0 {
+			b.state.Kanban.Cursors[colIdx]--
+			if b.state.Kanban.Cursors[colIdx] < b.state.Kanban.ScrollOff[colIdx] {
+				b.state.Kanban.ScrollOff[colIdx] = b.state.Kanban.Cursors[colIdx]
+			}
+		}
+	}
+	return *b.state
+}
+
+func KanbanNextTicket(b *BoardService) BoardViewState {
+	colIdx := b.state.Kanban.ColIndex
+	if colIdx >= 0 && colIdx < len(b.state.Kanban.Columns) && colIdx < len(b.state.Kanban.Cursors) {
+		numTickets := len(b.state.Kanban.Columns[colIdx].Tickets)
+		if b.state.Kanban.Cursors[colIdx] < numTickets-1 {
+			b.state.Kanban.Cursors[colIdx]++
+		}
+	}
+	return *b.state
+}
+
+func KanbanJumpColumn(b *BoardService, index int) BoardViewState {
+	if index >= 0 && index < len(b.state.Kanban.ColumnDefs) {
+		b.state.Kanban.ColIndex = index
 	}
 	return *b.state
 }

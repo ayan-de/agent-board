@@ -48,6 +48,9 @@ type TicketViewStyles struct {
 	Empty       lipgloss.Style
 }
 
+// TicketViewModel is the old standalone ticket view model.
+// Deprecated: The new App architecture uses board.BoardService and Renderer instead.
+// This model is retained for reference and will be removed in a future refactor.
 type TicketViewModel struct {
 	store    *store.Store
 	resolver *keybinding.Resolver

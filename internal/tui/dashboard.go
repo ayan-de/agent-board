@@ -30,6 +30,9 @@ type DashboardStyles struct {
 	PaneContent lipgloss.Style
 }
 
+// DashboardModel is the old standalone dashboard model.
+// Deprecated: The new App architecture uses board.BoardService and Renderer instead.
+// This model is retained for reference and will be removed in a future refactor.
 type DashboardModel struct {
 	store          *store.Store
 	orchestrator   board.Orchestrator
