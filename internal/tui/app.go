@@ -30,10 +30,16 @@ type App struct {
 
 type AppDeps struct {
 	Orchestrator board.Orchestrator
+	Board        *board.BoardService
 }
 
 func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry, deps AppDeps) (*App, error) {
-	boardSvc := board.NewBoardService(s, deps.Orchestrator, cfg, reg)
+	var boardSvc *board.BoardService
+	if deps.Board != nil {
+		boardSvc = deps.Board
+	} else {
+		boardSvc = board.NewBoardService(s, deps.Orchestrator, cfg, reg)
+	}
 
 	renderer := NewRenderer(0, 0)
 

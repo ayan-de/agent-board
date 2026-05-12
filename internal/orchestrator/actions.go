@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-func (s Service) ApplyRunOutcome(ctx context.Context, input ApplyRunOutcomeInput) error {
+func (s *Service) ApplyRunOutcome(ctx context.Context, input ApplyRunOutcomeInput) error {
 	if input.ResumeCommand != "" {
 		if err := s.store.SetResumeCommand(ctx, input.TicketID, input.ResumeCommand); err != nil {
 			return fmt.Errorf("set resume command: %w", err)

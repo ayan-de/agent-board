@@ -124,7 +124,7 @@ func (s *Service) CompletionChan() <-chan RunCompletion {
 	return s.completionCh
 }
 
-func (s Service) CreateProposal(ctx context.Context, input CreateProposalInput) (store.Proposal, error) {
+func (s *Service) CreateProposal(ctx context.Context, input CreateProposalInput) (store.Proposal, error) {
 	if s.store == nil {
 		return store.Proposal{}, fmt.Errorf("orchestrator.createProposal: store not configured")
 	}

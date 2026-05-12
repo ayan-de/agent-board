@@ -69,6 +69,14 @@ type KanbanStyles struct {
 
 type TicketViewMode int
 
+const (
+	ModeTicketView TicketViewMode = 0
+	ModeTicketEdit TicketViewMode = 1
+	ModeTicketAgentSelect TicketViewMode = 2
+	ModeTicketPrioritySelect TicketViewMode = 3
+	ModeTicketDependsOnSelect TicketViewMode = 4
+)
+
 type TicketViewState struct {
 	Ticket      *store.Ticket
 	Cursor      int
@@ -77,6 +85,7 @@ type TicketViewState struct {
 	Agents      []config.DetectedAgent
 	Proposal    *store.Proposal
 	Loading     bool
+	DependsOnTickets []store.Ticket
 }
 
 type DashboardViewState struct {
