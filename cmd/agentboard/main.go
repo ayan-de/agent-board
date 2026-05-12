@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/ayan-de/agent-board/internal/board"
 	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/llm"
 	"github.com/ayan-de/agent-board/internal/mcp"
@@ -84,8 +85,10 @@ func main() {
 		_ = reg.Set("agentboard")
 	}
 
+	boardSvc := board.NewBoardService(s, orch, cfg, reg)
+
 	app, err := tui.NewApp(cfg, s, reg, tui.AppDeps{
-		Orchestrator: orch,
+		Board: boardSvc,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error creating app: %v\n", err)
