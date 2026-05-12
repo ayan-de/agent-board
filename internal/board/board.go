@@ -33,6 +33,7 @@ func NewBoardService(s *store.Store, orch Orchestrator, cfg *config.Config, reg 
 		orchestrator:  orch,
 		config:        cfg,
 		registry:      reg,
+		state:         &BoardViewState{},
 	}
 
 	b.state.Kanban.ColumnDefs = cfg.Board.Columns
@@ -88,6 +89,14 @@ func (b *BoardService) ProcessIntent(intent Intent) BoardViewState {
 	case IntentStartRun:
 		if b.state.Ticket != nil && b.state.Ticket.Proposal != nil {
 			return ProposalStartRun(b, b.state.Ticket.Proposal.ID)
+		}
+		return *b.state
+	case IntentStartAdHocRun:
+		session, err := b.orchestrator.StartAdHocRun(context.Background(), i.Agent, i.Prompt)
+		if err != nil {
+			b.SetNotification("Ad-hoc run failed", err.Error(), NotificationError)
+		} else {
+			b.SetNotification("Ad-hoc run started", "Agent: "+session.Agent, NotificationSuccess)
 		}
 		return *b.state
 	case IntentRefreshDashboard:
