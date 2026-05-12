@@ -9,10 +9,7 @@ import (
 	"github.com/ayan-de/agent-board/internal/store"
 )
 
-type BoardService struct {
-	state *BoardViewState
-	store store.Store
-}
+
 
 func KanbanSelectTicket(b *BoardService, ticketID string) BoardViewState {
 	ticket, err := b.store.GetTicket(context.Background(), ticketID)
@@ -67,20 +64,7 @@ func KanbanMoveTicket(b *BoardService, ticketID, newStatus string) BoardViewStat
 	return *b.state
 }
 
-func (b *BoardService) loadKanbanState() *BoardService {
-	b.state.Kanban.Columns = make([]KanbanColumn, len(b.state.Kanban.ColumnDefs))
-	for i, col := range b.state.Kanban.ColumnDefs {
-		tickets, _ := b.store.ListTickets(context.Background(), store.TicketFilters{Status: col.Status})
-		if tickets == nil {
-			tickets = []store.Ticket{}
-		}
-		b.state.Kanban.Columns[i] = KanbanColumn{
-			Def:     col,
-			Tickets: tickets,
-		}
-	}
-	return b
-}
+
 
 func KanbanHandleTabChange(b *BoardService, tab KanbanTab) BoardViewState {
 	b.state.Kanban.Tab = tab

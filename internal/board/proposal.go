@@ -87,15 +87,3 @@ func ProposalStartRun(b *BoardService, proposalID string) BoardViewState {
 	return *b.state
 }
 
-func (b *BoardService) handleRunCompletion(completion orchestrator.RunCompletion) {
-	b.state.ActiveView = ViewBoard
-	b.loadKanbanState()
-
-	if completion.TicketID != "" {
-		b.state.Notification = &NotificationState{
-			Title:   "Run completed",
-			Message: "Agent finished working on " + completion.TicketID,
-			Variant: NotificationSuccess,
-		}
-	}
-}
