@@ -3,6 +3,8 @@ package board
 import (
 	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/store"
+	"github.com/ayan-de/agent-board/internal/theme"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type ViewType int
@@ -37,14 +39,32 @@ type KanbanColumn struct {
 }
 
 type KanbanViewState struct {
-	Columns    []KanbanColumn
-	ColIndex   int
-	Cursors    []int
-	ScrollOff  []int
-	ColumnDefs []config.Column
-	Tab        KanbanTab
-	SearchQuery string
-	MonthOffset int
+	Columns      []KanbanColumn
+	ColIndex     int
+	Cursors      []int
+	ScrollOff    []int
+	ColumnDefs   []config.Column
+	Tab          KanbanTab
+	SearchQuery  string
+	MonthOffset  int
+	Theme        *theme.Theme
+	Styles       KanbanStyles
+}
+
+type KanbanStyles struct {
+	FocusedColumn   lipgloss.Style
+	BlurredColumn   lipgloss.Style
+	FocusedTitle    lipgloss.Style
+	BlurredTitle    lipgloss.Style
+	SelectedTicket  lipgloss.Style
+	Ticket          lipgloss.Style
+	EmptyColumn     lipgloss.Style
+	TabBar          lipgloss.Style
+	TabActive       lipgloss.Style
+	TabInactive     lipgloss.Style
+	SearchBox       lipgloss.Style
+	SearchCursor    lipgloss.Style
+	SearchBoxActive lipgloss.Style
 }
 
 type TicketViewMode int

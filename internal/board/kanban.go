@@ -67,7 +67,7 @@ func KanbanMoveTicket(b *BoardService, ticketID, newStatus string) BoardViewStat
 	return *b.state
 }
 
-func (b *BoardService) loadKanbanState() {
+func (b *BoardService) loadKanbanState() *BoardService {
 	b.state.Kanban.Columns = make([]KanbanColumn, len(b.state.Kanban.ColumnDefs))
 	for i, col := range b.state.Kanban.ColumnDefs {
 		tickets, _ := b.store.ListTickets(context.Background(), store.TicketFilters{Status: col.Status})
@@ -79,6 +79,7 @@ func (b *BoardService) loadKanbanState() {
 			Tickets: tickets,
 		}
 	}
+	return b
 }
 
 func KanbanHandleTabChange(b *BoardService, tab KanbanTab) BoardViewState {
