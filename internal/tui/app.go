@@ -41,6 +41,9 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry, deps AppDep
 		boardSvc = board.NewBoardService(s, deps.Orchestrator, cfg, reg)
 	}
 
+	boardSvc.SetKanbanTheme(reg.Active())
+	boardSvc.SetKanbanStyles(reg.Active(), board.NewKanbanStyles(reg.Active()))
+
 	renderer := NewRenderer(0, 0)
 
 	km := keybinding.DefaultKeyMap()
@@ -70,6 +73,19 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry, deps AppDep
 
 func (a *App) Init() tea.Cmd {
 	return tea.EnterAltScreen
+}
+
+func (a *App) propagateTheme() {
+	t := a.board.GetActiveTheme()
+	a.palette.SetTheme(t)
+	a.modal.SetTheme(t)
+	a.textInput.SetTheme(t)
+	a.notification.SetTheme(t)
+}
+
+func (a *App) openConfigEditor() {
+	cfg := a.board.Config()
+	a.modal.OpenInfo("Config Path", "Edit your config at:\n"+cfg.ProjectConfigPath, nil)
 }
 
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

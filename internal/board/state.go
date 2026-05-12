@@ -67,6 +67,74 @@ type KanbanStyles struct {
 	SearchBoxActive lipgloss.Style
 }
 
+// DefaultKanbanStyles returns styles with hardcoded default colors.
+func DefaultKanbanStyles() KanbanStyles {
+	return KanbanStyles{
+		FocusedColumn: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("69")),
+		BlurredColumn: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("240")),
+		FocusedTitle: lipgloss.NewStyle().
+			Background(lipgloss.Color("69")).
+			Foreground(lipgloss.Color("15")).
+			Bold(true),
+		BlurredTitle: lipgloss.NewStyle().
+			Background(lipgloss.Color("236")).
+			Foreground(lipgloss.Color("252")),
+		SelectedTicket: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("15")),
+		Ticket: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("252")),
+		EmptyColumn: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240")),
+		TabBar:      lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		TabActive:   lipgloss.NewStyle().Foreground(lipgloss.Color("69")).Bold(true),
+		TabInactive: lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		SearchBox: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240")),
+		SearchBoxActive: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("211")).Bold(true),
+	}
+}
+
+// NewKanbanStyles returns styles themed from the given theme.
+func NewKanbanStyles(t *theme.Theme) KanbanStyles {
+	return KanbanStyles{
+		FocusedColumn: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(t.Primary),
+		BlurredColumn: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(t.TextMuted),
+		FocusedTitle: lipgloss.NewStyle().
+			Background(t.Primary).
+			Foreground(t.Text).
+			Bold(true),
+		BlurredTitle: lipgloss.NewStyle().
+			Background(t.BackgroundPanel).
+			Foreground(t.Text),
+		SelectedTicket: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(t.Text).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(t.BorderActive),
+		Ticket: lipgloss.NewStyle().
+			Foreground(t.Text),
+		EmptyColumn: lipgloss.NewStyle().
+			Foreground(t.TextMuted),
+		TabBar:      lipgloss.NewStyle().Foreground(t.TextMuted),
+		TabActive:   lipgloss.NewStyle().Foreground(t.Primary).Bold(true),
+		TabInactive: lipgloss.NewStyle().Foreground(t.TextMuted),
+		SearchBox: lipgloss.NewStyle().
+			Foreground(t.TextMuted),
+		SearchBoxActive: lipgloss.NewStyle().
+			Foreground(t.Secondary).Bold(true),
+	}
+}
+
 type TicketViewMode int
 
 const (

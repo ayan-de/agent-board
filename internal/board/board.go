@@ -132,6 +132,29 @@ func (b *BoardService) ClearNotification() {
 	b.state.Notification = nil
 }
 
+func (b *BoardService) GetActiveTheme() *theme.Theme {
+	return b.registry.Active()
+}
+
+// SetKanbanTheme sets the kanban theme. Styles should be set via SetKanbanStyles.
+func (b *BoardService) SetKanbanTheme(t *theme.Theme) {
+	b.state.Kanban.Theme = t
+}
+
+// SetKanbanStyles sets the kanban styles from a theme and styles struct.
+func (b *BoardService) SetKanbanStyles(t *theme.Theme, styles KanbanStyles) {
+	b.state.Kanban.Theme = t
+	b.state.Kanban.Styles = styles
+}
+
+func (b *BoardService) Config() *config.Config {
+	return b.config
+}
+
+func (b *BoardService) Registry() *theme.Registry {
+	return b.registry
+}
+
 func (b *BoardService) OpenModal(title, body string, onConfirm, onCancel func()) {
 	b.state.Modal = &ModalState{
 		Title:    title,

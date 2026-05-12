@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -85,7 +84,7 @@ func (ac *appCommands) themeItems() []Item {
 
 func (ac *appCommands) onSelect(item Item) {
 	ac.registry.Set(item.ID)
-	ac.app.applyTheme()
+	ac.app.propagateTheme()
 }
 
 func (ac *appCommands) onConfirm(item Item) {
@@ -97,18 +96,15 @@ func (ac *appCommands) onConfirm(item Item) {
 	case "quit":
 		ac.app.quit = true
 	case "config":
-		ac.app.runCommand = tea.ExecProcess(
-			exec.Command("nvim", ac.config.ProjectConfigPath),
-			func(err error) tea.Msg { return editorFinishedMsg{err: err} },
-		)
+		ac.app.openConfigEditor()
 	case "import_theme":
 		themesDir := filepath.Join(config.GetBaseDir(), "themes")
 		ac.app.modal.Open(
 			"Import Theme",
 			fmt.Sprintf("Generate your theme at ayande.xyz and save the JSON file to:\n%s", themesDir),
 			func() tea.Cmd {
-				ac.app.registry.LoadUserThemes(themesDir)
-				themes := ac.app.registry.All()
+				ac.registry.LoadUserThemes(themesDir)
+				themes := ac.registry.All()
 				var userThemes []string
 				for _, t := range themes {
 					if t.Source == "user" {
@@ -146,7 +142,7 @@ require_approval = %v`, llm.Provider, llm.Model, llm.BaseURL, llm.CoordinatorMod
 		ac.app.modal.OpenInfo("Orchestrator Configuration", msg, nil)
 	default:
 		ac.registry.Set(id)
-		ac.app.applyTheme()
+		ac.app.propagateTheme()
 		config.SaveTheme(ac.config.ProjectConfigPath, id)
 	}
 }

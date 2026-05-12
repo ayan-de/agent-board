@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ayan-de/agent-board/internal/board"
 	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/keybinding"
 	"github.com/ayan-de/agent-board/internal/store"
@@ -24,22 +25,6 @@ const (
 	TabDateFilter
 )
 
-type KanbanStyles struct {
-	FocusedColumn   lipgloss.Style
-	BlurredColumn   lipgloss.Style
-	FocusedTitle    lipgloss.Style
-	BlurredTitle    lipgloss.Style
-	SelectedTicket  lipgloss.Style
-	Ticket          lipgloss.Style
-	EmptyColumn     lipgloss.Style
-	TabBar          lipgloss.Style
-	TabActive       lipgloss.Style
-	TabInactive     lipgloss.Style
-	SearchBox       lipgloss.Style
-	SearchCursor    lipgloss.Style
-	SearchBoxActive lipgloss.Style
-}
-
 type KanbanModel struct {
 	store           *store.Store
 	resolver        *keybinding.Resolver
@@ -50,7 +35,7 @@ type KanbanModel struct {
 	scrollOffsets   []int
 	columns         [][]store.Ticket
 	columnDefs      []config.Column
-	styles          KanbanStyles
+	styles          board.KanbanStyles
 	animFrame       int
 	theme           *theme.Theme
 	tab             KanbanTab
@@ -59,70 +44,12 @@ type KanbanModel struct {
 	projectInitDate time.Time
 }
 
-func DefaultKanbanStyles() KanbanStyles {
-	return KanbanStyles{
-		FocusedColumn: lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("69")),
-		BlurredColumn: lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("240")),
-		FocusedTitle: lipgloss.NewStyle().
-			Background(lipgloss.Color("69")).
-			Foreground(lipgloss.Color("15")).
-			Bold(true),
-		BlurredTitle: lipgloss.NewStyle().
-			Background(lipgloss.Color("236")).
-			Foreground(lipgloss.Color("252")),
-		SelectedTicket: lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("15")),
-		Ticket: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("252")),
-		EmptyColumn: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("240")),
-		TabBar:      lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
-		TabActive:   lipgloss.NewStyle().Foreground(lipgloss.Color("69")).Bold(true),
-		TabInactive: lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
-		SearchBox: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("240")),
-		SearchBoxActive: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("211")).Bold(true),
-	}
+func DefaultKanbanStyles() board.KanbanStyles {
+	return board.DefaultKanbanStyles()
 }
 
-func NewKanbanStyles(t *theme.Theme) KanbanStyles {
-	return KanbanStyles{
-		FocusedColumn: lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(t.Primary),
-		BlurredColumn: lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(t.TextMuted),
-		FocusedTitle: lipgloss.NewStyle().
-			Background(t.Primary).
-			Foreground(t.Text).
-			Bold(true),
-		BlurredTitle: lipgloss.NewStyle().
-			Background(t.BackgroundPanel).
-			Foreground(t.Text),
-		SelectedTicket: lipgloss.NewStyle().
-			Bold(true).
-			Foreground(t.Text).
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(t.BorderActive),
-		Ticket: lipgloss.NewStyle().
-			Foreground(t.Text),
-		EmptyColumn: lipgloss.NewStyle().
-			Foreground(t.TextMuted),
-		TabBar:      lipgloss.NewStyle().Foreground(t.TextMuted),
-		TabActive:   lipgloss.NewStyle().Foreground(t.Primary).Bold(true),
-		TabInactive: lipgloss.NewStyle().Foreground(t.TextMuted),
-		SearchBox: lipgloss.NewStyle().
-			Foreground(t.TextMuted),
-		SearchBoxActive: lipgloss.NewStyle().
-			Foreground(t.Secondary).Bold(true),
-	}
+func NewKanbanStyles(t *theme.Theme) board.KanbanStyles {
+	return board.NewKanbanStyles(t)
 }
 
 func NewKanbanModel(s *store.Store, resolver *keybinding.Resolver, t *theme.Theme, columns []config.Column) (KanbanModel, error) {
