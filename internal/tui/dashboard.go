@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ayan-de/agent-board/internal/board"
 	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/keybinding"
 	"github.com/ayan-de/agent-board/internal/orchestrator"
@@ -31,7 +32,7 @@ type DashboardStyles struct {
 
 type DashboardModel struct {
 	store          *store.Store
-	orchestrator   Orchestrator
+	orchestrator   board.Orchestrator
 	resolver       *keybinding.Resolver
 	Agents         []config.DetectedAgent
 	ActiveSessions map[string]store.Session // agent binary -> session
@@ -110,7 +111,7 @@ func NewDashboardStyles(t *theme.Theme) DashboardStyles {
 	}
 }
 
-func NewDashboardModel(s *store.Store, orch Orchestrator, resolver *keybinding.Resolver, Agents []config.DetectedAgent, t *theme.Theme) DashboardModel {
+func NewDashboardModel(s *store.Store, orch board.Orchestrator, resolver *keybinding.Resolver, Agents []config.DetectedAgent, t *theme.Theme) DashboardModel {
 	ti := textinput.New()
 	ti.Placeholder = "Type to send to agent..."
 	ti.CharLimit = 156

@@ -14,8 +14,13 @@ type Orchestrator interface {
 	ApproveProposal(ctx context.Context, proposalID string) error
 	StartApprovedRun(ctx context.Context, proposalID string) (store.Session, error)
 	StartAdHocRun(ctx context.Context, agent, prompt string) (store.Session, error)
-	CompletionChan() <-chan orchestrator.RunCompletion
+	FinishRun(ctx context.Context, input orchestrator.FinishRunInput) error
+	GetLogs(sessionID string) []string
+	SendInput(sessionID, input string) error
 	GetActiveSessions() []*orchestrator.AgentSession
+	GetPaneContent(sessionID string, lines int) (string, error)
+	SwitchToPane(sessionID string) error
+	CompletionChan() <-chan orchestrator.RunCompletion
 }
 
 type BoardService struct {
