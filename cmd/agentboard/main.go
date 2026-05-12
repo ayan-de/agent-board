@@ -26,7 +26,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if !tmux.IsInTmux() {
+	if !tmux.IsInTmux() && cfg.General.Tmux != "never" {
 		sessionName := cfg.ProjectName
 		cmd := exec.Command("tmux", "new-session", "-A", "-s", sessionName, os.Args[0])
 		cmd.Stdin = os.Stdin
