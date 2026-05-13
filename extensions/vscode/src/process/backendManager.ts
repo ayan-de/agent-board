@@ -30,17 +30,26 @@ export class BackendManager {
     private binaryPath: string | null = null;
     private statusBarItem: vscode.StatusBarItem;
     private outputChannel: vscode.OutputChannel;
+    private projectDir: string = '';
 
     constructor(outputChannel: vscode.OutputChannel) {
         this.outputChannel = outputChannel;
         this.statusBarItem = vscode.window.createStatusBarItem();
     }
 
-    async ensureRunning(): Promise<string> {
-        if (this.backend?.isRunning()) {
-            return `http://localhost:${this.port}`;
-        }
+    setProjectDir(dir: string) {
+        this.projectDir = dir;
+    }
 
+    async restartBackend(): Promise<string> {
+        if (this.backend) {
+            await this.backend.stop();
+            this.backend = null;
+        }
+        return this.startBackend();
+    }
+
+    private async startBackend(): Promise<string> {
         vscode.window.showInformationMessage('AgentBoard: starting backend...');
 
         const binaryName = getPlatformBinary();
@@ -53,7 +62,7 @@ export class BackendManager {
 
         this.port = await findAvailablePort(8080);
 
-        this.backend = new BackendProcess(this.port);
+        this.backend = new BackendProcess(this.port, this.projectDir);
         await this.backend.start(this.binaryPath);
         await this.waitForHealth();
 
@@ -63,6 +72,13 @@ export class BackendManager {
 
         vscode.window.showInformationMessage(`AgentBoard ready on port ${this.port}`);
         return `http://localhost:${this.port}`;
+    }
+
+    async ensureRunning(): Promise<string> {
+        if (this.backend?.isRunning()) {
+            return `http://localhost:${this.port}`;
+        }
+        return this.startBackend();
     }
 
     private findLocalBinary(binaryName: string): string | null {
@@ -115,5 +131,9 @@ export class BackendManager {
 
     getBaseUrl(): string {
         return `http://localhost:${this.port}`;
+    }
+
+    getPort(): number {
+        return this.port;
     }
 }

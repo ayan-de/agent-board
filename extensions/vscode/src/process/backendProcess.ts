@@ -3,14 +3,20 @@ import { ChildProcess, spawn } from 'child_process';
 export class BackendProcess {
     private process: ChildProcess | null = null;
     private port: number;
+    private projectDir: string;
 
-    constructor(port: number) {
+    constructor(port: number, projectDir = '') {
         this.port = port;
+        this.projectDir = projectDir;
     }
 
     start(binaryPath: string): Promise<void> {
         return new Promise((resolve, reject) => {
-            this.process = spawn(binaryPath, ['--api', '--addr', `:${this.port}`], {
+            const args = ['--api', '--addr', `:${this.port}`];
+            if (this.projectDir) {
+                args.push('--project-dir', this.projectDir);
+            }
+            this.process = spawn(binaryPath, args, {
                 stdio: ['ignore', 'pipe', 'pipe'],
                 detached: false,
             });
