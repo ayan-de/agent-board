@@ -199,21 +199,107 @@ AgentBoard ships with builtin themes. User themes can be placed in `~/.agentboar
 ```
 agent-board/
 ├── cmd/agentboard/
-│   └── main.go             # TUI entrypoint
+│   └── main.go              # Entrypoint — wires deps, starts TUI or API server
 ├── internal/
-│   ├── tui/                # Bubble Tea application
-│   ├── store/              # SQLite persistence
-│   ├── config/             # Config loading and agent detection
-│   ├── theme/              # Theme registry
-│   ├── keybinding/         # Keymap and action resolution
-│   ├── llm/                # LangChain Go provider registry
-│   ├── orchestrator/       # Agent lifecycle management
-│   ├── pty/                # PTY agent configurations
-│   ├── prompt/             # LLM prompt templates
-│   ├── mcp/                # MCP manager and adapters
-│   └── mcpclient/          # MCP stdio client wrapper
-├── docs/                   # Design notes
-└── AGENTS.md               # Project state documentation
+│   ├── api/                  # HTTP + WebSocket API server (chi + gorilla/websocket)
+│   │   ├── handlers.go      # REST endpoints (tickets, proposals, sessions, runs)
+│   │   ├── middleware.go    # CORS, logging, recovery
+│   │   ├── server.go        # chi router setup, server lifecycle
+│   │   └── websocket.go     # WebSocket hub — streams RunCompletion events
+│   ├── config/               # TOML config loading + env var overrides
+│   │   ├── agent.go         # Agent definitions (claude-code, opencode, cursor)
+│   │   ├── config.go        # Config struct and Load()
+│   │   ├── defaults.go      # Default values and config scaffolding
+│   │   ├── detection.go     # Auto-detect available agents on $PATH
+│   │   ├── loader.go        # TOML file loader
+│   │   └── ...
+│   ├── core/                 # Canonical interface boundary (shared by TUI and API)
+│   │   ├── orchestrator.go  # Orchestrator interface
+│   │   ├── store.go         # Store, LLMClient, Runner, AgentRunner interfaces
+│   │   └── types.go         # Shared types: AgentSession, AgentPane,
+│   │                        #   CreateProposalInput, FinishRunInput,
+│   │                        #   RunCompletion, ApplyRunOutcomeInput
+│   ├── keybinding/           # Keymap definitions and action resolution
+│   │   ├── action.go        # Action type and registry
+│   │   ├── config.go        # Keybinding config
+│   │   ├── keymap.go        # Key to action mapping
+│   │   └── resolver.go       # Resolves keypresses to actions
+│   ├── llm/                  # LLM provider registry (OpenAI, Claude, Ollama, etc.)
+│   │   ├── client.go        # LLM client interface
+│   │   ├── factory.go       # Provider factory
+│   │   └── provider_*.go   # Provider-specific implementations
+│   ├── mcp/                  # MCP server integrations (ContextCarry, SessionCarry)
+│   │   ├── client.go        # Shared MCP client bootstrap and registry
+│   │   ├── contextcarry.go  # ContextCarry MCP server integration
+│   │   └── sessioncarry.go  # SessionCarry MCP server integration
+│   ├── mcpclient/            # Reusable generic MCP client wrapper
+│   ├── orchestrator/         # Agent orchestration — tmux/PTY runners, session mgmt
+│   │   ├── actions.go        # Run outcome processing
+│   │   ├── approval.go       # Proposal approval logic
+│   │   ├── pane_manager.go   # tmux window/pane management for agents
+│   │   ├── pty_runner.go    # PTY-based agent runner
+│   │   ├── service.go        # Orchestrator service — implements core.Orchestrator
+│   │   ├── summarizer.go     # Context summarization
+│   │   ├── tmux_runner.go   # tmux-window-based agent runner
+│   │   └── types.go         # Type aliases pointing to core interfaces
+│   ├── prompt/               # LLM prompt templates for decomposition/assignment
+│   ├── pty/                  # PTY utilities for agent process spawning
+│   │   ├── agent.go         # Agent definitions (opencode, claude)
+│   │   ├── pty.go          # PTY allocation and I/O
+│   │   └── tmux.go         # tmux pane split helpers
+│   ├── store/                # SQLite persistence layer
+│   │   ├── sqlite.go        # DB connection, initialization, migrations
+│   │   ├── tickets.go       # Ticket CRUD
+│   │   ├── sessions.go      # Session and agent state persistence
+│   │   ├── proposals.go     # Proposal CRUD
+│   │   ├── events.go        # Event logging
+│   │   └── contextcarry.go  # ContextCarry integration
+│   ├── theme/                # Theme registry and built-in themes
+│   │   ├── theme.go         # Theme struct and Registry
+│   │   ├── loader.go        # Theme file loader
+│   │   └── themes/*.json    # Built-in themes (nord, dracula, tokyonight, ...)
+│   ├── tmux/                 # tmux utilities (session detection, pane management)
+│   └── tui/                  # Bubble Tea TUI application
+│       ├── app.go           # Root model — window management, orchestration
+│       ├── dashboard.go     # Agent dashboard view (tmux pane display)
+│       ├── kanban.go        # Kanban board rendering and columns
+│       ├── keybindings.go   # Key mapping and handler dispatch
+│       ├── ticketview.go    # Ticket detail/edit panel
+│       ├── ticketcard.go    # Ticket card rendering
+│       ├── modal.go         # Confirmation modals
+│       ├── notification.go   # Notification overlay system
+│       ├── palette.go       # Command palette
+│       ├── textinput_modal.go # Text input modals
+│       └── ...
+├── docs/                     # Design notes and specs (superpowers)
+│   └── superpowers/
+│       ├── plans/           # Implementation plans
+│       └── specs/           # Design specifications
+├── go.mod
+└── README.md
+```
+
+### Interface Architecture
+
+```
+┌──────────────────────────────────────────────────────┐
+│                    TUI (bubbletea)                  │
+│            internal/tui/ — consumes core.Orchestrator │
+└──────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│                    API (chi + WS)                   │
+│              internal/api/ — consumes core.Orchestrator│
+└──────────────────────────────────────────────────────┘
+                      ▼
+          internal/core/  (interface boundary)
+          ├── Orchestrator interface
+          ├── Store interface
+          └── Shared types (AgentSession, RunCompletion, ...)
+                      ▼
+          internal/orchestrator/service.go
+          (implements Orchestrator + Store)
+                      ▼
+          internal/store/  (SQLite implementation)
 ```
 
 ---
