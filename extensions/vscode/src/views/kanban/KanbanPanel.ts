@@ -40,6 +40,8 @@ export class KanbanPanel {
             this.refreshView();
         };
 
+        this.refreshView();
+
         this.panel.onDidDispose(() => {
             KanbanPanel.currentPanel = undefined;
         });

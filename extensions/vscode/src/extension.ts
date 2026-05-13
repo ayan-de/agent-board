@@ -10,12 +10,16 @@ import { renderSidebarHtml, SidebarProject } from './views/sidebar/sidebarTempla
 let backendManager: BackendManager;
 let apiClient: ApiClient | undefined;
 let appState: AppState | undefined;
+let selectedProjectPath: string = '';
 
 export function activate(context: vscode.ExtensionContext) {
     const outputChannel = vscode.window.createOutputChannel('AgentBoard');
     backendManager = new BackendManager(outputChannel);
 
     const initBackend = async () => {
+        if (selectedProjectPath) {
+            backendManager!.setProjectDir(selectedProjectPath);
+        }
         const baseUrl = await backendManager!.ensureRunning();
         apiClient = new ApiClient(baseUrl);
         appState = new AppState();
@@ -138,7 +142,18 @@ export function activate(context: vscode.ExtensionContext) {
 
             view.webview.onDidReceiveMessage((msg) => {
                 if (msg.type === 'selectProject') {
-                    initBackend().catch((err) => {
+                    selectedProjectPath = msg.path || '';
+                    backendManager!.setProjectDir(selectedProjectPath);
+                    backendManager!.restartBackend().then(() => {
+                        apiClient = new ApiClient(`http://localhost:${backendManager!.getPort()}`);
+                        appState = new AppState();
+                        return apiClient.listTickets();
+                    }).then((tickets) => {
+                        appState!.setTickets(tickets);
+                        if (apiClient && appState) {
+                            KanbanPanel.open(apiClient, appState);
+                        }
+                    }).catch((err) => {
                         vscode.window.showErrorMessage(`Error opening project: ${err}`);
                     });
                 }
