@@ -23,9 +23,10 @@ import (
 func main() {
 	apiMode := flag.Bool("api", false, "Run in API-only mode (no TUI)")
 	addr := flag.String("addr", ":8080", "API server address")
+	projectDir := flag.String("project-dir", "", "Project directory (overrides auto-detection)")
 	flag.Parse()
 
-	cfg, err := config.Load()
+	cfg, err := config.LoadWithProjectDir(*projectDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error loading config: %v\n", err)
 		os.Exit(1)
@@ -80,7 +81,15 @@ func main() {
 
 	if !tmux.IsInTmux() {
 		sessionName := cfg.ProjectName
-		cmd := exec.Command("tmux", "new-session", "-A", "-s", sessionName, os.Args[0], "-addr", *addr)
+		args := []string{"new-session", "-A", "-s", sessionName, os.Args[0]}
+		if *apiMode {
+			args = append(args, "-api")
+		}
+		args = append(args, "-addr", *addr)
+		if *projectDir != "" {
+			args = append(args, "-project-dir", *projectDir)
+		}
+		cmd := exec.Command("tmux", args...)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr

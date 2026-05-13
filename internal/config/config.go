@@ -79,6 +79,41 @@ func Load() (*Config, error) {
 	return LoadFromDir(baseDir, projectName)
 }
 
+func LoadWithProjectDir(projectDir string) (*Config, error) {
+	if projectDir == "" {
+		return Load()
+	}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("config.load: home directory: %w", err)
+	}
+
+	baseDir := filepath.Join(homeDir, ".agentboard")
+
+	projectName := deriveProjectNameFromDir(projectDir)
+
+	return LoadFromDir(baseDir, projectName)
+}
+
+func deriveProjectNameFromDir(dir string) string {
+	remote := getGitRemoteFromDir(dir)
+	if remote != "" {
+		return ExtractProjectName(remote, filepath.Base(dir))
+	}
+	return ExtractProjectName("", filepath.Base(dir))
+}
+
+func getGitRemoteFromDir(dir string) string {
+	cmd := exec.Command("git", "remote", "get-url", "origin")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
 func getGitRemote() string {
 	cmd := exec.Command("git", "remote", "get-url", "origin")
 	out, err := cmd.Output()
