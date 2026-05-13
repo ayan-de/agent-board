@@ -23,17 +23,6 @@ type Service struct {
 	completionCh   chan RunCompletion
 }
 
-// AgentSession tracks an active agent session
-type AgentSession struct {
-	SessionID string
-	TicketID  string
-	Agent     string
-	StartedAt int64
-	Status    string
-	PaneID    string
-	WindowID  string
-}
-
 func NewService(store Store, llm LLMClient, runner Runner, ctx ContextCarryProvider) *Service {
 	return &Service{
 		store:          store,

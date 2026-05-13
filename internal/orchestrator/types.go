@@ -1,83 +1,19 @@
 package orchestrator
 
 import (
-	"context"
-
-	"github.com/ayan-de/agent-board/internal/llm"
-	"github.com/ayan-de/agent-board/internal/store"
+	"github.com/ayan-de/agent-board/internal/core"
 )
 
-type CreateProposalInput struct {
-	TicketID string
-}
+type CreateProposalInput = core.CreateProposalInput
+type ApplyRunOutcomeInput = core.ApplyRunOutcomeInput
+type FinishRunInput = core.FinishRunInput
+type RunRequest = core.RunRequest
+type RunHandle = core.RunHandle
+type RunCompletion = core.RunCompletion
+type AgentSession = core.AgentSession
 
-type ApplyRunOutcomeInput struct {
-	TicketID      string
-	Outcome       string
-	ResumeCommand string
-}
-
-type FinishRunInput struct {
-	TicketID      string
-	SessionID     string
-	Outcome       string
-	Summary       string
-	ResumeCommand string
-}
-
-type RunRequest struct {
-	TicketID   string
-	SessionID  string
-	Agent      string
-	Prompt     string
-	Reporter   func(string)
-	Target     string
-	OnComplete func(outcome, summary, resumeCommand string)
-}
-
-type RunHandle struct {
-	Outcome string
-	Summary string
-}
-
-type RunCompletion struct {
-	TicketID      string
-	SessionID     string
-	Outcome       string
-	Summary       string
-	ResumeCommand string
-}
-
-type LLMClient interface {
-	GenerateProposal(ctx context.Context, input llm.ProposalPrompt) (llm.ProposalDraft, error)
-	SummarizeContext(ctx context.Context, input llm.SummaryInput) (string, error)
-}
-
-type Runner interface {
-	Start(ctx context.Context, req RunRequest) (RunHandle, error)
-}
-
-type AgentRunner interface {
-	Start(ctx context.Context, req RunRequest) (RunHandle, error)
-	GetPaneID(sessionID string) (string, bool)
-}
-
-type Store interface {
-	GetTicket(ctx context.Context, id string) (store.Ticket, error)
-	CreateProposal(ctx context.Context, p store.Proposal) (store.Proposal, error)
-	GetProposal(ctx context.Context, id string) (store.Proposal, error)
-	UpdateProposalStatus(ctx context.Context, id, status string) error
-	GetContextCarry(ctx context.Context, ticketID string) (store.ContextCarry, error)
-	UpsertContextCarry(ctx context.Context, cc store.ContextCarry) error
-	CreateSession(ctx context.Context, sess store.Session) (store.Session, error)
-	EndSession(ctx context.Context, id, status string) error
-	HasActiveSession(ctx context.Context, ticketID string) bool
-	SetAgentActive(ctx context.Context, id string, active bool) error
-	SetResumeCommand(ctx context.Context, id, cmd string) error
-	MoveStatus(ctx context.Context, id, status string) error
-	CreateEvent(ctx context.Context, e store.Event) (store.Event, error)
-}
-type ContextCarryProvider interface {
-	LoadContext(ctx context.Context, ticketID string) (string, error)
-	SaveContext(ctx context.Context, ticketID, outcome string) error
-}
+type LLMClient = core.LLMClient
+type Runner = core.Runner
+type AgentRunner = core.AgentRunner
+type Store = core.Store
+type ContextCarryProvider = core.ContextCarryProvider

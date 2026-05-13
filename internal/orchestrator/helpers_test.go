@@ -71,6 +71,30 @@ func (f *fakeStore) CreateEvent(_ context.Context, e store.Event) (store.Event, 
 	f.lastEvent = e
 	return e, nil
 }
+func (f *fakeStore) ListTickets(_ context.Context, _ store.TicketFilters) ([]store.Ticket, error) {
+	return nil, nil
+}
+func (f *fakeStore) CreateTicket(_ context.Context, t store.Ticket) (store.Ticket, error) {
+	return t, nil
+}
+func (f *fakeStore) UpdateTicket(_ context.Context, t store.Ticket) (store.Ticket, error) {
+	return t, nil
+}
+func (f *fakeStore) DeleteTicket(_ context.Context, _ string) error {
+	return nil
+}
+func (f *fakeStore) GetActiveProposalForTicket(_ context.Context, _ string) (store.Proposal, error) {
+	return store.Proposal{}, nil
+}
+func (f *fakeStore) GetSession(_ context.Context, _ string) (store.Session, error) {
+	return store.Session{}, nil
+}
+func (f *fakeStore) ListSessions(_ context.Context, _ string) ([]store.Session, error) {
+	return nil, nil
+}
+func (f *fakeStore) ListActiveSessions(_ context.Context) ([]store.Session, error) {
+	return nil, nil
+}
 
 type fakeLLMClient struct {
 	proposal     llm.ProposalDraft

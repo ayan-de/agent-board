@@ -3,6 +3,8 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+
+	"github.com/ayan-de/agent-board/internal/core"
 )
 
 // TmuxRunner manages agents in tmux panes using a PaneManager
@@ -59,7 +61,7 @@ func (r *TmuxRunner) CapturePane(sessionID string, lines int) (string, error) {
 }
 
 // ListPanes returns all active agent panes
-func (r *TmuxRunner) ListPanes() []*AgentPane {
+func (r *TmuxRunner) ListPanes() []*core.AgentPane {
 	return r.paneManager.ListPanes()
 }
 

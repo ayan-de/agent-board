@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ayan-de/agent-board/internal/core"
 )
 
 type opencodeEvent struct {
@@ -65,13 +67,13 @@ func parseOpencodeOutput(r io.Reader) (RunHandle, error) {
 // PaneManager manages tmux panes for running agents
 type PaneManager struct {
 	mu          sync.RWMutex
-	panes       map[string]*AgentPane
+	panes       map[string]*paneState
 	tmux        string
 	sessionName string
 }
 
-// AgentPane represents a running agent's tmux pane
-type AgentPane struct {
+// paneState represents a running agent's tmux pane (internal, includes private fields)
+type paneState struct {
 	SessionID  string
 	TicketID   string
 	Agent      string
@@ -86,6 +88,19 @@ type AgentPane struct {
 	onComplete func(outcome, summary, resumeCommand string)
 }
 
+func (p *paneState) ToCore() *core.AgentPane {
+	return &core.AgentPane{
+		SessionID: p.SessionID,
+		TicketID:  p.TicketID,
+		Agent:     p.Agent,
+		PaneID:    p.PaneID,
+		WindowID:  p.WindowID,
+		Status:    p.Status,
+		Outcome:   p.Outcome,
+		Summary:   p.Summary,
+	}
+}
+
 // NewPaneManager creates a new pane manager
 func NewPaneManager(sessionName string) (*PaneManager, error) {
 	tmuxPath, err := exec.LookPath("tmux")
@@ -96,14 +111,14 @@ func NewPaneManager(sessionName string) (*PaneManager, error) {
 		sessionName = "agentboard"
 	}
 	return &PaneManager{
-		panes:       make(map[string]*AgentPane),
+		panes:       make(map[string]*paneState),
 		tmux:        tmuxPath,
 		sessionName: sessionName,
 	}, nil
 }
 
 // CreatePane creates a new tmux pane for an agent and starts it
-func (pm *PaneManager) CreatePane(ctx context.Context, req RunRequest) (*AgentPane, error) {
+func (pm *PaneManager) CreatePane(ctx context.Context, req RunRequest) (*core.AgentPane, error) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
@@ -115,7 +130,7 @@ func (pm *PaneManager) CreatePane(ctx context.Context, req RunRequest) (*AgentPa
 	// Create a cancelable context for this pane
 	paneCtx, cancel := context.WithCancel(ctx)
 
-	pane := &AgentPane{
+	pane := &paneState{
 		SessionID:  req.SessionID,
 		TicketID:   req.TicketID,
 		Agent:      req.Agent,
@@ -199,11 +214,11 @@ func (pm *PaneManager) CreatePane(ctx context.Context, req RunRequest) (*AgentPa
 	// Store the pane
 	pm.panes[req.SessionID] = pane
 
-	return pane, nil
+	return pane.ToCore(), nil
 }
 
 // monitorPane watches a tmux pane for completion
-func (pm *PaneManager) monitorPane(ctx context.Context, pane *AgentPane, reporter func(string)) {
+func (pm *PaneManager) monitorPane(ctx context.Context, pane *paneState, reporter func(string)) {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -281,34 +296,37 @@ func (pm *PaneManager) capturePaneOutput(paneID string, lines int) (string, erro
 }
 
 // GetPane retrieves a pane by session ID
-func (pm *PaneManager) GetPane(sessionID string) (*AgentPane, bool) {
+func (pm *PaneManager) GetPane(sessionID string) (*core.AgentPane, bool) {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
 	pane, ok := pm.panes[sessionID]
-	return pane, ok
+	if !ok {
+		return nil, false
+	}
+	return pane.ToCore(), true
 }
 
 // ListPanes returns all active panes
-func (pm *PaneManager) ListPanes() []*AgentPane {
+func (pm *PaneManager) ListPanes() []*core.AgentPane {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
 
-	panes := make([]*AgentPane, 0, len(pm.panes))
+	panes := make([]*core.AgentPane, 0, len(pm.panes))
 	for _, p := range pm.panes {
-		panes = append(panes, p)
+		panes = append(panes, p.ToCore())
 	}
 	return panes
 }
 
 // ListPanesByAgent returns all panes for a specific agent binary
-func (pm *PaneManager) ListPanesByAgent(agent string) []*AgentPane {
+func (pm *PaneManager) ListPanesByAgent(agent string) []*core.AgentPane {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
 
-	panes := make([]*AgentPane, 0)
+	panes := make([]*core.AgentPane, 0)
 	for _, p := range pm.panes {
 		if p.Agent == agent {
-			panes = append(panes, p)
+			panes = append(panes, p.ToCore())
 		}
 	}
 	return panes
