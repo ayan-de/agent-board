@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/ayan-de/agent-board/internal/config"
+	"github.com/ayan-de/agent-board/internal/core"
 	"github.com/ayan-de/agent-board/internal/keybinding"
-	"github.com/ayan-de/agent-board/internal/orchestrator"
 	"github.com/ayan-de/agent-board/internal/store"
 	"github.com/ayan-de/agent-board/internal/theme"
 	"github.com/ayan-de/agent-board/internal/tmux"
@@ -119,27 +119,13 @@ type monthNavigateMsg struct {
 	direction int
 }
 
-type Orchestrator interface {
-	CreateProposal(ctx context.Context, input orchestrator.CreateProposalInput) (store.Proposal, error)
-	ApproveProposal(ctx context.Context, proposalID string) error
-	StartApprovedRun(ctx context.Context, proposalID string) (store.Session, error)
-	StartAdHocRun(ctx context.Context, agent, prompt string) (store.Session, error)
-	FinishRun(ctx context.Context, input orchestrator.FinishRunInput) error
-	GetLogs(sessionID string) []string
-	SendInput(sessionID, input string) error
-	GetActiveSessions() []*orchestrator.AgentSession
-	GetPaneContent(sessionID string, lines int) (string, error)
-	SwitchToPane(sessionID string) error
-	CompletionChan() <-chan orchestrator.RunCompletion
-}
-
 type AppDeps struct {
-	Orchestrator Orchestrator
+	Orchestrator core.Orchestrator
 }
 
 type App struct {
 	store        *store.Store
-	orchestrator Orchestrator
+	orchestrator core.Orchestrator
 	resolver     *keybinding.Resolver
 	config       *config.Config
 	registry     *theme.Registry
@@ -161,7 +147,7 @@ type App struct {
 	activeTicket *store.Ticket
 
 	generatingProposals map[string]bool
-	completionCh        <-chan orchestrator.RunCompletion
+	completionCh        <-chan core.RunCompletion
 	dashboardPaneID     string
 	lastSelectedAgent   string
 	lastSelectedSession string
@@ -537,7 +523,7 @@ func (a *App) createProposalCmd(ticketID string) tea.Cmd {
 		defer cancel()
 
 		debugLog.Printf("createProposal: ticket=%s", ticketID)
-		proposal, err := a.orchestrator.CreateProposal(ctx, orchestrator.CreateProposalInput{
+		proposal, err := a.orchestrator.CreateProposal(ctx, core.CreateProposalInput{
 			TicketID: ticketID,
 		})
 		if err != nil {

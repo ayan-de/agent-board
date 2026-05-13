@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/ayan-de/agent-board/internal/config"
+	"github.com/ayan-de/agent-board/internal/core"
 	"github.com/ayan-de/agent-board/internal/keybinding"
-	"github.com/ayan-de/agent-board/internal/orchestrator"
 	"github.com/ayan-de/agent-board/internal/store"
 	"github.com/ayan-de/agent-board/internal/theme"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -31,7 +31,7 @@ type DashboardStyles struct {
 
 type DashboardModel struct {
 	store          *store.Store
-	orchestrator   Orchestrator
+	orchestrator   core.Orchestrator
 	resolver       *keybinding.Resolver
 	Agents         []config.DetectedAgent
 	ActiveSessions map[string]store.Session // agent binary -> session
@@ -44,7 +44,7 @@ type DashboardModel struct {
 	isInput        bool
 
 	// For pane management
-	activeAgentSessions []*orchestrator.AgentSession
+	activeAgentSessions []*core.AgentSession
 	selectedSessionID   string
 	paneContent         string
 	paneContentLoadedAt time.Time
@@ -110,7 +110,7 @@ func NewDashboardStyles(t *theme.Theme) DashboardStyles {
 	}
 }
 
-func NewDashboardModel(s *store.Store, orch Orchestrator, resolver *keybinding.Resolver, Agents []config.DetectedAgent, t *theme.Theme) DashboardModel {
+func NewDashboardModel(s *store.Store, orch core.Orchestrator, resolver *keybinding.Resolver, Agents []config.DetectedAgent, t *theme.Theme) DashboardModel {
 	ti := textinput.New()
 	ti.Placeholder = "Type to send to agent..."
 	ti.CharLimit = 156
@@ -133,7 +133,7 @@ func (m DashboardModel) SelectedAgent() config.DetectedAgent {
 	return config.DetectedAgent{}
 }
 
-func (m DashboardModel) SelectedSession() *orchestrator.AgentSession {
+func (m DashboardModel) SelectedSession() *core.AgentSession {
 	if m.selectedSessionID != "" {
 		for _, sess := range m.activeAgentSessions {
 			if sess.SessionID == m.selectedSessionID {
