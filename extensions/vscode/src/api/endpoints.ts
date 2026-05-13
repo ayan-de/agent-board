@@ -1,34 +1,34 @@
 // Single source of truth for all API URL paths
 
 export const Tickets = {
-    list: () => '/tickets',
-    create: () => '/tickets',
-    get: (id: string) => `/tickets/${id}`,
-    update: (id: string) => `/tickets/${id}`,
-    delete: (id: string) => `/tickets/${id}`,
-    moveStatus: (id: string) => `/tickets/${id}/status`,
+    list: () => '/api/tickets',
+    create: () => '/api/tickets',
+    get: (id: string) => `/api/tickets/${id}`,
+    update: (id: string) => `/api/tickets/${id}`,
+    delete: (id: string) => `/api/tickets/${id}`,
+    moveStatus: (id: string) => `/api/tickets/${id}/status`,
 } as const;
 
 export const Proposals = {
-    create: () => '/proposals',
-    get: (id: string) => `/proposals/${id}`,
-    approve: (id: string) => `/proposals/${id}/approve`,
+    create: () => '/api/proposals',
+    get: (id: string) => `/api/proposals/${id}`,
+    approve: (id: string) => `/api/proposals/${id}/approve`,
 } as const;
 
 export const Runs = {
-    startApproved: (proposalId: string) => `/runs/${proposalId}/start`,
-    startAdHoc: () => '/runs/adhoc',
-    finish: (sessionId: string) => `/runs/${sessionId}/finish`,
+    startApproved: (proposalId: string) => `/api/runs/${proposalId}/start`,
+    startAdHoc: () => '/api/runs/adhoc',
+    finish: (sessionId: string) => `/api/runs/${sessionId}/finish`,
 } as const;
 
 export const Sessions = {
-    list: () => '/sessions',
-    listActive: () => '/sessions/list',
-    logs: (id: string) => `/sessions/${id}/logs`,
-    pane: (id: string) => `/sessions/${id}/pane`,
-    switch: (id: string) => `/sessions/${id}/switch`,
+    list: () => '/api/sessions',
+    listActive: () => '/api/sessions/list',
+    logs: (id: string) => `/api/sessions/${id}/logs`,
+    pane: (id: string) => `/api/sessions/${id}/pane`,
+    switch: (id: string) => `/api/sessions/${id}/switch`,
 } as const;
 
 export const WebSocket = {
-    global: () => '/ws?session=global',
+    global: () => '/api/ws?session=global',
 } as const;

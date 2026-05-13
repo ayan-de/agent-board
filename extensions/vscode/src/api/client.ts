@@ -27,7 +27,8 @@ export class ApiClient {
             : this.url(endpoints.Tickets.list());
         const res = await fetch(url);
         if (!res.ok) throw new Error(await res.text());
-        return res.json() as Promise<Ticket[]>;
+        const data = await res.json();
+        return Array.isArray(data) ? data : [];
     }
 
     async getTicket(id: string): Promise<Ticket> {
