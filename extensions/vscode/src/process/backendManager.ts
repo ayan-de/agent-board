@@ -27,7 +27,7 @@ function findAvailablePort(start: number): Promise<number> {
 export class BackendManager {
     private backend: BackendProcess | null = null;
     private port: number = 8080;
-    private binaryPath: string = '';
+    private binaryPath: string | null = null;
     private statusBarItem: vscode.StatusBarItem;
     private outputChannel: vscode.OutputChannel;
 
@@ -41,14 +41,14 @@ export class BackendManager {
             return `http://localhost:${this.port}`;
         }
 
-        vscode.window.showInformationMessage('AgentBoard: downloading backend...');
+        vscode.window.showInformationMessage('AgentBoard: starting backend...');
 
         const binaryName = getPlatformBinary();
-        const extensionPath = vscode.extensions.getExtension('ayan-de.agentboard')!.extensionUri.fsPath;
-        this.binaryPath = path.join(extensionPath, 'bin', binaryName);
+        this.binaryPath = this.findLocalBinary(binaryName);
 
-        if (!fs.existsSync(this.binaryPath)) {
-            await this.downloadBinary(binaryName, extensionPath);
+        if (!this.binaryPath) {
+            vscode.window.showErrorMessage('agentboard binary not found. Please build it: go build -o agentboard ./cmd/agentboard');
+            throw new Error('agentboard binary not found');
         }
 
         this.port = await findAvailablePort(8080);
@@ -65,25 +65,28 @@ export class BackendManager {
         return `http://localhost:${this.port}`;
     }
 
-    private async downloadBinary(binaryName: string, extensionPath: string): Promise<void> {
-        const binDir = path.join(extensionPath, 'bin');
-        fs.mkdirSync(binDir, { recursive: true });
+    private findLocalBinary(binaryName: string): string | null {
+        const ext = process.platform === 'win32' ? '.exe' : '';
+        const withExt = (p: string) => p.endsWith(ext) ? p : p + ext;
 
-        const targetPath = path.join(binDir, binaryName);
-        const url = `https://github.com/ayan-de/agent-board/releases/latest/download/${binaryName}`;
+        const searchPaths = [
+            // Development: hardcoded project root (for testing)
+            withExt('/home/ayande/Project/AGENT-BOARD/agent-board/' + binaryName),
+            // Development: current working directory (extension dev host cwd)
+            withExt(path.join(process.cwd(), binaryName)),
+            // Standalone: ~/.local/bin
+            withExt(path.join(process.env.HOME || '', '.local', 'bin', binaryName)),
+            // Unix typical locations
+            '/usr/local/bin/' + binaryName,
+            '/usr/bin/' + binaryName,
+        ];
 
-        try {
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`Download failed: ${response.statusText}`);
+        for (const p of searchPaths) {
+            if (fs.existsSync(p)) {
+                return p;
             }
-            const buffer = await response.arrayBuffer();
-            fs.writeFileSync(targetPath, Buffer.from(buffer));
-            fs.chmodSync(targetPath, 0o755);
-        } catch (err) {
-            vscode.window.showErrorMessage(`Failed to download AgentBoard: ${err}`);
-            throw err;
         }
+        return null;
     }
 
     private async waitForHealth(timeout = 15000): Promise<void> {
