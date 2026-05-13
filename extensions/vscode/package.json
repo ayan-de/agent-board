@@ -14,6 +14,13 @@
   "activationEvents": [
     "onCommand:agentboard.helloWorld",
     "onCommand:agentboard.open",
+    "onCommand:agentboard.addTicket",
+    "onCommand:agentboard.refreshBoard",
+    "onCommand:agentboard.deleteTicket",
+    "onCommand:agentboard.columnLeft",
+    "onCommand:agentboard.columnRight",
+    "onCommand:agentboard.ticketUp",
+    "onCommand:agentboard.ticketDown",
     "onView:agentboard.kanban"
   ],
   "contributes": {
@@ -25,6 +32,108 @@
       {
         "command": "agentboard.open",
         "title": "Open AgentBoard"
+      },
+      {
+        "command": "agentboard.addTicket",
+        "title": "Add Ticket"
+      },
+      {
+        "command": "agentboard.refreshBoard",
+        "title": "Refresh Board"
+      },
+      {
+        "command": "agentboard.deleteTicket",
+        "title": "Delete Ticket"
+      },
+      {
+        "command": "agentboard.createProposal",
+        "title": "Create Proposal"
+      },
+      {
+        "command": "agentboard.approveProposal",
+        "title": "Approve Proposal"
+      },
+      {
+        "command": "agentboard.startRun",
+        "title": "Start Run"
+      },
+      {
+        "command": "agentboard.startAdHocRun",
+        "title": "Start Ad-Hoc Run"
+      },
+      {
+        "command": "agentboard.stopRun",
+        "title": "Stop Run"
+      },
+      {
+        "command": "agentboard.toggleDashboard",
+        "title": "Toggle Dashboard"
+      },
+      {
+        "command": "agentboard.openCommandPalette",
+        "title": "Open Command Palette"
+      },
+      {
+        "command": "agentboard.showHelp",
+        "title": "Show Help"
+      },
+      {
+        "command": "agentboard.columnLeft",
+        "title": "Column Left"
+      },
+      {
+        "command": "agentboard.columnRight",
+        "title": "Column Right"
+      },
+      {
+        "command": "agentboard.ticketUp",
+        "title": "Ticket Up"
+      },
+      {
+        "command": "agentboard.ticketDown",
+        "title": "Ticket Down"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "agentboard.columnLeft",
+        "key": "h",
+        "when": "agentboard.kanban.focused"
+      },
+      {
+        "command": "agentboard.columnRight",
+        "key": "l",
+        "when": "agentboard.kanban.focused"
+      },
+      {
+        "command": "agentboard.ticketUp",
+        "key": "k",
+        "when": "agentboard.kanban.focused"
+      },
+      {
+        "command": "agentboard.ticketDown",
+        "key": "j",
+        "when": "agentboard.kanban.focused"
+      },
+      {
+        "command": "agentboard.addTicket",
+        "key": "a",
+        "when": "agentboard.kanban.focused"
+      },
+      {
+        "command": "agentboard.refreshBoard",
+        "key": "r",
+        "when": "agentboard.kanban.focused"
+      },
+      {
+        "command": "agentboard.openCommandPalette",
+        "key": ":",
+        "when": "agentboard.kanban.focused"
+      },
+      {
+        "command": "agentboard.showHelp",
+        "key": "?",
+        "when": "agentboard.kanban.focused"
       }
     ],
     "viewsContainers": {

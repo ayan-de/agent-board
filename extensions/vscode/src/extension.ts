@@ -7,63 +7,114 @@ import { AppState } from './state/appState';
 import { KanbanPanel } from './views/kanban/KanbanPanel';
 import { renderSidebarHtml, SidebarProject } from './views/sidebar/sidebarTemplate';
 
-
 let backendManager: BackendManager;
 let apiClient: ApiClient | undefined;
 let appState: AppState | undefined;
-
-async function ensureBackend(): Promise<{ apiClient: ApiClient; appState: AppState }> {
-    if (apiClient && appState) {
-        return { apiClient, appState };
-    }
-    const baseUrl = await backendManager!.ensureRunning();
-    apiClient = new ApiClient(baseUrl);
-    appState = new AppState();
-    const tickets = await apiClient.listTickets();
-    appState.setTickets(tickets);
-    return { apiClient, appState };
-}
 
 export function activate(context: vscode.ExtensionContext) {
     const outputChannel = vscode.window.createOutputChannel('AgentBoard');
     backendManager = new BackendManager(outputChannel);
 
-    // Start backend in background
-    backendManager.ensureRunning().then((baseUrl) => {
+    const initBackend = async () => {
+        const baseUrl = await backendManager!.ensureRunning();
         apiClient = new ApiClient(baseUrl);
         appState = new AppState();
-        return apiClient.listTickets();
-    }).then((tickets) => {
-        appState!.setTickets(tickets);
+        const tickets = await apiClient.listTickets();
+        appState.setTickets(tickets);
+    };
+
+    backendManager.ensureRunning().then(() => {
+        return initBackend();
     }).catch((err) => {
         outputChannel.appendLine(`Backend start error: ${err}`);
     });
 
-    // Open KanbanPanel (editor tab) via command
     context.subscriptions.push(
         vscode.commands.registerCommand('agentboard.open', async () => {
-            try {
-                const { apiClient: ac, appState: as } = await ensureBackend();
-                KanbanPanel.open(ac, as);
-            } catch (err) {
-                vscode.window.showErrorMessage(`AgentBoard error: ${err}`);
+            if (!apiClient || !appState) {
+                await initBackend();
+            }
+            if (apiClient && appState) {
+                KanbanPanel.open(apiClient, appState);
             }
         })
     );
 
-    // Open KanbanPanel when sidebar icon is clicked
     context.subscriptions.push(
-        vscode.commands.registerCommand('agentboard.openSidebar', async () => {
+        vscode.commands.registerCommand('agentboard.refreshBoard', async () => {
+            if (!apiClient || !appState) return;
+            const tickets = await apiClient.listTickets();
+            appState.setTickets(tickets);
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('agentboard.addTicket', async () => {
+            if (!apiClient || !appState) return;
+            const title = await vscode.window.showInputBox({
+                prompt: 'Ticket title',
+                placeHolder: 'What needs to be done?',
+            });
+            if (!title) return;
             try {
-                const { apiClient: ac, appState: as } = await ensureBackend();
-                KanbanPanel.open(ac, as);
+                const ticket = await apiClient.createTicket({ title });
+                const tickets = await apiClient.listTickets();
+                appState.setTickets(tickets);
+                vscode.window.showInformationMessage(`Created ${ticket.id}`);
             } catch (err) {
-                vscode.window.showErrorMessage(`AgentBoard error: ${err}`);
+                vscode.window.showErrorMessage(`Failed to create ticket: ${err}`);
             }
         })
     );
 
-    // WebviewViewProvider: sidebar view shows project list
+    context.subscriptions.push(
+        vscode.commands.registerCommand('agentboard.deleteTicket', async () => {
+            if (!apiClient || !appState) return;
+            const selected = appState.getSelectedTicket();
+            if (!selected) {
+                vscode.window.showWarningMessage('No ticket selected');
+                return;
+            }
+            const confirm = await vscode.window.showWarningMessage(
+                `Delete ticket ${selected.id}?`,
+                { modal: true },
+                'Delete', 'Cancel'
+            );
+            if (confirm !== 'Delete') return;
+            try {
+                await apiClient.deleteTicket(selected.id);
+                const tickets = await apiClient.listTickets();
+                appState.setTickets(tickets);
+            } catch (err) {
+                vscode.window.showErrorMessage(`Delete failed: ${err}`);
+            }
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('agentboard.columnLeft', () => {
+            appState?.moveSelection('left');
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('agentboard.columnRight', () => {
+            appState?.moveSelection('right');
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('agentboard.ticketUp', () => {
+            appState?.moveSelection('up');
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('agentboard.ticketDown', () => {
+            appState?.moveSelection('down');
+        })
+    );
+
     const provider: vscode.WebviewViewProvider = {
         resolveWebviewView(view) {
             view.webview.options = { enableScripts: true };
@@ -87,10 +138,7 @@ export function activate(context: vscode.ExtensionContext) {
 
             view.webview.onDidReceiveMessage((msg) => {
                 if (msg.type === 'selectProject') {
-                    // TODO: Switch backend to use selected project's database
-                    ensureBackend().then(({ apiClient: ac, appState: as }) => {
-                        KanbanPanel.open(ac, as);
-                    }).catch((err) => {
+                    initBackend().catch((err) => {
                         vscode.window.showErrorMessage(`Error opening project: ${err}`);
                     });
                 }
