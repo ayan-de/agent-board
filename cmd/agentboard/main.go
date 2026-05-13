@@ -1,11 +1,13 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 
+	"github.com/ayan-de/agent-board/internal/api"
 	"github.com/ayan-de/agent-board/internal/config"
 	"github.com/ayan-de/agent-board/internal/llm"
 	"github.com/ayan-de/agent-board/internal/mcp"
@@ -19,28 +21,14 @@ import (
 )
 
 func main() {
+	apiMode := flag.Bool("api", false, "Run in API-only mode (no TUI)")
+	addr := flag.String("addr", ":8080", "API server address")
+	flag.Parse()
+
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error loading config: %v\n", err)
 		os.Exit(1)
-	}
-
-	if !tmux.IsInTmux() {
-		sessionName := cfg.ProjectName
-		cmd := exec.Command("tmux", "new-session", "-A", "-s", sessionName, os.Args[0])
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			fmt.Fprintf(os.Stderr, "error launching tmux: %v\n", err)
-			os.Exit(1)
-		}
-		return
-	}
-
-	sessionName := cfg.ProjectName
-	if actualSession, err := tmux.GetCurrentSessionName(); err == nil {
-		sessionName = actualSession
 	}
 
 	statuses := make([]string, len(cfg.Board.Columns))
@@ -60,6 +48,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	sessionName := cfg.ProjectName
+	if actualSession, err := tmux.GetCurrentSessionName(); err == nil {
+		sessionName = actualSession
+	}
+
 	var runner orchestrator.Runner
 	var agentRunner orchestrator.AgentRunner
 	tmuxRunner, err := orchestrator.NewTmuxRunner(sessionName)
@@ -74,6 +67,28 @@ func main() {
 	orch := orchestrator.NewService(s, llmClient, runner, ctxCarry)
 	if agentRunner != nil {
 		orch.SetAgentRunner(agentRunner)
+	}
+
+	if *apiMode {
+		server := api.NewServer(orch, s)
+		if err := server.Start(*addr); err != nil {
+			fmt.Fprintf(os.Stderr, "error running api server: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if !tmux.IsInTmux() {
+		sessionName := cfg.ProjectName
+		cmd := exec.Command("tmux", "new-session", "-A", "-s", sessionName, os.Args[0], "-addr", *addr)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "error launching tmux: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	reg := theme.NewRegistry("dark")
