@@ -30,7 +30,7 @@ The long-term product direction is full AI agent orchestration:
 
 ### Implemented
 
-- `cmd/agentboard/main.go` starts the TUI, creates tmux session if not in one
+- `cmd/agentboard/main.go` starts the TUI (or API-only mode via `--api`), creates tmux session if not in one
 - `internal/tui` contains the working Bubble Tea application
 - `internal/store` contains the SQLite-backed ticket, session, proposal, event, and context carry persistence
 - `internal/config` handles defaults, TOML loading, env overlay, project naming, config scaffolding, agent detection, and MCP server config
@@ -42,6 +42,8 @@ The long-term product direction is full AI agent orchestration:
 - `internal/prompt` central repository for all LLM prompt templates
 - `internal/mcp` provides MCP manager, context carry adapter with load/save via MCP protocol
 - `internal/mcpclient` wraps mcp-go stdio client for MCP server communication
+- `internal/core` defines shared interfaces (`Orchestrator`, `Store`, `Runner`, `LLMClient`, `AgentRunner`) and types used by both TUI and API layers
+- `internal/api` provides HTTP+WebSocket REST API for VSCode extension and other consumers
 
 ### Partially Implemented
 
@@ -49,9 +51,7 @@ The long-term product direction is full AI agent orchestration:
 
 ### Placeholder / Not Yet Implemented
 
-- `internal/api`
 - `internal/decomposition`
-- `internal/apitypes`
 
 When touching one of those packages, assume the architecture is still open unless another section here says otherwise.
 
@@ -82,21 +82,21 @@ When not already in tmux, main.go creates a new tmux session named `{project-nam
 ```text
 agent-board/
 ├── cmd/agentboard/
-│   └── main.go             # TUI entrypoint only
+│   └── main.go             # TUI or API entrypoint (--api flag)
 ├── internal/
-│   ├── tui/                # Working Bubble Tea app and views
-│   ├── store/              # Working SQLite persistence
-│   ├── config/             # Working config loading, defaults, detection
-│   ├── theme/              # Working theme registry and JSON theme loading
-│   ├── keybinding/         # Working keymap model and config overrides
-│   ├── llm/                # Working LangChain Go integration with provider registry
-│   ├── orchestrator/       # Working agent lifecycle layer
-│   ├── prompt/             # Working central prompt repository
-│   ├── mcp/                # Working MCP manager and context carry adapter
-│   ├── mcpclient/          # Working mcp-go stdio client wrapper
-│   ├── api/                # Planned HTTP/WebSocket API
-│   ├── decomposition/      # Planned LLM-driven project decomposition
-│   └── apitypes/           # Planned shared DTOs
+│   ├── tui/                # Bubble Tea app and views (UI layer)
+│   ├── core/               # Shared interfaces (Orchestrator, Store, Runner, LLMClient) and types
+│   ├── store/              # SQLite persistence
+│   ├── config/             # Config loading, defaults, detection
+│   ├── theme/              # Theme registry and JSON theme loading
+│   ├── keybinding/         # Keymap model and config overrides
+│   ├── llm/                # LLM provider registry (openai, ollama, claude, zai)
+│   ├── orchestrator/       # Agent lifecycle layer (implements Orchestrator interface)
+│   ├── prompt/             # Central prompt repository
+│   ├── mcp/                # MCP manager and context carry adapter
+│   ├── mcpclient/          # mcp-go stdio client wrapper
+│   ├── api/                # HTTP/WebSocket API (REST endpoints + WS hub)
+│   └── decomposition/      # Planned LLM-driven project decomposition
 ├── docs/                   # Design notes, plans, and roadmap
 └── AGENTS.md               # Operational project memory
 ```
@@ -107,10 +107,13 @@ agent-board/
 TUI <-> Store
 TUI <-> Config
 TUI <-> Theme Registry
-TUI <-> Orchestrator <-> Store
-                    <-> LLM (coordinator/summarizer)
-                    <-> Runner (subprocess exec)
-                    <-> ContextCarryProvider (MCP)
+TUI <-> Orchestrator (via core.Orchestrator interface) <-> Store
+                                                          <-> LLM (coordinator/summarizer)
+                                                          <-> Runner (subprocess exec)
+                                                          <-> ContextCarryProvider (MCP)
+API <-> Orchestrator (via core.Orchestrator interface)
+API <-> Store (via core.Store interface)
+WS  <- CompletionChan (run completion events pushed to connected clients)
 ```
 
 ---
@@ -312,8 +315,11 @@ Notes:
 # Build
 go build -o agentboard ./cmd/agentboard
 
-# Run TUI
+# Run TUI (default)
 ./agentboard
+
+# Run API server only
+./agentboard --api --addr :8080
 
 # Run tests
 go test ./...
@@ -324,9 +330,9 @@ go vet ./...
 
 ### Notes
 
-- the entrypoint currently launches TUI mode only
-- there is no implemented `--api` mode yet
-- there is no implemented `init` subcommand yet
+- the entrypoint launches TUI mode by default; use `--api` for API-only mode
+- both TUI and API share the same `orchestrator.Service` instance
+- WebSocket endpoint at `/api/ws?session={sessionID}` streams `RunCompletion` events
 - in restricted sandboxes, `go test ./...` may require a writable `GOCACHE`
 
 ---
@@ -368,6 +374,8 @@ go vet ./...
 | **Bubble Tea + Lip Gloss** | Good fit for the product. |
 | **TDD-first discipline** | Good rule. It is followed well in the implemented packages and should continue for orchestration work. |
 | **Orchestrator as a separate layer** | Good direction, but it must become the single owner of process lifecycle once implemented. Do not let TUI start owning process logic. |
+| **internal/core/ for shared interfaces** | `core.Orchestrator` and `core.Store` are the canonical boundaries. Both TUI and API depend on `core`, not on concrete implementations. |
+| **chi for HTTP routing** | Lightweight, idiomatic. No need for a heavier framework. |
 
 ---
 
@@ -384,7 +392,6 @@ go vet ./...
 ### Main Risks
 
 - placeholder packages can create false confidence if docs or future code assume they already define stable contracts
-- `internal/tui` currently owns some workflow logic directly; if that expands into orchestration behavior, the UI layer will become too heavy
 - `store` currently mixes durable domain state with some future runtime state like `agent_active`; keep a clear distinction once live agents exist
 - `config` is doing several jobs today: defaults, path resolution, env overlay, project naming, and agent detection. This is still manageable, but avoid turning it into a catch-all package
 
@@ -401,12 +408,12 @@ go vet ./...
 
 ## Suggested Next Build Order
 
-1. Define the orchestrator domain model and interfaces before wiring tmux or PTY process execution.
-2. Implement a minimal in-process orchestrator service for start, stop, list, and observe agent sessions.
-3. Hook the TUI to that orchestrator for one agent flow end to end.
-4. Add persistence for orchestration events and session transitions where needed.
-5. Add tmux and PTY adapters behind the orchestrator.
-6. Add API handlers only after the orchestrator API is stable enough for both TUI and HTTP consumers.
+1. Define the orchestrator domain model and interfaces before wiring tmux or PTY process execution. ✅ (internal/core)
+2. Implement a minimal in-process orchestrator service for start, stop, list, and observe agent sessions. ✅ (internal/orchestrator)
+3. Hook the TUI to that orchestrator for one agent flow end to end. ✅
+4. Add persistence for orchestration events and session transitions where needed. ✅
+5. Add tmux and PTY adapters behind the orchestrator. ✅
+6. Add API handlers for both TUI and HTTP consumers. ✅ (internal/api)
 7. Add MCP and decomposition after the local orchestration loop is solid.
 
 ---
