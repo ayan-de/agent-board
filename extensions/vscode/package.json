@@ -1,0 +1,30 @@
+{
+  "name": "agentboard",
+  "displayName": "AgentBoard",
+  "description": "Kanban board for AI coding agents",
+  "version": "0.1.0",
+  "publisher": "ayan-de",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": ["Other"],
+  "main": "./dist/extension.js",
+  "activationEvents": ["onCommand:agentboard.helloWorld"],
+  "contributes": {
+    "commands": [{
+      "command": "agentboard.helloWorld",
+      "title": "Hello World"
+    }]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.75.0",
+    "@types/node": "^18.0.0",
+    "@vscode/test-electron": "^2.3.0",
+    "typescript": "^5.3.0"
+  }
+}
