@@ -24,6 +24,8 @@ func NewServer(orch core.Orchestrator, store core.Store) *Server {
 
 	hubMgr := NewHubManager(orch.CompletionChan())
 
+	r.Get("/health", h.Health)
+
 	r.Route("/api", func(r chi.Router) {
 		// Orchestrator endpoints
 		r.Post("/proposals", h.CreateProposal)

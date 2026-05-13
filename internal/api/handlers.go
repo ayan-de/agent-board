@@ -272,3 +272,8 @@ func (h *Handlers) GetActiveSessionsList(w http.ResponseWriter, r *http.Request)
 	}
 	json.NewEncoder(w).Encode(sessions)
 }
+
+func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("ok"))
+}
