@@ -42,6 +42,7 @@ func (km *KeyMap) TicketViewHelp() string {
 		ActionAssignAgent,      // A: assign agent
 		ActionSetPriority,      // p: set priority
 		ActionStartRun,         // r: start run
+		ActionInteract,         // e: edit
 	}
 	var parts []string
 	for _, a := range actions {
