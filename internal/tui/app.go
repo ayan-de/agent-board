@@ -60,6 +60,7 @@ type runStartedMsg struct {
 
 type directRunStartedMsg struct {
 	ticketID string
+	agent    string
 	prompt   string
 }
 
@@ -352,7 +353,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case directRunStartedMsg:
 		return a, tea.Batch(
 			a.showNotification("Run started", "Agent is working...", NotificationInfo),
-			a.startDirectRunAndListenCmd(msg.ticketID, msg.prompt),
+			a.startDirectRunAndListenCmd(msg.ticketID, msg.agent, msg.prompt),
 		)
 	case runCompletedMsg:
 		a.kanban, _ = a.kanban.Reload()
@@ -364,6 +365,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return a, a.showNotification("Run completed", fmt.Sprintf("Agent finished working on %s", msg.ticketID), NotificationSuccess)
+	case runStartFailedMsg:
+		return a, a.showNotification("Run failed", msg.err.Error(), NotificationError)
 	case proposalFailedMsg:
 		delete(a.generatingProposals, msg.ticketID)
 		if a.activeTicket != nil && a.activeTicket.ID == msg.ticketID {
@@ -487,11 +490,11 @@ func (a *App) startAdHocRunAndListenCmd(agent, prompt string) tea.Cmd {
 	}
 }
 
-func (a *App) startDirectRunAndListenCmd(ticketID, prompt string) tea.Cmd {
+func (a *App) startDirectRunAndListenCmd(ticketID, agent, prompt string) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
 
-		_, err := a.orchestrator.StartAdHocRun(ctx, "", prompt)
+		_, err := a.orchestrator.StartAdHocRun(ctx, agent, prompt)
 		if err != nil {
 			return runStartFailedMsg{err: err}
 		}
