@@ -18,7 +18,7 @@ func (s *Store) migrate() error {
 
 	CREATE TABLE IF NOT EXISTS sessions (
 		id          TEXT PRIMARY KEY,
-		ticket_id   TEXT REFERENCES tickets(id) ON DELETE CASCADE,
+		ticket_id   TEXT,
 		agent       TEXT NOT NULL,
 		started_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
 		ended_at    DATETIME,
@@ -99,7 +99,7 @@ func (s *Store) migrate() error {
 			_, err = s.db.Exec(`
 				CREATE TABLE sessions (
 					id          TEXT PRIMARY KEY,
-					ticket_id   TEXT REFERENCES tickets(id) ON DELETE CASCADE,
+					ticket_id   TEXT,
 					agent       TEXT NOT NULL,
 					started_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
 					ended_at    DATETIME,
