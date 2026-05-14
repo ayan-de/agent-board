@@ -229,6 +229,11 @@ func ticketFields() []ticketField {
 	}
 }
 
+func (m TicketViewModel) helpFooter() string {
+	km := m.resolver.KeyMap()
+	return km.TicketViewHelp() + " │ Esc: back"
+}
+
 func NewTicketViewModel(s *store.Store, resolver *keybinding.Resolver, t *theme.Theme, agents []config.DetectedAgent) TicketViewModel {
 	return TicketViewModel{
 		store:      s,
@@ -299,24 +304,17 @@ func (m TicketViewModel) handleViewKey(msg tea.KeyMsg) (TicketViewModel, tea.Cmd
 		if m.cursor > 0 {
 			m.cursor--
 		}
-	}
-
-	switch key {
-	case "e":
+	case keybinding.ActionInteract:
 		if m.ticket != nil && m.cursor < len(m.fields) && m.fields[m.cursor].editable {
 			m.editBuffer = m.fields[m.cursor].value(m.ticket)
 			m.mode = ticketEditMode
 		}
-	case "s":
-		if m.ticket != nil {
-			return m.cycleStatus()
-		}
-	case "a":
+	case keybinding.ActionAssignAgent:
 		if m.ticket != nil {
 			m.mode = ticketAgentSelectMode
 			m.agentCursor = 0
 		}
-	case "p":
+	case keybinding.ActionSetPriority:
 		if m.ticket != nil {
 			m.mode = ticketPrioritySelectMode
 			m.priorityCursor = 0
@@ -327,7 +325,31 @@ func (m TicketViewModel) handleViewKey(msg tea.KeyMsg) (TicketViewModel, tea.Cmd
 				}
 			}
 		}
-	case "d":
+	case keybinding.ActionCycleStatus:
+		if m.ticket != nil {
+			return m.cycleStatus()
+		}
+	case keybinding.ActionGenerateProposal:
+		if m.ticket != nil {
+			ticketID := m.ticket.ID
+			return m, func() tea.Msg {
+				return generateProposalMsg{ticketID: ticketID}
+			}
+		}
+	case keybinding.ActionApproveProposal:
+		if m.activeProposal != nil && m.activeProposal.Status == "pending" {
+			proposalID := m.activeProposal.ID
+			return m, func() tea.Msg {
+				return proposalApprovedMsg{proposalID: proposalID}
+			}
+		}
+	case keybinding.ActionViewProposal:
+		if m.activeProposal != nil {
+			return m, func() tea.Msg {
+				return viewProposalFullMsg{proposalID: m.activeProposal.ID}
+			}
+		}
+	case keybinding.ActionSetDependsOn:
 		if m.ticket != nil {
 			m.mode = ticketDependsOnSelectMode
 			m.dependsOnCursor = 0
@@ -338,23 +360,37 @@ func (m TicketViewModel) handleViewKey(msg tea.KeyMsg) (TicketViewModel, tea.Cmd
 				m.dependsOnTickets = m.dependsOnTickets[:5]
 			}
 		}
-	case "o":
-		if m.activeProposal != nil && m.activeProposal.Status == "pending" {
-			proposalID := m.activeProposal.ID
-			return m, func() tea.Msg {
-				return proposalApprovedMsg{proposalID: proposalID}
+	case keybinding.ActionStartRun:
+		if m.ticket != nil {
+			if m.ticket.Status != "in_progress" {
+				return m, func() tea.Msg {
+					return notificationMsg{
+						title:    "Cannot start run",
+						message:  "Move ticket to In Progress to start the agent working",
+						variant:  NotificationInfo,
+					}
+				}
 			}
-		}
-	case "r":
-		if m.activeProposal != nil && m.activeProposal.Status == "approved" {
-			return m, func() tea.Msg {
-				return runStartedMsg{proposalID: m.activeProposal.ID}
+			if m.activeProposal != nil {
+				if m.activeProposal.Status == "approved" {
+					return m, func() tea.Msg {
+						return runStartedMsg{proposalID: m.activeProposal.ID}
+					}
+				}
+				// Proposal exists but not approved - show notification
+				return m, func() tea.Msg {
+					return notificationMsg{
+						title:   "Cannot start run",
+						message: "Approve proposal to start execution",
+						variant: NotificationInfo,
+					}
+				}
 			}
-		}
-	case "v":
-		if m.activeProposal != nil {
+			// No proposal - direct run with ticket title + description
+			prompt := fmt.Sprintf("Ticket: %s\nTitle: %s\nDescription: %s",
+				m.ticket.ID, m.ticket.Title, m.ticket.Description)
 			return m, func() tea.Msg {
-				return viewProposalFullMsg{proposalID: m.activeProposal.ID}
+				return directRunStartedMsg{ticketID: m.ticket.ID, prompt: prompt}
 			}
 		}
 	}
@@ -824,14 +860,12 @@ func (m TicketViewModel) View() string {
 	} else if m.mode == ticketAdHocPromptMode {
 		footer = "Enter: run agent │ Esc: cancel"
 	} else {
-		footer = "e: edit │ s: cycle status │ a: assign agent │ p: set priority │ d: set depends on │ Esc: back"
+		footer = m.helpFooter()
 		if m.activeProposal != nil {
 			footer += " │ v: view proposal"
 		}
 		if m.activeProposal != nil && m.activeProposal.Status == "pending" {
 			footer += " │ o: approve proposal"
-		} else if m.activeProposal != nil && m.activeProposal.Status == "approved" {
-			footer += " │ r: start run"
 		}
 	}
 
