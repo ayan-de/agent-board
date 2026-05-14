@@ -25,11 +25,19 @@ const (
 	ActionJumpColumn3
 	ActionJumpColumn4
 	ActionShowHelp
+	ActionGenerateProposal
 	ActionGoToTicket
 	ActionShowDashboard
 	ActionOpenPalette
 	ActionInteract
 	ActionSwitchToPane
+	ActionStartRun
+	ActionAssignAgent
+	ActionSetPriority
+	ActionCycleStatus
+	ActionApproveProposal
+	ActionViewProposal
+	ActionSetDependsOn
 )
 
 func (a Action) String() string {
@@ -88,6 +96,20 @@ func (a Action) String() string {
 		return "interact"
 	case ActionSwitchToPane:
 		return "switch_to_pane"
+	case ActionStartRun:
+		return "start_run"
+	case ActionAssignAgent:
+		return "assign_agent"
+	case ActionSetPriority:
+		return "set_priority"
+	case ActionCycleStatus:
+		return "cycle_status"
+	case ActionApproveProposal:
+		return "approve_proposal"
+	case ActionViewProposal:
+		return "view_proposal"
+	case ActionSetDependsOn:
+		return "set_depends_on"
 	default:
 		return "unknown"
 	}
