@@ -37,12 +37,12 @@ func (km *KeyMap) GetByAction(action Action) (key string) {
 // TicketViewHelp returns the help footer text for ticket view
 func (km *KeyMap) TicketViewHelp() string {
 	actions := []Action{
-		ActionStartAgent,       // s: cycle status
-		ActionGenerateProposal, // c: generate proposal
-		ActionAssignAgent,      // A: assign agent
-		ActionSetPriority,      // p: set priority
-		ActionStartRun,         // r: start run
-		ActionInteract,         // e: edit
+		ActionCycleStatus,       // s: cycle status
+		ActionGenerateProposal,  // c: generate proposal
+		ActionAssignAgent,       // A: assign agent
+		ActionSetPriority,       // p: set priority
+		ActionStartRun,          // r: start run
+		ActionInteract,          // e: edit
 	}
 	var parts []string
 	for _, a := range actions {
