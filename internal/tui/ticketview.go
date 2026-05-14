@@ -387,10 +387,19 @@ func (m TicketViewModel) handleViewKey(msg tea.KeyMsg) (TicketViewModel, tea.Cmd
 				}
 			}
 			// No proposal - direct run with ticket title + description
+			if m.ticket.Agent == "" {
+				return m, func() tea.Msg {
+					return notificationMsg{
+						title:   "Cannot start run",
+						message: "Assign an agent to this ticket first",
+						variant: NotificationInfo,
+					}
+				}
+			}
 			prompt := fmt.Sprintf("Ticket: %s\nTitle: %s\nDescription: %s",
 				m.ticket.ID, m.ticket.Title, m.ticket.Description)
 			return m, func() tea.Msg {
-				return directRunStartedMsg{ticketID: m.ticket.ID, prompt: prompt}
+				return directRunStartedMsg{ticketID: m.ticket.ID, agent: m.ticket.Agent, prompt: prompt}
 			}
 		}
 	}
