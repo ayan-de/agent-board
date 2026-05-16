@@ -85,9 +85,9 @@ func (f *fakeOrchestrator) CompletionChan() <-chan orchestrator.RunCompletion {
 	return f.completionCh
 }
 
-func (f *fakeOrchestrator) StartAdHocRun(ctx context.Context, agent, prompt string) (store.Session, error) {
+func (f *fakeOrchestrator) StartAdHocRun(ctx context.Context, ticketID, agent, prompt string) (store.Session, error) {
 	session, err := f.store.CreateSession(ctx, store.Session{
-		TicketID: "",
+		TicketID: ticketID,
 		Agent:    agent,
 		Status:   "running",
 	})

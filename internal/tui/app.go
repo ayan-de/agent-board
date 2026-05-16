@@ -133,7 +133,7 @@ type Orchestrator interface {
 	CreateProposal(ctx context.Context, input orchestrator.CreateProposalInput) (store.Proposal, error)
 	ApproveProposal(ctx context.Context, proposalID string) error
 	StartApprovedRun(ctx context.Context, proposalID string) (store.Session, error)
-	StartAdHocRun(ctx context.Context, agent, prompt string) (store.Session, error)
+	StartAdHocRun(ctx context.Context, ticketID, agent, prompt string) (store.Session, error)
 	FinishRun(ctx context.Context, input orchestrator.FinishRunInput) error
 	GetLogs(sessionID string) []string
 	SendInput(sessionID, input string) error
@@ -476,7 +476,7 @@ func (a *App) startAdHocRunAndListenCmd(agent, prompt string) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
 
-		_, err := a.orchestrator.StartAdHocRun(ctx, agent, prompt)
+		_, err := a.orchestrator.StartAdHocRun(ctx, "", agent, prompt)
 		if err != nil {
 			return runStartFailedMsg{err: err}
 		}
@@ -494,7 +494,7 @@ func (a *App) startDirectRunAndListenCmd(ticketID, agent, prompt string) tea.Cmd
 	return func() tea.Msg {
 		ctx := context.Background()
 
-		_, err := a.orchestrator.StartAdHocRun(ctx, agent, prompt)
+		_, err := a.orchestrator.StartAdHocRun(ctx, ticketID, agent, prompt)
 		if err != nil {
 			return runStartFailedMsg{err: err}
 		}
