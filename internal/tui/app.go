@@ -58,6 +58,12 @@ type runStartedMsg struct {
 	proposalID string
 }
 
+type directRunStartedMsg struct {
+	ticketID string
+	agent    string
+	prompt   string
+}
+
 type adhocRunStartedMsg struct {
 	agent  string
 	prompt string
@@ -79,6 +85,10 @@ type proposalFailedMsg struct {
 type proposalLoadedMsg struct {
 	TicketID string
 	proposal *store.Proposal
+}
+
+type generateProposalMsg struct {
+	ticketID string
 }
 
 type viewProposalFullMsg struct {
@@ -123,7 +133,7 @@ type Orchestrator interface {
 	CreateProposal(ctx context.Context, input orchestrator.CreateProposalInput) (store.Proposal, error)
 	ApproveProposal(ctx context.Context, proposalID string) error
 	StartApprovedRun(ctx context.Context, proposalID string) (store.Session, error)
-	StartAdHocRun(ctx context.Context, agent, prompt string) (store.Session, error)
+	StartAdHocRun(ctx context.Context, ticketID, agent, prompt string) (store.Session, error)
 	FinishRun(ctx context.Context, input orchestrator.FinishRunInput) error
 	GetLogs(sessionID string) []string
 	SendInput(sessionID, input string) error
@@ -319,6 +329,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.ticketView = a.ticketView.SetProposal(msg.proposal)
 		}
 		return a, nil
+	case generateProposalMsg:
+		return a.handleGenerateProposal(msg)
 	case proposalApprovedMsg:
 		return a, a.approveProposalCmd(msg.proposalID)
 	case viewProposalFullMsg:
@@ -338,6 +350,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.showNotification("Ad-hoc run started", fmt.Sprintf("%s is working...", msg.agent), NotificationInfo),
 			a.startAdHocRunAndListenCmd(msg.agent, msg.prompt),
 		)
+	case directRunStartedMsg:
+		return a, tea.Batch(
+			a.showNotification("Run started", "Agent is working...", NotificationInfo),
+			a.startDirectRunAndListenCmd(msg.ticketID, msg.agent, msg.prompt),
+		)
 	case runCompletedMsg:
 		a.kanban, _ = a.kanban.Reload()
 		if a.activeTicket != nil && a.activeTicket.ID == msg.ticketID {
@@ -348,6 +365,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return a, a.showNotification("Run completed", fmt.Sprintf("Agent finished working on %s", msg.ticketID), NotificationSuccess)
+	case runStartFailedMsg:
+		return a, a.showNotification("Run failed", msg.err.Error(), NotificationError)
 	case proposalFailedMsg:
 		delete(a.generatingProposals, msg.ticketID)
 		if a.activeTicket != nil && a.activeTicket.ID == msg.ticketID {
@@ -457,7 +476,7 @@ func (a *App) startAdHocRunAndListenCmd(agent, prompt string) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
 
-		_, err := a.orchestrator.StartAdHocRun(ctx, agent, prompt)
+		_, err := a.orchestrator.StartAdHocRun(ctx, "", agent, prompt)
 		if err != nil {
 			return runStartFailedMsg{err: err}
 		}
@@ -465,6 +484,24 @@ func (a *App) startAdHocRunAndListenCmd(agent, prompt string) tea.Cmd {
 		select {
 		case completion := <-a.completionCh:
 			return runCompletedMsg{ticketID: completion.TicketID}
+		case <-time.After(60 * time.Second):
+			return runCompletedMsg{ticketID: ""}
+		}
+	}
+}
+
+func (a *App) startDirectRunAndListenCmd(ticketID, agent, prompt string) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+
+		_, err := a.orchestrator.StartAdHocRun(ctx, ticketID, agent, prompt)
+		if err != nil {
+			return runStartFailedMsg{err: err}
+		}
+
+		select {
+		case <-a.completionCh:
+			return runCompletedMsg{ticketID: ticketID}
 		case <-time.After(60 * time.Second):
 			return runCompletedMsg{ticketID: ""}
 		}
@@ -517,18 +554,21 @@ func (a *App) handleStatusChanged(msg statusChangedMsg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	cmds = append(cmds, a.showNotification("Status updated", fmt.Sprintf("%s moved to %s", msg.ticketID, msg.newStatus), NotificationSuccess))
 	if a.activeTicket != nil && a.activeTicket.ID == msg.ticketID {
-		a.ticketView = a.ticketView.SetLoading(msg.newStatus == "in_progress")
-	}
-
-	// If moved to in_progress, trigger orchestration
-	if msg.newStatus == "in_progress" {
-		a.generatingProposals[msg.ticketID] = true
-		cmds = append(cmds, a.createProposalCmd(msg.ticketID))
-	} else {
-		delete(a.generatingProposals, msg.ticketID)
+		a.ticketView = a.ticketView.SetLoading(false)
 	}
 
 	return a, tea.Batch(cmds...)
+}
+
+func (a *App) handleGenerateProposal(msg generateProposalMsg) (tea.Model, tea.Cmd) {
+	if a.activeTicket == nil || a.activeTicket.ID != msg.ticketID {
+		return a, nil
+	}
+
+	a.ticketView = a.ticketView.SetLoading(true)
+	a.generatingProposals[msg.ticketID] = true
+
+	return a, a.createProposalCmd(msg.ticketID)
 }
 
 func (a *App) createProposalCmd(ticketID string) tea.Cmd {
@@ -717,10 +757,11 @@ func (a *App) renderHeader() string {
 	labelStyle := lipgloss.NewStyle().Foreground(primary)
 	nameStyle := lipgloss.NewStyle().Bold(true).Foreground(fg)
 	hintStyle := lipgloss.NewStyle().Foreground(muted)
+	km := a.resolver.KeyMap()
 
-	hintPart := hintStyle.Render("a: add ticket  │  d: delete ticket")
+	hintPart := hintStyle.Render(km.BindingsForActions(keybinding.ActionAddTicket, keybinding.ActionDeleteTicket))
 	projectPart := labelStyle.Render("  Project: ") + nameStyle.Render(name)
-	hintPart2 := hintStyle.Render(" ?: help  │  r: refresh")
+	hintPart2 := hintStyle.Render(km.BindingsForActions(keybinding.ActionShowHelp, keybinding.ActionRefresh))
 
 	projectWidth := lipgloss.Width(projectPart)
 	hintWidth := lipgloss.Width(hintPart) + lipgloss.Width(hintPart2)

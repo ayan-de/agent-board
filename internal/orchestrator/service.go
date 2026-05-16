@@ -50,9 +50,9 @@ func (s *Service) SetAgentRunner(pr AgentRunner) {
 	s.agentRunner = pr
 }
 
-func (s *Service) StartAdHocRun(ctx context.Context, agent, prompt string) (store.Session, error) {
+func (s *Service) StartAdHocRun(ctx context.Context, ticketID, agent, prompt string) (store.Session, error) {
 	session, err := s.store.CreateSession(ctx, store.Session{
-		TicketID: "",
+		TicketID: ticketID,
 		Agent:    agent,
 		Status:   "running",
 	})
@@ -60,16 +60,22 @@ func (s *Service) StartAdHocRun(ctx context.Context, agent, prompt string) (stor
 		return store.Session{}, err
 	}
 
+	if ticketID != "" {
+		if err := s.store.SetAgentActive(ctx, ticketID, true); err != nil {
+			return store.Session{}, err
+		}
+	}
+
 	onComplete := func(outcome, summary, resumeCommand string) {
 		_ = s.FinishRun(context.Background(), FinishRunInput{
-			TicketID:  "",
+			TicketID:  ticketID,
 			SessionID: session.ID,
 			Outcome:   outcome,
 			Summary:   summary,
 			ResumeCommand: resumeCommand,
 		})
 		s.completionCh <- RunCompletion{
-			TicketID:  "",
+			TicketID:  ticketID,
 			SessionID: session.ID,
 			Outcome:   outcome,
 			Summary:   summary,
@@ -80,7 +86,7 @@ func (s *Service) StartAdHocRun(ctx context.Context, agent, prompt string) (stor
 	var handle RunHandle
 	if s.agentRunner != nil {
 		handle, err = s.agentRunner.Start(ctx, RunRequest{
-			TicketID:   "",
+			TicketID:   ticketID,
 			SessionID:  session.ID,
 			Agent:      agent,
 			Prompt:     prompt,
@@ -93,13 +99,16 @@ func (s *Service) StartAdHocRun(ctx context.Context, agent, prompt string) (stor
 
 	if err != nil {
 		_ = s.store.EndSession(ctx, session.ID, "failed")
+		if ticketID != "" {
+			_ = s.store.SetAgentActive(ctx, ticketID, false)
+		}
 		return store.Session{}, err
 	}
 
 	s.mu.Lock()
 	s.activeSessions[session.ID] = &AgentSession{
 		SessionID: session.ID,
-		TicketID:  "",
+		TicketID:  ticketID,
 		Agent:     agent,
 		StartedAt: session.StartedAt.Unix(),
 		Status:    "running",
@@ -107,7 +116,7 @@ func (s *Service) StartAdHocRun(ctx context.Context, agent, prompt string) (stor
 	s.mu.Unlock()
 
 	_, _ = s.store.CreateEvent(ctx, store.Event{
-		TicketID:  "",
+		TicketID:  ticketID,
 		SessionID: session.ID,
 		Kind:      "run.started",
 		Payload:   handle.Outcome,

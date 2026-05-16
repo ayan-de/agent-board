@@ -53,3 +53,7 @@ func (r *Resolver) Reset() {
 func (r *Resolver) InChordMode() bool {
 	return r.chordMode
 }
+
+func (r *Resolver) KeyMap() KeyMap {
+	return r.keyMap
+}
