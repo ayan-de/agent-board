@@ -117,7 +117,7 @@ func DefaultKeyMap() KeyMap {
 			{Key: "p", Action: ActionSetPriority, Description: "set priority"},
 			{Key: "o", Action: ActionApproveProposal, Description: "approve proposal"},
 			{Key: "v", Action: ActionViewProposal, Description: "view proposal"},
-			{Key: "d", Action: ActionSetDependsOn, Description: "set depends on"},
+			{Key: "D", Action: ActionSetDependsOn, Description: "set depends on"},
 			{Key: "1", Action: ActionJumpColumn1, Description: "jump col 1"},
 			{Key: "2", Action: ActionJumpColumn2, Description: "jump col 2"},
 			{Key: "3", Action: ActionJumpColumn3, Description: "jump col 3"},
@@ -126,7 +126,7 @@ func DefaultKeyMap() KeyMap {
 			{Key: "g", Action: ActionGoToTicket, IsChord: true, Description: "go to ticket"},
 			{Key: "i", Action: ActionShowDashboard, Description: "show dashboard"},
 			{Key: "e", Action: ActionInteract, Description: "edit"},
-			{Key: "v", Action: ActionSwitchToPane, Description: "switch to pane"},
+			{Key: "w", Action: ActionSwitchToPane, Description: "switch to pane"},
 			{Key: ":", Action: ActionOpenPalette, Description: "open palette"},
 		},
 	}
