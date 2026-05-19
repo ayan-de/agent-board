@@ -1,5 +1,5 @@
 {
-  "name": "agentboard",
+  "name": "@thisisayande/agentboard",
   "version": "0.1.8",
   "description": "Terminal-based Kanban board that orchestrates AI coding agents",
   "license": "MIT",
@@ -8,7 +8,7 @@
     "url": "https://github.com/ayan-de/agent-board"
   },
   "bin": {
-    "agentboard": "./bin/agentboard.sh"
+    "agentboard": "bin/agentboard.sh"
   },
   "os": [
     "linux",
