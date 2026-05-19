@@ -103,7 +103,7 @@ func TestAppAgentAssignShowsNotification(t *testing.T) {
 	app.ticketView = app.ticketView.SetTicket(&ticket)
 	app.view = viewTicket
 
-	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'A'}})
 
 	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd == nil {

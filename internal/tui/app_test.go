@@ -161,11 +161,11 @@ func TestMoveToInProgressCreatesProposalRequest(t *testing.T) {
 	ctx := context.Background()
 
 	ticket, _ := app.store.CreateTicket(ctx, store.Ticket{Status: "backlog", Agent: "opencode", Title: "Test Ticket"})
+	app.activeTicket = &ticket
 
-	// Directly send statusChangedMsg to Update
-	_, cmd := app.Update(statusChangedMsg{
-		ticketID:  ticket.ID,
-		newStatus: "in_progress",
+	// Directly send generateProposalMsg to Update
+	_, cmd := app.Update(generateProposalMsg{
+		ticketID: ticket.ID,
 	})
 
 	if cmd == nil {
@@ -443,11 +443,18 @@ func TestProposalApprovalAndRunWorkflow(t *testing.T) {
 	ctx := context.Background()
 
 	ticket, _ := app.store.CreateTicket(ctx, store.Ticket{Status: "backlog", Agent: "claude-code", Title: "Work Ticket"})
+	app.activeTicket = &ticket
 
-	// 1. Move to in_progress to create proposal
+	// 1. Move to in_progress
 	_, cmd := app.Update(statusChangedMsg{
 		ticketID:  ticket.ID,
 		newStatus: "in_progress",
+	})
+	execCmd(app, cmd)
+
+	// 2. Create proposal explicitly via generateProposalMsg
+	_, cmd = app.Update(generateProposalMsg{
+		ticketID: ticket.ID,
 	})
 	execCmd(app, cmd)
 
@@ -455,8 +462,7 @@ func TestProposalApprovalAndRunWorkflow(t *testing.T) {
 		t.Fatalf("expected proposal for %s", ticket.ID)
 	}
 
-	// 2. Mock proposal loading (simulate what happens in App after creation)
-	app.activeTicket = &ticket
+	// 3. Mock proposal loading (simulate what happens in App after creation)
 	p, _ := app.store.GetActiveProposalForTicket(ctx, ticket.ID)
 	app.Update(proposalLoadedMsg{TicketID: ticket.ID, proposal: &p})
 
@@ -464,7 +470,7 @@ func TestProposalApprovalAndRunWorkflow(t *testing.T) {
 		t.Fatal("activeProposal should not be nil")
 	}
 
-	// 3. Approve proposal
+	// 4. Approve proposal
 	_, cmd = app.Update(proposalApprovedMsg{proposalID: p.ID})
 	execCmd(app, cmd)
 
@@ -474,7 +480,7 @@ func TestProposalApprovalAndRunWorkflow(t *testing.T) {
 		t.Errorf("proposal status = %s, want approved", updatedP.Status)
 	}
 
-	// 4. Start run
+	// 5. Start run
 	_, cmd = app.Update(runStartedMsg{proposalID: p.ID})
 	execCmd(app, cmd)
 

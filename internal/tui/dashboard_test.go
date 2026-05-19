@@ -192,9 +192,9 @@ func TestDashboardRefreshKey(t *testing.T) {
 	m.width = 120
 	m.height = 40
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}})
 	if !m.refreshed {
-		t.Error("refresh flag not set after pressing r")
+		t.Error("refresh flag not set after pressing R")
 	}
 }
 

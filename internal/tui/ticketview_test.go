@@ -520,7 +520,7 @@ func TestTicketViewModelAgentSelectMode(t *testing.T) {
 	})
 	m = m.SetTicket(&ticket)
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'A'}})
 	if m.mode != ticketAgentSelectMode {
 		t.Fatalf("mode = %v, want ticketAgentSelectMode", m.mode)
 	}
@@ -541,7 +541,7 @@ func TestTicketViewModelAgentSelectNavigate(t *testing.T) {
 	})
 	m = m.SetTicket(&ticket)
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'A'}})
 
 	downKey := tea.KeyMsg{Type: tea.KeyDown}
 	m, _ = m.Update(downKey)
@@ -555,7 +555,7 @@ func TestTicketViewModelAgentSelectNavigate(t *testing.T) {
 		t.Errorf("agentCursor = %d after up, want 0", m.agentCursor)
 	}
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		m, _ = m.Update(upKey)
 	}
 	if m.agentCursor != 0 {
@@ -575,7 +575,7 @@ func TestTicketViewModelAgentSelectAssign(t *testing.T) {
 	})
 	m = m.SetTicket(&ticket)
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'A'}})
 
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -606,7 +606,7 @@ func TestTicketViewModelAgentSelectNone(t *testing.T) {
 	})
 	m = m.SetTicket(&ticket)
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'A'}})
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 
 	if m.ticket.Agent != "" {
@@ -633,10 +633,10 @@ func TestTicketViewModelAgentSelectDropdownRenders(t *testing.T) {
 	})
 	m = m.SetTicket(&ticket)
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'A'}})
 
 	if m.mode != ticketAgentSelectMode {
-		t.Error("mode should be ticketAgentSelectMode after 'a'")
+		t.Error("mode should be ticketAgentSelectMode after 'A'")
 	}
 
 	view := m.View()
@@ -658,7 +658,7 @@ func TestTicketViewModelAgentSelectCancel(t *testing.T) {
 	})
 	m = m.SetTicket(&ticket)
 
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'A'}})
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEscape})
 
@@ -723,7 +723,7 @@ func TestTicketViewModelRunDoesNothingWhenProposalPending(t *testing.T) {
 	m = m.SetTicket(&ticket)
 	m = m.SetProposal(&proposal)
 
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}})
 	if cmd != nil {
 		t.Fatalf("expected no run command for pending proposal, got %T", cmd())
 	}
