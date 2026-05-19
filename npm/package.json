@@ -1,0 +1,33 @@
+{
+  "name": "agentboard",
+  "version": "0.1.8",
+  "description": "Terminal-based Kanban board that orchestrates AI coding agents",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ayan-de/agent-board"
+  },
+  "bin": {
+    "agentboard": "./bin/agentboard.sh"
+  },
+  "os": [
+    "linux",
+    "darwin",
+    "android"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "scripts": {
+    "postinstall": "./bin/download.js"
+  },
+  "keywords": [
+    "kanban",
+    "ai",
+    "agent",
+    "claude",
+    "opencode",
+    "cursor"
+  ]
+}
