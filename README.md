@@ -1,5 +1,5 @@
 
-<p align="center">
+<div align="center">
 
 ```
  █▀█ █▀▀ █▀▀ █▄░█ ▀█▀   █▄▄ █▀█ █▀█ █▀█ █▀▄
@@ -12,7 +12,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 
-</p>
+</div>
 
 **AgentBoard** is a terminal-based Kanban board for orchestrating and managing AI coding agents. It provides a visual development workflow for modern software engineering, bridging project management with automated code generation.
 
