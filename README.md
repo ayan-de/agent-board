@@ -1,12 +1,11 @@
 
 <div align="center">
 
-<img src="docs/ChatGPT%20Image%20May%2014,%202026,%2001_13_21%20PM.png" width="280" height="200" />
-
 ```
                             █▀█ █▀▀ █▀▀ █▄░█ ▀█▀   █▄▄ █▀█ █▀█ █▀█ █▀▄
                             █▀█ █▄█ ██▄ █░▀█ ░█░   █▄█ █▄█ █▀█ █▀▄ █▄▀
 ```
+<img src="docs/ChatGPT%20Image%20May%2014,%202026,%2001_13_21%20PM.png" width="280" height="200" />
 
 **Opensource TUI based Kanban board for orchestrating AI coding agents**
 
