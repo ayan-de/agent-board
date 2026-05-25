@@ -1,12 +1,25 @@
-# AgentBoard
+
+<center>
+
+```
+ █▀█ █▀▀ █▀▀ █▄░█ ▀█▀   █▄▄ █▀█ █▀█ █▀█ █▀▄
+ █▀█ █▄█ ██▄ █░▀█ ░█░   █▄█ █▄█ █▀█ █▀▄ █▄▀
+```
+
+**opensource TUI based Kanban board for orchestrating AI coding agents**
+
+</center>
+
+<center>
 
 [![Go Version](https://img.shields.io/github/go-mod/go-version/ayan-de/agent-board)](https://go.dev/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
+</center>
 
 **AgentBoard** is a terminal-based Kanban board for orchestrating and managing AI coding agents. It provides a visual development workflow for modern software engineering, bridging project management with automated code generation.
 
-<img width="1863" height="450" alt="AgentBoard TUI Mockup" src="https://github-production-user-asset-6210df.s3.amazonaws.com/59247285/579415351-95cd3ac9-d3a4-4c49-91b6-dff6b6c4988a.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAVCODYLSA53PQK4ZA%2F20260416%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260416T174544Z&X-Amz-Expires=300&X-Amz-Signature=a092b147f626f2c61c0bd7814d445ba3729ade629ac0876570d89c4a4657fdea&X-Amz-SignedHeaders=host&response-content-type=image%2Fpng" />
+<img width="1863" height="450" alt="AgentBoard TUI Mockup" src="docs/image.png" />
 
 ---
 
