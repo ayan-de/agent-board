@@ -1,5 +1,5 @@
 
-<center>
+<p align="center">
 
 ```
  █▀█ █▀▀ █▀▀ █▄░█ ▀█▀   █▄▄ █▀█ █▀█ █▀█ █▀▄
@@ -8,14 +8,11 @@
 
 **opensource TUI based Kanban board for orchestrating AI coding agents**
 
-</center>
-
-<center>
-
 [![Go Version](https://img.shields.io/github/go-mod/go-version/ayan-de/agent-board)](https://go.dev/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
-</center>
+
+</p>
 
 **AgentBoard** is a terminal-based Kanban board for orchestrating and managing AI coding agents. It provides a visual development workflow for modern software engineering, bridging project management with automated code generation.
 
