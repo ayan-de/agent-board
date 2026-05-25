@@ -2,11 +2,11 @@
 <div align="center">
 
 ```
- █▀█ █▀▀ █▀▀ █▄░█ ▀█▀   █▄▄ █▀█ █▀█ █▀█ █▀▄
- █▀█ █▄█ ██▄ █░▀█ ░█░   █▄█ █▄█ █▀█ █▀▄ █▄▀
+                            █▀█ █▀▀ █▀▀ █▄░█ ▀█▀   █▄▄ █▀█ █▀█ █▀█ █▀▄
+                            █▀█ █▄█ ██▄ █░▀█ ░█░   █▄█ █▄█ █▀█ █▀▄ █▄▀
 ```
 
-**opensource TUI based Kanban board for orchestrating AI coding agents**
+**Opensource TUI based Kanban board for orchestrating AI coding agents**
 
 [![Go Version](https://img.shields.io/github/go-mod/go-version/ayan-de/agent-board)](https://go.dev/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
