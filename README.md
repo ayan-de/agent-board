@@ -72,8 +72,8 @@ go build -o agentboard ./cmd/agentboard
 # Add to PATH (optional)
 export PATH="$HOME/.local/bin:$PATH"
 
-# Initialize configuration
-./agentboard init
+# Run it in the project you want to use it in
+./agentboard
 ```
 
 #### Platform-Specific Notes
