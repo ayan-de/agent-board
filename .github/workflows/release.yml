@@ -45,7 +45,7 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          go build -ldflags="-s -w" -o "agentboard-${GOOS}-${{ matrix.artifact_arch }}" ./cmd/agentboard
+          go build -ldflags="-s -w -X github.com/ayan-de/agent-board/internal/version.Version=${{ github.ref_name }}" -o "agentboard-${GOOS}-${{ matrix.artifact_arch }}" ./cmd/agentboard
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
