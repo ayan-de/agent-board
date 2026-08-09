@@ -16,14 +16,19 @@ jobs:
         include:
           - goos: linux
             goarch: amd64
+            artifact_arch: x86_64
           - goos: linux
             goarch: arm64
+            artifact_arch: arm64
           - goos: darwin
             goarch: amd64
+            artifact_arch: x86_64
           - goos: darwin
             goarch: arm64
+            artifact_arch: arm64
           - goos: android
             goarch: arm64
+            artifact_arch: arm64
 
     runs-on: ubuntu-latest
 
@@ -40,13 +45,13 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          go build -ldflags="-s -w" -o "agentboard-${GOOS}-${GOARCH}" ./cmd/agentboard
+          go build -ldflags="-s -w" -o "agentboard-${GOOS}-${{ matrix.artifact_arch }}" ./cmd/agentboard
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: agentboard-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: agentboard-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: agentboard-${{ matrix.goos }}-${{ matrix.artifact_arch }}
+          path: agentboard-${{ matrix.goos }}-${{ matrix.artifact_arch }}
 
   release:
     needs: build
