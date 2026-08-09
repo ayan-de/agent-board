@@ -97,6 +97,15 @@ Or if installed via binary:
 agentboard
 ```
 
+### CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `agentboard` | Launch the Kanban TUI (default) |
+| `agentboard update` | Check for and install the latest release in-place |
+| `agentboard -v`, `--version`, `version` | Print the installed version |
+| `agentboard -h`, `--help`, `help` | Show usage and available commands |
+
 ### Keybindings
 
 | Key | Action |
