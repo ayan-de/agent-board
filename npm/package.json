@@ -1,6 +1,6 @@
 {
   "name": "@thisisayande/agentboard",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Terminal-based Kanban board that orchestrates AI coding agents",
   "license": "MIT",
   "repository": {
