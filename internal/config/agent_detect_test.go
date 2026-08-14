@@ -8,8 +8,8 @@ import (
 
 func TestDetectAgents(t *testing.T) {
 	agents := DetectAgents()
-	if len(agents) != 4 {
-		t.Fatalf("DetectAgents() returned %d agents, want 4", len(agents))
+	if len(agents) != 5 {
+		t.Fatalf("DetectAgents() returned %d agents, want 5", len(agents))
 	}
 
 	names := map[string]bool{}
@@ -20,7 +20,7 @@ func TestDetectAgents(t *testing.T) {
 		}
 	}
 
-	for _, want := range []string{"claude-code", "opencode", "codex", "cursor"} {
+	for _, want := range []string{"claude-code", "opencode", "codex", "cursor", "freecode"} {
 		if !names[want] {
 			t.Errorf("missing agent %q", want)
 		}
@@ -68,6 +68,7 @@ func TestAgentColor(t *testing.T) {
 		{"opencode", "#808080"},
 		{"codex", "#10A37F"},
 		{"cursor", "#F0DB4F"},
+		{"freecode", "#7C3AED"},
 		{"unknown", ""},
 		{"", ""},
 	}
