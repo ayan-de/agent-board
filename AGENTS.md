@@ -236,7 +236,7 @@ Current stored fields:
 ```text
 id            TEXT PRIMARY KEY
 title         TEXT NOT NULL
-description   TEXT
+prompt        TEXT
 status        TEXT
 priority      TEXT
 agent         TEXT

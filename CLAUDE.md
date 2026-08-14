@@ -148,7 +148,7 @@ go get github.com/BurntSushi/toml
 ```
 id          TEXT PRIMARY KEY  (e.g. AGT-03)
 title       TEXT
-description TEXT
+prompt      TEXT
 status      TEXT  (backlog | in_progress | review | done)
 agent       TEXT  (claude-code | opencode | cursor | null)
 branch      TEXT
