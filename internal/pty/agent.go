@@ -134,6 +134,29 @@ func NewGeminiCode() *Config {
 	}
 }
 
+// FreeCode is an interactive TUI agent, like opencode/claude/codex/gemini.
+// The default invocation (`freecode [project]`) opens a full TUI with a
+// prompt editor; `freecode run` is the headless subcommand and is NOT what
+// we want here. Prompt is typed into the editor via the PTY after the
+// banner appears.
+func NewFreeCode() *Config {
+	return &Config{
+		Name:         "freecode",
+		Bin:          "freecode",
+		Args:         []string{},
+		ReadyPattern: regexp.MustCompile(`>_\s+FreeCode`),
+		SendPrompt:   SendPromptSingleLine,
+		FormatPrompt: DefaultFormatPrompt,
+		IdlePatterns: []*regexp.Regexp{
+			regexp.MustCompile(`>_\s+FreeCode`),
+			regexp.MustCompile(`(?m)^❯\s*$`),
+		},
+		GracePeriod:     8 * time.Second,
+		FallbackTimeout: 5 * time.Second,
+		ReadyWait:       300 * time.Millisecond,
+	}
+}
+
 func NewRegistry() map[string]*Config {
 	return map[string]*Config{
 		"opencode":    NewOpenCode(),
@@ -141,6 +164,7 @@ func NewRegistry() map[string]*Config {
 		"claude-code": NewClaudeCode(),
 		"codex":       NewCodex(),
 		"gemini":      NewGeminiCode(),
+		"freecode":    NewFreeCode(),
 	}
 }
 
