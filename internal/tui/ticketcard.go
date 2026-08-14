@@ -101,8 +101,8 @@ func (c TicketCardModel) ExpandedHeight() int {
 		innerWidth = 4
 	}
 	descLines := 1
-	if c.ticket.Description != "" {
-		descLines = (utf8.RuneCountInString(c.ticket.Description) + innerWidth - 1) / innerWidth
+	if c.ticket.Prompt != "" {
+		descLines = (utf8.RuneCountInString(c.ticket.Prompt) + innerWidth - 1) / innerWidth
 		if descLines < 1 {
 			descLines = 1
 		}
@@ -152,8 +152,8 @@ func (c TicketCardModel) renderExpanded() string {
 	sepLine := strings.Repeat("─", iw)
 
 	var descLines string
-	if c.ticket.Description != "" {
-		descLines = wrapText(c.ticket.Description, iw)
+	if c.ticket.Prompt != "" {
+		descLines = wrapText(c.ticket.Prompt, iw)
 	}
 
 	footerLine := c.renderFooter(iw)

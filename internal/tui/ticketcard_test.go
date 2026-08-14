@@ -25,7 +25,7 @@ func testTicket() store.Ticket {
 	return store.Ticket{
 		ID:          "AGT-01",
 		Title:       "Implement Auth",
-		Description: "Add JWT authentication flow",
+		Prompt:      "Add JWT authentication flow",
 		Status:      "in_progress",
 		Priority:    "high",
 		Agent:       "claude-code",
@@ -76,7 +76,7 @@ func TestTicketCardExpandedRenders(t *testing.T) {
 		t.Error("expanded card missing title")
 	}
 	if !strings.Contains(output, "Add JWT authentication flow") {
-		t.Error("expanded card missing description")
+		t.Error("expanded card missing prompt")
 	}
 }
 
@@ -156,25 +156,25 @@ func TestTicketCardLongTitleTruncationCompact(t *testing.T) {
 	}
 }
 
-func TestTicketCardExpandedWrapsDescription(t *testing.T) {
+func TestTicketCardExpandedWrapsPrompt(t *testing.T) {
 	ticket := testTicket()
-	ticket.Description = strings.Repeat("D", 200)
+	ticket.Prompt = strings.Repeat("D", 200)
 	card := NewTicketCardModel(ticket, true, true, 20, 0, testCardTheme())
 	output := card.Render()
 
 	if !strings.Contains(output, "D") {
-		t.Error("expanded card should contain description text")
+		t.Error("expanded card should contain prompt text")
 	}
 }
 
-func TestTicketCardEmptyDescription(t *testing.T) {
+func TestTicketCardEmptyPrompt(t *testing.T) {
 	ticket := testTicket()
-	ticket.Description = ""
+	ticket.Prompt = ""
 	card := NewTicketCardModel(ticket, false, false, 30, 0, testCardTheme())
 	output := card.Render()
 
 	if output == "" {
-		t.Fatal("card with empty description should still render")
+		t.Fatal("card with empty prompt should still render")
 	}
 }
 

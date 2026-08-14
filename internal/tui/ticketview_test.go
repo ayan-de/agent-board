@@ -75,10 +75,10 @@ func TestTicketViewModelSetTicket(t *testing.T) {
 	ctx := context.Background()
 
 	ticket, _ := s.CreateTicket(ctx, store.Ticket{
-		Title:       "Test Ticket",
-		Description: "A description",
-		Status:      "backlog",
-		Priority:    "high",
+		Title:    "Test Ticket",
+		Prompt:   "A prompt",
+		Status:   "backlog",
+		Priority: "high",
 	})
 
 	m = m.SetTicket(&ticket)
@@ -106,9 +106,9 @@ func TestTicketViewModelFieldNavigation(t *testing.T) {
 	ctx := context.Background()
 
 	ticket, _ := s.CreateTicket(ctx, store.Ticket{
-		Title:       "Nav Test",
-		Description: "Desc",
-		Status:      "backlog",
+		Title:  "Nav Test",
+		Prompt: "Desc",
+		Status: "backlog",
 	})
 	m = m.SetTicket(&ticket)
 
@@ -143,12 +143,12 @@ func TestTicketViewModelViewRendersFields(t *testing.T) {
 	m.viewport.Height = m.height - 7
 
 	ticket, _ := s.CreateTicket(ctx, store.Ticket{
-		Title:       "Render Me",
-		Description: "Some details here",
-		Status:      "in_progress",
-		Priority:    "high",
-		Agent:       "claude-code",
-		Branch:      "feat/auth",
+		Title:    "Render Me",
+		Prompt:   "Some details here",
+		Status:   "in_progress",
+		Priority: "high",
+		Agent:    "claude-code",
+		Branch:   "feat/auth",
 	})
 	m = m.SetTicket(&ticket)
 
@@ -286,10 +286,14 @@ func TestTicketViewModelEditTitle(t *testing.T) {
 		t.Errorf("mode = %v, want ticketEditMode", m.mode)
 	}
 
+	if m.editBuffer != "" {
+		t.Errorf("editBuffer = %q, want empty (title edit opens blank)", m.editBuffer)
+	}
+
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'X'}})
 
-	if m.editBuffer != "Old TitleX" {
-		t.Errorf("editBuffer = %q, want %q", m.editBuffer, "Old TitleX")
+	if m.editBuffer != "X" {
+		t.Errorf("editBuffer = %q, want %q", m.editBuffer, "X")
 	}
 	if m.mode != ticketEditMode {
 		t.Errorf("mode = %v, want ticketEditMode", m.mode)
@@ -300,13 +304,13 @@ func TestTicketViewModelEditTitle(t *testing.T) {
 	if m.mode != ticketViewMode {
 		t.Errorf("mode = %v after enter, want ticketViewMode", m.mode)
 	}
-	if m.ticket.Title != "Old TitleX" {
-		t.Errorf("title = %q, want %q", m.ticket.Title, "Old TitleX")
+	if m.ticket.Title != "X" {
+		t.Errorf("title = %q, want %q", m.ticket.Title, "X")
 	}
 
 	loaded, _ := s.GetTicket(ctx, ticket.ID)
-	if loaded.Title != "Old TitleX" {
-		t.Errorf("persisted title = %q, want %q", loaded.Title, "Old TitleX")
+	if loaded.Title != "X" {
+		t.Errorf("persisted title = %q, want %q", loaded.Title, "X")
 	}
 }
 
@@ -345,33 +349,37 @@ func TestTicketViewModelEditBackspace(t *testing.T) {
 
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'H'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
 
-	if m.editBuffer != "Hell" {
-		t.Errorf("editBuffer = %q after backspace, want %q", m.editBuffer, "Hell")
+	if m.editBuffer != "Hel" {
+		t.Errorf("editBuffer = %q after backspace, want %q", m.editBuffer, "Hel")
 	}
 }
 
-func TestTicketViewModelEditDescriptionField(t *testing.T) {
+func TestTicketViewModelEditPromptField(t *testing.T) {
 	m, s := newTestTicketView(t)
 	ctx := context.Background()
 
 	ticket, _ := s.CreateTicket(ctx, store.Ticket{
-		Title:       "Desc Edit",
-		Description: "Old desc",
-		Status:      "backlog",
+		Title:  "Prompt Edit",
+		Prompt: "Old desc",
+		Status: "backlog",
 	})
 	m = m.SetTicket(&ticket)
 
 	descIdx := -1
 	for i, f := range m.fields {
-		if f.label == "Description" {
+		if f.label == "Prompt" {
 			descIdx = i
 			break
 		}
 	}
 	if descIdx < 0 {
-		t.Fatal("Description field not found")
+		t.Fatal("Prompt field not found")
 	}
 
 	m.cursor = descIdx
@@ -384,8 +392,8 @@ func TestTicketViewModelEditDescriptionField(t *testing.T) {
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'!'}})
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 
-	if m.ticket.Description != "Old desc!" {
-		t.Errorf("description = %q, want %q", m.ticket.Description, "Old desc!")
+	if m.ticket.Prompt != "Old desc!" {
+		t.Errorf("prompt = %q, want %q", m.ticket.Prompt, "Old desc!")
 	}
 }
 

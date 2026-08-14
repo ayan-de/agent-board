@@ -153,10 +153,10 @@ func ticketFields() []ticketField {
 			set:      func(t *store.Ticket, v string) { t.Title = v },
 		},
 		{
-			label:    "Description",
-			value:    func(t *store.Ticket) string { return t.Description },
+			label:    "Prompt",
+			value:    func(t *store.Ticket) string { return t.Prompt },
 			editable: true,
-			set:      func(t *store.Ticket, v string) { t.Description = v },
+			set:      func(t *store.Ticket, v string) { t.Prompt = v },
 		},
 		{
 			label:    "Status",
@@ -306,7 +306,11 @@ func (m TicketViewModel) handleViewKey(msg tea.KeyMsg) (TicketViewModel, tea.Cmd
 		}
 	case keybinding.ActionInteract:
 		if m.ticket != nil && m.cursor < len(m.fields) && m.fields[m.cursor].editable {
-			m.editBuffer = m.fields[m.cursor].value(m.ticket)
+			if m.fields[m.cursor].label == "Title" {
+				m.editBuffer = ""
+			} else {
+				m.editBuffer = m.fields[m.cursor].value(m.ticket)
+			}
 			m.mode = ticketEditMode
 		}
 	case keybinding.ActionAssignAgent:
@@ -386,7 +390,7 @@ func (m TicketViewModel) handleViewKey(msg tea.KeyMsg) (TicketViewModel, tea.Cmd
 					}
 				}
 			}
-			// No proposal - direct run with ticket title + description
+			// No proposal - direct run with ticket title + prompt
 			if m.ticket.Agent == "" {
 				return m, func() tea.Msg {
 					return notificationMsg{
@@ -396,8 +400,8 @@ func (m TicketViewModel) handleViewKey(msg tea.KeyMsg) (TicketViewModel, tea.Cmd
 					}
 				}
 			}
-			prompt := fmt.Sprintf("Ticket: %s\nTitle: %s\nDescription: %s",
-				m.ticket.ID, m.ticket.Title, m.ticket.Description)
+			prompt := fmt.Sprintf("Ticket: %s\nTitle: %s\nPrompt: %s",
+				m.ticket.ID, m.ticket.Title, m.ticket.Prompt)
 			return m, func() tea.Msg {
 				return directRunStartedMsg{ticketID: m.ticket.ID, agent: m.ticket.Agent, prompt: prompt}
 			}
@@ -656,7 +660,7 @@ func (m TicketViewModel) buildPromptFromTicket() string {
 	if m.ticket == nil {
 		return ""
 	}
-	return fmt.Sprintf("Ticket: %s\nTitle: %s\nDescription: %s", m.ticket.ID, m.ticket.Title, m.ticket.Description)
+	return fmt.Sprintf("Ticket: %s\nTitle: %s\nPrompt: %s", m.ticket.ID, m.ticket.Title, m.ticket.Prompt)
 }
 
 func (m TicketViewModel) SetTicket(t *store.Ticket) TicketViewModel {
