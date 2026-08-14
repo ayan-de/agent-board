@@ -346,3 +346,65 @@ esac
 		t.Fatalf("Start() did not send a literal space for newlines (prompt should be single-line):\n%s", log)
 	}
 }
+
+func TestPtyRunnerStartLaunchesFreeCodeTUIAndInjectsPrompt(t *testing.T) {
+	t.Setenv("TMUX", "/tmp/tmux-test,123,0")
+
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+
+	tmuxDir := t.TempDir()
+	logFile := filepath.Join(tmuxDir, "tmux.log")
+	t.Setenv("FAKE_TMUX_LOG_FREECODE", logFile)
+	t.Setenv("PATH", tmuxDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	fakeTmux := `#!/bin/sh
+printf '%s\n' "$*" >> "$FAKE_TMUX_LOG_FREECODE"
+case "$1" in
+  new-window)
+    printf '%%42\n'
+    ;;
+  capture-pane)
+    printf '                   >_ FreeCode (v0.24.6)                   \n❯ \n'
+    ;;
+  list-panes)
+    exit 1
+    ;;
+esac
+`
+	if err := os.WriteFile(filepath.Join(tmuxDir, "tmux"), []byte(fakeTmux), 0755); err != nil {
+		t.Fatalf("write fake tmux: %v", err)
+	}
+
+	runner, err := NewTmuxAgentRunner("agentboard")
+	if err != nil {
+		t.Fatalf("NewTmuxAgentRunner() error = %v", err)
+	}
+
+	_, err = runner.Start(context.Background(), RunRequest{
+		SessionID: "session-freecode",
+		Agent:     "freecode",
+		Prompt:    "Greet me",
+	})
+	if err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+
+	time.Sleep(300 * time.Millisecond)
+
+	raw, err := os.ReadFile(logFile)
+	if err != nil {
+		t.Fatalf("read tmux log: %v", err)
+	}
+	log := string(raw)
+
+	if strings.Contains(log, "freecode run") {
+		t.Fatalf("Start() launched freecode in headless 'run' subcommand mode, must open its interactive TUI:\n%s", log)
+	}
+	if !strings.Contains(log, "send-keys -t %42 freecode Enter") {
+		t.Fatalf("Start() did not launch the interactive freecode binary:\n%s", log)
+	}
+	if !strings.Contains(log, "send-keys -t %42 -l") {
+		t.Fatalf("Start() did not inject the prompt character-by-character:\n%s", log)
+	}
+}
