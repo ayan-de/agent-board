@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"path/filepath"
@@ -65,6 +66,66 @@ func TestOpenRunsMigrations(t *testing.T) {
 	}
 }
 
+func TestMigrateRenameDescriptionToPrompt(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "legacy.db")
+
+	rawDB, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open raw db: %v", err)
+	}
+	if _, err := rawDB.Exec(`CREATE TABLE tickets (
+		id TEXT PRIMARY KEY,
+		title TEXT NOT NULL,
+		description TEXT DEFAULT '',
+		status TEXT NOT NULL,
+		priority TEXT DEFAULT 'medium',
+		agent TEXT DEFAULT '',
+		branch TEXT DEFAULT '',
+		tags TEXT DEFAULT '[]',
+		depends_on TEXT DEFAULT '[]',
+		agent_active INTEGER DEFAULT 0,
+		resume_command TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`); err != nil {
+		t.Fatalf("create legacy schema: %v", err)
+	}
+	if _, err := rawDB.Exec(`INSERT INTO tickets (id, title, description, status) VALUES (?, ?, ?, ?)`,
+		"AGT-01", "Legacy", "old description text", "backlog"); err != nil {
+		t.Fatalf("insert legacy row: %v", err)
+	}
+	rawDB.Close()
+
+	s, err := Open(dbPath, []string{"backlog", "in_progress", "review", "done"}, "AGT-")
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer s.Close()
+
+	var descCount, promptCount int
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('tickets') WHERE name='description'").Scan(&descCount); err != nil {
+		t.Fatalf("pragma description: %v", err)
+	}
+	if descCount != 0 {
+		t.Errorf("description column still present (count=%d), want renamed to prompt", descCount)
+	}
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('tickets') WHERE name='prompt'").Scan(&promptCount); err != nil {
+		t.Fatalf("pragma prompt: %v", err)
+	}
+	if promptCount != 1 {
+		t.Errorf("prompt column missing (count=%d), want 1", promptCount)
+	}
+
+	got, err := s.GetTicket(context.Background(), "AGT-01")
+	if err != nil {
+		t.Fatalf("GetTicket: %v", err)
+	}
+	if got.Prompt != "old description text" {
+		t.Errorf("Prompt = %q, want %q (data must survive migration)", got.Prompt, "old description text")
+	}
+}
+
 func TestOpenIdempotent(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
@@ -104,10 +165,10 @@ func TestCreateTicket(t *testing.T) {
 	defer s.Close()
 
 	ticket, err := s.CreateTicket(context.Background(), Ticket{
-		Title:       "Implement auth",
-		Description: "Add JWT authentication",
-		Status:      "backlog",
-		Priority:    "high",
+		Title:    "Implement auth",
+		Prompt:   "Add JWT authentication",
+		Status:   "backlog",
+		Priority: "high",
 	})
 	if err != nil {
 		t.Fatalf("CreateTicket: %v", err)
@@ -428,7 +489,7 @@ func TestUpdateTicket(t *testing.T) {
 	}
 
 	created.Title = "Updated"
-	created.Description = "New description"
+	created.Prompt = "New prompt"
 	created.Tags = []string{"updated"}
 
 	updated, err := s.UpdateTicket(context.Background(), created)
@@ -438,8 +499,8 @@ func TestUpdateTicket(t *testing.T) {
 	if updated.Title != "Updated" {
 		t.Errorf("Title = %q, want %q", updated.Title, "Updated")
 	}
-	if updated.Description != "New description" {
-		t.Errorf("Description = %q, want %q", updated.Description, "New description")
+	if updated.Prompt != "New prompt" {
+		t.Errorf("Prompt = %q, want %q", updated.Prompt, "New prompt")
 	}
 	if len(updated.Tags) != 1 || updated.Tags[0] != "updated" {
 		t.Errorf("Tags = %v, want [updated]", updated.Tags)

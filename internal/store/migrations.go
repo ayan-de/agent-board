@@ -5,7 +5,7 @@ func (s *Store) migrate() error {
 	CREATE TABLE IF NOT EXISTS tickets (
 		id          TEXT PRIMARY KEY,
 		title       TEXT NOT NULL,
-		description TEXT DEFAULT '',
+		prompt      TEXT DEFAULT '',
 		status      TEXT NOT NULL,
 		priority    TEXT DEFAULT 'medium',
 		agent       TEXT DEFAULT '',
@@ -84,6 +84,28 @@ func (s *Store) migrate() error {
 		_, err = s.db.Exec("ALTER TABLE tickets ADD COLUMN resume_command TEXT")
 		if err != nil {
 			return err
+		}
+	}
+
+	var hasDescCol int
+	err = s.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('tickets') WHERE name='description'").Scan(&hasDescCol)
+	if err == nil && hasDescCol > 0 {
+		var hasPromptCol int
+		err = s.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('tickets') WHERE name='prompt'").Scan(&hasPromptCol)
+		if err == nil && hasPromptCol == 0 {
+			_, err = s.db.Exec("ALTER TABLE tickets RENAME COLUMN description TO prompt")
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		var hasPromptCol int
+		err = s.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('tickets') WHERE name='prompt'").Scan(&hasPromptCol)
+		if err == nil && hasPromptCol == 0 {
+			_, err = s.db.Exec("ALTER TABLE tickets ADD COLUMN prompt TEXT DEFAULT ''")
+			if err != nil {
+				return err
+			}
 		}
 	}
 

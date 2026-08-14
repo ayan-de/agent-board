@@ -11,7 +11,7 @@ import (
 type Ticket struct {
 	ID            string
 	Title         string
-	Description   string
+	Prompt        string
 	Status        string
 	Priority      string
 	Agent         string
@@ -37,7 +37,7 @@ type TicketFilters struct {
 type ticketRow struct {
 	ID            string
 	Title         string
-	Description   string
+	Prompt        string
 	Status        string
 	Priority      string
 	Agent         string
@@ -66,7 +66,7 @@ func (r ticketRow) toTicket() (Ticket, error) {
 	return Ticket{
 		ID:            r.ID,
 		Title:         r.Title,
-		Description:   r.Description,
+		Prompt:        r.Prompt,
 		Status:        r.Status,
 		Priority:      r.Priority,
 		Agent:         r.Agent,
@@ -148,9 +148,9 @@ func (s *Store) CreateTicket(ctx context.Context, t Ticket) (Ticket, error) {
 	t.UpdatedAt = now
 
 	_, err = s.db.ExecContext(ctx,
-		`INSERT INTO tickets (id, title, description, status, priority, agent, branch, tags, depends_on, agent_active, resume_command, created_at, updated_at)
+		`INSERT INTO tickets (id, title, prompt, status, priority, agent, branch, tags, depends_on, agent_active, resume_command, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		t.ID, t.Title, t.Description, t.Status, t.Priority, t.Agent, t.Branch, string(tags), string(deps), t.AgentActive, t.ResumeCommand, t.CreatedAt, t.UpdatedAt,
+		t.ID, t.Title, t.Prompt, t.Status, t.Priority, t.Agent, t.Branch, string(tags), string(deps), t.AgentActive, t.ResumeCommand, t.CreatedAt, t.UpdatedAt,
 	)
 	if err != nil {
 		return Ticket{}, fmt.Errorf("store.createTicket: %w", err)
@@ -162,9 +162,9 @@ func (s *Store) CreateTicket(ctx context.Context, t Ticket) (Ticket, error) {
 func (s *Store) GetTicket(ctx context.Context, id string) (Ticket, error) {
 	var r ticketRow
 	err := s.db.QueryRowContext(ctx,
-		"SELECT id, title, description, status, priority, agent, branch, tags, depends_on, agent_active, resume_command, created_at, updated_at FROM tickets WHERE id = ?",
+		"SELECT id, title, prompt, status, priority, agent, branch, tags, depends_on, agent_active, resume_command, created_at, updated_at FROM tickets WHERE id = ?",
 		id,
-	).Scan(&r.ID, &r.Title, &r.Description, &r.Status, &r.Priority, &r.Agent, &r.Branch, &r.Tags, &r.DependsOn, &r.AgentActive, &r.ResumeCommand, &r.CreatedAt, &r.UpdatedAt)
+	).Scan(&r.ID, &r.Title, &r.Prompt, &r.Status, &r.Priority, &r.Agent, &r.Branch, &r.Tags, &r.DependsOn, &r.AgentActive, &r.ResumeCommand, &r.CreatedAt, &r.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return Ticket{}, fmt.Errorf("store.getTicket %s: %w", id, ErrNotFound)
 	}
@@ -181,7 +181,7 @@ func (s *Store) GetTicket(ctx context.Context, id string) (Ticket, error) {
 }
 
 func (s *Store) ListTickets(ctx context.Context, filters TicketFilters) ([]Ticket, error) {
-	query := "SELECT id, title, description, status, priority, agent, branch, tags, depends_on, agent_active, resume_command, created_at, updated_at FROM tickets WHERE 1=1"
+	query := "SELECT id, title, prompt, status, priority, agent, branch, tags, depends_on, agent_active, resume_command, created_at, updated_at FROM tickets WHERE 1=1"
 	var args []interface{}
 
 	if filters.Status != "" {
@@ -209,7 +209,7 @@ func (s *Store) ListTickets(ctx context.Context, filters TicketFilters) ([]Ticke
 		args = append(args, *filters.To)
 	}
 	if filters.Search != "" {
-		query += " AND (title LIKE ? OR description LIKE ?)"
+		query += " AND (title LIKE ? OR prompt LIKE ?)"
 		pattern := "%" + filters.Search + "%"
 		args = append(args, pattern, pattern)
 	}
@@ -225,7 +225,7 @@ func (s *Store) ListTickets(ctx context.Context, filters TicketFilters) ([]Ticke
 	var tickets []Ticket
 	for rows.Next() {
 		var r ticketRow
-		if err := rows.Scan(&r.ID, &r.Title, &r.Description, &r.Status, &r.Priority, &r.Agent, &r.Branch, &r.Tags, &r.DependsOn, &r.AgentActive, &r.ResumeCommand, &r.CreatedAt, &r.UpdatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Title, &r.Prompt, &r.Status, &r.Priority, &r.Agent, &r.Branch, &r.Tags, &r.DependsOn, &r.AgentActive, &r.ResumeCommand, &r.CreatedAt, &r.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("store.listTickets: %w", err)
 		}
 		ticket, err := r.toTicket()
@@ -258,8 +258,8 @@ func (s *Store) UpdateTicket(ctx context.Context, t Ticket) (Ticket, error) {
 	t.UpdatedAt = time.Now()
 
 	result, err := s.db.ExecContext(ctx,
-		`UPDATE tickets SET title=?, description=?, status=?, priority=?, agent=?, branch=?, tags=?, depends_on=?, agent_active=?, resume_command=?, updated_at=? WHERE id=?`,
-		t.Title, t.Description, t.Status, t.Priority, t.Agent, t.Branch, string(tags), string(deps), t.AgentActive, t.ResumeCommand, t.UpdatedAt, t.ID,
+		`UPDATE tickets SET title=?, prompt=?, status=?, priority=?, agent=?, branch=?, tags=?, depends_on=?, agent_active=?, resume_command=?, updated_at=? WHERE id=?`,
+		t.Title, t.Prompt, t.Status, t.Priority, t.Agent, t.Branch, string(tags), string(deps), t.AgentActive, t.ResumeCommand, t.UpdatedAt, t.ID,
 	)
 	if err != nil {
 		return Ticket{}, fmt.Errorf("store.updateTicket: %w", err)
