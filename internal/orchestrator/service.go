@@ -159,7 +159,7 @@ func (s Service) CreateProposal(ctx context.Context, input CreateProposalInput) 
 	draft, err := s.llm.GenerateProposal(ctx, llm.ProposalPrompt{
 		TicketID:      ticket.ID,
 		Title:         ticket.Title,
-		Description:   ticket.Description,
+		Prompt:        ticket.Prompt,
 		AssignedAgent: ticket.Agent,
 		ContextCarry:  carrySummary,
 	})

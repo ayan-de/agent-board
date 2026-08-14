@@ -5,7 +5,7 @@ import "context"
 type ProposalPrompt struct {
 	TicketID      string
 	Title         string
-	Description   string
+	Prompt        string
 	AssignedAgent string
 	ContextCarry  string
 }

@@ -2,10 +2,10 @@ package prompt
 
 import "fmt"
 
-func GenerateProposal(ticketID, title, description, agent, contextCarry string) string {
+func GenerateProposal(ticketID, title, ticketPrompt, agent, contextCarry string) string {
 	return fmt.Sprintf(
 		"You are preparing a worker prompt for an AI coding agent.\n\n"+
-			"Ticket ID: %s\nTitle: %s\nDescription: %s\nAssigned agent: %s\n"+
+			"Ticket ID: %s\nTitle: %s\nPrompt: %s\nAssigned agent: %s\n"+
 			"Context from previous runs: %s\n\n"+
 			"Return only the final worker prompt that the assigned agent should execute.\n"+
 			"Do not include chain-of-thought, reasoning, analysis, `<think>` tags, commentary, or markdown fences.\n"+
@@ -13,7 +13,7 @@ func GenerateProposal(ticketID, title, description, agent, contextCarry string) 
 			"Include all relevant context and specific instructions in plain text.",
 		ticketID,
 		title,
-		description,
+		ticketPrompt,
 		agent,
 		contextCarry,
 	)

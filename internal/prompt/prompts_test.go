@@ -17,7 +17,7 @@ func TestGenerateProposalContainsContext(t *testing.T) {
 		t.Error("missing title")
 	}
 	if !strings.Contains(got, "Build JWT flow") {
-		t.Error("missing description")
+		t.Error("missing prompt")
 	}
 	if !strings.Contains(got, "opencode") {
 		t.Error("missing agent")

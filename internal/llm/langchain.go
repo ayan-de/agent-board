@@ -16,7 +16,7 @@ type LangChainClient struct {
 }
 
 func (c LangChainClient) GenerateProposal(ctx context.Context, in ProposalPrompt) (ProposalDraft, error) {
-	p := prompt.GenerateProposal(in.TicketID, in.Title, in.Description, in.AssignedAgent, in.ContextCarry)
+	p := prompt.GenerateProposal(in.TicketID, in.Title, in.Prompt, in.AssignedAgent, in.ContextCarry)
 	text, err := llms.GenerateFromSinglePrompt(ctx, c.Coordinator, p)
 	if err != nil {
 		return ProposalDraft{}, fmt.Errorf("llm.generateProposal: %w", err)

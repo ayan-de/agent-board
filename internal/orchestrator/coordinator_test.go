@@ -12,11 +12,11 @@ import (
 func TestCreateProposalUsesTicketAndContextCarry(t *testing.T) {
 	fs := &fakeStore{
 		ticket: store.Ticket{
-			ID:          "AGT-01",
-			Title:       "Add orchestrator",
-			Description: "Build orchestration flow",
-			Status:      "in_progress",
-			Agent:       "opencode",
+			ID:     "AGT-01",
+			Title:  "Add orchestrator",
+			Prompt: "Build orchestration flow",
+			Status: "in_progress",
+			Agent:  "opencode",
 		},
 		contextCarry: store.ContextCarry{
 			TicketID: "AGT-01",

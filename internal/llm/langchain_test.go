@@ -36,7 +36,7 @@ func TestGenerateProposalBuildsPromptFromTicketContext(t *testing.T) {
 	got, err := client.GenerateProposal(context.Background(), llm.ProposalPrompt{
 		TicketID:      "AGT-01",
 		Title:         "Add orchestrator",
-		Description:   "Build service layer",
+		Prompt:        "Build service layer",
 		AssignedAgent: "opencode",
 		ContextCarry:  "prior run summary",
 	})
@@ -88,7 +88,7 @@ func TestGenerateProposalStripsThinkBlocks(t *testing.T) {
 	got, err := client.GenerateProposal(context.Background(), llm.ProposalPrompt{
 		TicketID:      "AGT-01",
 		Title:         "Add orchestrator",
-		Description:   "Build service layer",
+		Prompt:        "Build service layer",
 		AssignedAgent: "opencode",
 	})
 	if err != nil {
