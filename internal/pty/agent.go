@@ -86,7 +86,7 @@ func NewOpenCode() *Config {
 		IdlePatterns:    []*regexp.Regexp{regexp.MustCompile(`Ask\s+anything`)},
 		GracePeriod:     8 * time.Second,
 		FallbackTimeout: 5 * time.Second,
-		ReadyWait:       5 * time.Second,
+		ReadyWait:       800 * time.Millisecond,
 	}
 }
 
@@ -94,14 +94,13 @@ func NewClaudeCode() *Config {
 	return &Config{
 		Name:            "claude-code",
 		Bin:             "claude",
-		Args:            []string{"--no-autocomplete"},
-		ReadyPattern:    regexp.MustCompile(`\?\s+for\s+shortcuts`),
+		ReadyPattern:    regexp.MustCompile(`bypass permissions on`),
 		SendPrompt:      SendPromptSingleLine,
 		FormatPrompt:    ClaudeFormatPrompt,
 		IdlePatterns:    []*regexp.Regexp{regexp.MustCompile(`Press\s+Ctrl-C\s+again\s+to\s+exit`)},
 		GracePeriod:     10 * time.Second,
 		FallbackTimeout: 10 * time.Second,
-		ReadyWait:       5 * time.Second,
+		ReadyWait:       2 * time.Second,
 	}
 }
 
@@ -109,14 +108,14 @@ func NewCodex() *Config {
 	return &Config{
 		Name:            "codex",
 		Bin:             "codex",
-		Args:            []string{},
+		Args:            []string{"--no-alt-screen"},
 		ReadyPattern:    regexp.MustCompile(`(?m)^\s*›\s*$|Run\s+/review\s+on\s+my\s+current\s+changes`),
 		SendPrompt:      SendPromptSingleLine,
 		FormatPrompt:    DefaultFormatPrompt,
 		IdlePatterns:    []*regexp.Regexp{regexp.MustCompile(`Run\s+/review\s+on\s+my\s+current\s+changes`)},
-		GracePeriod:     8 * time.Second,
-		FallbackTimeout: 120 * time.Second,
-		ReadyWait:       5 * time.Second,
+		GracePeriod:     10 * time.Second,
+		FallbackTimeout: 8 * time.Second,
+		ReadyWait:       1 * time.Second,
 	}
 }
 
@@ -124,14 +123,14 @@ func NewGeminiCode() *Config {
 	return &Config{
 		Name:            "gemini",
 		Bin:             "gemini",
-		Args:            []string{},
+		Args:            []string{"-y"},
 		ReadyPattern:    regexp.MustCompile(`Gemini\s+CLI`),
 		SendPrompt:      SendPromptSingleLine,
-		FormatPrompt:    DefaultFormatPrompt,
+		FormatPrompt:    ClaudeFormatPrompt,
 		IdlePatterns:    []*regexp.Regexp{regexp.MustCompile(`Type\s+your\s+message`)},
-		GracePeriod:     8 * time.Second,
-		FallbackTimeout: 120 * time.Second,
-		ReadyWait:       5 * time.Second,
+		GracePeriod:     10 * time.Second,
+		FallbackTimeout: 10 * time.Second,
+		ReadyWait:       2 * time.Second,
 	}
 }
 

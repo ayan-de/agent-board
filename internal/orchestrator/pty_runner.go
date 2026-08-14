@@ -83,13 +83,15 @@ func (r *tmuxAgentRunner) injectPrompt(paneID, sessionID string, cfg *pty.Config
 	prompt := string(promptBytes)
 
 	for _, c := range prompt {
-		var key string
 		if c == '\n' {
-			key = "C-m"
+			if err := exec.Command("tmux", "send-keys", "-t", paneID, "-l", " ").Run(); err != nil {
+				return
+			}
 		} else {
-			key = fmt.Sprintf("%c", c)
+			if err := exec.Command("tmux", "send-keys", "-t", paneID, "-l", fmt.Sprintf("%c", c)).Run(); err != nil {
+				return
+			}
 		}
-		exec.Command("tmux", "send-keys", "-t", paneID, "-l", key).Run()
 		time.Sleep(10 * time.Millisecond)
 	}
 	exec.Command("tmux", "send-keys", "-t", paneID, "Enter").Run()
