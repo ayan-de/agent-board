@@ -26,6 +26,7 @@ var agentSpecs = []agentSpec{
 	{name: "opencode", binary: "opencode", logo: "█▀▀█\n█__█\n▀▀▀▀", logoClr: "#808080"},
 	{name: "codex", binary: "codex", logo: " ▗▄▄▄▖\n ▐▝▞▙▌\n ▝▀▀▀▘", logoClr: "#10A37F"},
 	{name: "cursor", binary: "cursor", logo: " ▛▀▀▀▜\n ▌ ▗▖ ▐\n ▙▄▄▄▟", logoClr: "#F0DB4F"},
+	{name: "freecode", binary: "freecode", logo: " ▐▛▀▀▀▜▌\n ▌  ▗▖  ▐\n ▙▄▄▄▄▄▄▟", logoClr: "#7C3AED"},
 }
 
 func DetectAgents() []DetectedAgent {
