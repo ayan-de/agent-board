@@ -68,7 +68,7 @@ func TestAgentColor(t *testing.T) {
 		{"opencode", "#808080"},
 		{"codex", "#10A37F"},
 		{"cursor", "#F0DB4F"},
-		{"freecode", "#7C3AED"},
+		{"freecode", "#e7c98a"},
 		{"unknown", ""},
 		{"", ""},
 	}

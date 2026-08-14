@@ -130,17 +130,19 @@ func ActivityBarWithType(frame int, width int, t *theme.Theme, animType Animatio
 	return b.String()
 }
 
-func agentDot(agent string, active bool) string {
+func agentDot(agent string, selected bool, active bool) string {
 	if agent == "" {
 		return ""
 	}
 
-	if active {
-		color := config.AgentColor(agent)
-		return lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render("●")
+	color := config.AgentColor(agent)
+	style := lipgloss.NewStyle().Foreground(lipgloss.Color(color))
+
+	if active || selected {
+		return style.Render("●")
 	}
 
-	return lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render("○")
+	return style.Render("○")
 }
 
 func agentNameStyled(agent string) string {

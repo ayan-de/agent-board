@@ -96,8 +96,11 @@ func TestTicketCardAgentDotIdle(t *testing.T) {
 	card := NewTicketCardModel(ticket, false, false, 30, 0, testCardTheme())
 	output := card.Render()
 
-	if !strings.Contains(output, "○") {
-		t.Error("idle agent card should show muted dot '○'")
+	if !strings.Contains(stripAnsi(output), "○") {
+		t.Error("idle, unselected agent card should show outlined dot '○'")
+	}
+	if strings.Contains(stripAnsi(output), "●") {
+		t.Error("idle, unselected agent card should not show filled dot '●'")
 	}
 }
 
@@ -107,8 +110,19 @@ func TestTicketCardAgentDotActive(t *testing.T) {
 	card := NewTicketCardModel(ticket, false, false, 30, 0, testCardTheme())
 	output := card.Render()
 
-	if !strings.Contains(output, "●") {
-		t.Error("active agent card should show colored dot '●'")
+	if !strings.Contains(stripAnsi(output), "●") {
+		t.Error("active agent card should show filled dot '●'")
+	}
+}
+
+func TestTicketCardAgentDotSelected(t *testing.T) {
+	ticket := testTicket()
+	ticket.AgentActive = false
+	card := NewTicketCardModel(ticket, true, false, 30, 0, testCardTheme())
+	output := card.Render()
+
+	if !strings.Contains(stripAnsi(output), "●") {
+		t.Error("selected agent card should show filled dot '●' even when idle")
 	}
 }
 

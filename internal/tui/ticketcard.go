@@ -202,7 +202,7 @@ func (c TicketCardModel) renderFooter(width int) string {
 		return leftSide
 	}
 
-	dot := agentDot(c.ticket.Agent, c.ticket.AgentActive)
+	dot := agentDot(c.ticket.Agent, c.selected, c.ticket.AgentActive)
 	agentName := agentNameStyled(c.ticket.Agent)
 	rightSide := dot + " " + agentName
 
