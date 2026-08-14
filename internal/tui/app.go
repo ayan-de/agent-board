@@ -196,6 +196,7 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry, deps AppDep
 		initDate, err := time.Parse("2006-01-02", initDateStr)
 		if err == nil {
 			kanban.projectInitDate = initDate
+			kanban.monthOffset = computeOffsetToContain(time.Now(), initDate)
 		}
 	}
 

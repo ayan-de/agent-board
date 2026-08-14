@@ -475,6 +475,129 @@ func TestMonthWindow(t *testing.T) {
 	}
 }
 
+func TestLoadColumnsRespectsMonthOffset(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+	s, err := store.Open(dbPath, []string{"backlog", "in_progress", "review", "done"}, "AGT-")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { s.Close() })
+
+	ctx := context.Background()
+
+	mayTime := time.Date(2026, 5, 15, 10, 0, 0, 0, time.UTC)
+	augTime := time.Date(2026, 8, 12, 10, 0, 0, 0, time.UTC)
+
+	if _, err := s.CreateTicket(ctx, store.Ticket{Title: "may-1", Status: "backlog", CreatedAt: mayTime}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateTicket(ctx, store.Ticket{Title: "may-2", Status: "backlog", CreatedAt: mayTime}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateTicket(ctx, store.Ticket{Title: "aug-1", Status: "backlog", CreatedAt: augTime}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateTicket(ctx, store.Ticket{Title: "aug-2", Status: "done", CreatedAt: augTime}); err != nil {
+		t.Fatal(err)
+	}
+
+	km := keybinding.DefaultKeyMap()
+	resolver := keybinding.NewResolver(km)
+	cols := []config.Column{
+		{Name: "Backlog", Status: "backlog"},
+		{Name: "Done", Status: "done"},
+	}
+	m, err := NewKanbanModel(s, resolver, testTheme(), cols)
+	if err != nil {
+		t.Fatalf("NewKanbanModel: %v", err)
+	}
+	m.projectInitDate = time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC)
+	m.monthOffset = 3
+
+	m, err = m.loadColumns()
+	if err != nil {
+		t.Fatalf("loadColumns: %v", err)
+	}
+
+	var total int
+	for _, col := range m.columns {
+		total += len(col)
+	}
+	if total != 2 {
+		t.Errorf("total tickets across columns = %d, want 2 (only Aug window)", total)
+	}
+
+	for _, t1 := range m.columns[0] {
+		if !t1.CreatedAt.After(time.Date(2026, 8, 9, 0, 0, 0, 0, time.UTC)) {
+			t.Errorf("backlog contains ticket outside Aug window: %s at %s", t1.Title, t1.CreatedAt)
+		}
+	}
+	for _, t1 := range m.columns[1] {
+		if !t1.CreatedAt.After(time.Date(2026, 8, 9, 0, 0, 0, 0, time.UTC)) {
+			t.Errorf("done contains ticket outside Aug window: %s at %s", t1.Title, t1.CreatedAt)
+		}
+	}
+}
+
+func TestComputeOffsetToContain(t *testing.T) {
+	cases := []struct {
+		name     string
+		today    time.Time
+		initDate time.Time
+		want     int
+	}{
+		{
+			name:     "today is init date",
+			today:    time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC),
+			initDate: time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC),
+			want:     0,
+		},
+		{
+			name:     "today is last day of init window",
+			today:    time.Date(2026, 6, 9, 23, 59, 59, 0, time.UTC),
+			initDate: time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC),
+			want:     0,
+		},
+		{
+			name:     "today is day after init window end",
+			today:    time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC),
+			initDate: time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC),
+			want:     1,
+		},
+		{
+			name:     "today is many months after init",
+			today:    time.Date(2026, 8, 14, 0, 0, 0, 0, time.UTC),
+			initDate: time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC),
+			want:     3,
+		},
+		{
+			name:     "today is before init date (clamps to zero, no negative offsets)",
+			today:    time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC),
+			initDate: time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC),
+			want:     0,
+		},
+		{
+			name:     "today is many years after init",
+			today:    time.Date(2030, 7, 4, 0, 0, 0, 0, time.UTC),
+			initDate: time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC),
+			want:     49,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := computeOffsetToContain(tc.today, tc.initDate)
+			if got != tc.want {
+				t.Errorf("computeOffsetToContain(%v, %v) = %d, want %d",
+					tc.today.Format("2006-01-02"),
+					tc.initDate.Format("2006-01-02"),
+					got, tc.want)
+			}
+		})
+	}
+}
+
 func TestKanbanMonthNavigation(t *testing.T) {
 	m := newTestKanban(t)
 	m.projectInitDate = time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC)

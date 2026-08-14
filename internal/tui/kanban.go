@@ -597,8 +597,14 @@ func (m KanbanModel) UpdateColumnDefs(columns []config.Column) (KanbanModel, err
 }
 
 func (m KanbanModel) loadColumns() (KanbanModel, error) {
+	var fromPtr, toPtr *time.Time
+	if !m.projectInitDate.IsZero() {
+		from, to := MonthWindow(m.projectInitDate, m.monthOffset)
+		fromPtr = &from
+		toPtr = &to
+	}
 	for i, col := range m.columnDefs {
-		tickets, err := m.store.ListTickets(context.Background(), store.TicketFilters{Status: col.Status})
+		tickets, err := m.store.ListTickets(context.Background(), store.TicketFilters{Status: col.Status, From: fromPtr, To: toPtr})
 		if err != nil {
 			return m, fmt.Errorf("kanban.loadColumns: %w", err)
 		}
@@ -665,6 +671,22 @@ func groupByStatus(tickets []store.Ticket) [4][]store.Ticket {
 		}
 	}
 	return cols
+}
+
+// computeOffsetToContain returns the smallest non-negative offset N such that
+// `today` falls within MonthWindow(initDate, N). If today is before initDate,
+// it returns 0 — we never navigate backwards past the project init month.
+func computeOffsetToContain(today, initDate time.Time) int {
+	if !today.After(initDate) {
+		return 0
+	}
+	from, to := MonthWindow(initDate, 0)
+	offset := 0
+	for today.Before(from) || today.After(to) {
+		offset++
+		from, to = MonthWindow(initDate, offset)
+	}
+	return offset
 }
 
 func MonthWindow(initDate time.Time, offset int) (from, to time.Time) {
