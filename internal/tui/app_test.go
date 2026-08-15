@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -70,7 +71,21 @@ func (f *fakeOrchestrator) SendInput(sessionID, input string) error {
 }
 
 func (f *fakeOrchestrator) GetActiveSessions() []*orchestrator.AgentSession {
-	return []*orchestrator.AgentSession{}
+	sessions, err := f.store.ListActiveSessions(context.Background())
+	if err != nil {
+		return nil
+	}
+	out := make([]*orchestrator.AgentSession, 0, len(sessions))
+	for _, s := range sessions {
+		out = append(out, &orchestrator.AgentSession{
+			SessionID: s.ID,
+			TicketID:  s.TicketID,
+			Agent:     s.Agent,
+			StartedAt: s.StartedAt.Unix(),
+			Status:    s.Status,
+		})
+	}
+	return out
 }
 
 func (f *fakeOrchestrator) GetPaneContent(sessionID string, lines int) (string, error) {
@@ -153,6 +168,51 @@ func TestNewApp(t *testing.T) {
 	}
 	if app.focus != focusBoard {
 		t.Errorf("focus = %v, want focusBoard", app.focus)
+	}
+}
+
+func TestNewAppShowsTicketsCreatedBeforeToday(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+	s, err := store.Open(dbPath, []string{"backlog", "in_progress", "review", "done"}, "AGT-")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { s.Close() })
+
+	old := time.Now().AddDate(0, 0, -7)
+	if _, err := s.CreateTicket(context.Background(), store.Ticket{
+		Title: "old ticket", Status: "backlog", CreatedAt: old,
+	}); err != nil {
+		t.Fatalf("create ticket: %v", err)
+	}
+
+	cfg := config.SetDefaults()
+	reg := theme.NewRegistry("dark")
+	reg.Register(&theme.Theme{
+		Name: "agentboard", Source: "builtin",
+		Primary: lipgloss.Color("69"), Text: lipgloss.Color("15"),
+		TextMuted: lipgloss.Color("240"), Background: lipgloss.Color("#000"),
+		BackgroundPanel: lipgloss.Color("236"), Border: lipgloss.Color("240"),
+		Success: lipgloss.Color("42"), Accent: lipgloss.Color("213"),
+	})
+
+	fo := newFakeOrchestrator(s)
+	app, err := NewApp(cfg, s, reg, AppDeps{Orchestrator: fo})
+	if err != nil {
+		t.Fatalf("new app: %v", err)
+	}
+
+	found := false
+	for _, col := range app.kanban.columns {
+		for _, tk := range col {
+			if tk.Title == "old ticket" {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Error("ticket created before app start should be visible immediately, without a manual refresh")
 	}
 }
 
@@ -421,8 +481,20 @@ func TestAppDashboardViewRenders(t *testing.T) {
 	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
 
 	view := app.View()
-	if !strings.Contains(view, "claude-code") {
-		t.Error("dashboard view missing agent name")
+	plain := stripAnsi(view)
+	if !strings.Contains(view, "Agent Dashboard") {
+		t.Error("dashboard view missing title")
+	}
+	// Sidebar must show installed agents with count 0 when no sessions are active.
+	hasZeroAgent := false
+	for _, name := range []string{"claude-code", "opencode", "codex", "cursor", "freecode"} {
+		if regexp.MustCompile(`(?m)^\s*▸?\s*` + regexp.QuoteMeta(name) + `\s+0\b`).MatchString(plain) {
+			hasZeroAgent = true
+			break
+		}
+	}
+	if !hasZeroAgent {
+		t.Errorf("dashboard view should show at least one installed agent with count 0, got:\n%s", plain)
 	}
 }
 

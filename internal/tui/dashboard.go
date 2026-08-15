@@ -50,6 +50,44 @@ type DashboardModel struct {
 	paneContentLoadedAt time.Time
 }
 
+type agentSessionGroup struct {
+	Agent    string
+	Sessions []*orchestrator.AgentSession
+}
+
+func (m DashboardModel) aggregateActiveSessions() []agentSessionGroup {
+	indexByAgent := make(map[string]int)
+	var groups []agentSessionGroup
+	for _, a := range m.Agents {
+		if !a.Found {
+			continue
+		}
+		idx := len(groups)
+		indexByAgent[a.Binary] = idx
+		indexByAgent[a.Name] = idx
+		groups = append(groups, agentSessionGroup{Agent: a.Binary})
+	}
+	for _, sess := range m.activeAgentSessions {
+		idx, ok := indexByAgent[sess.Agent]
+		if !ok {
+			idx = len(groups)
+			indexByAgent[sess.Agent] = idx
+			groups = append(groups, agentSessionGroup{Agent: sess.Agent})
+		}
+		groups[idx].Sessions = append(groups[idx].Sessions, sess)
+	}
+	return groups
+}
+
+func (m DashboardModel) displayNameFor(binary string) string {
+	for _, a := range m.Agents {
+		if a.Binary == binary {
+			return a.Name
+		}
+	}
+	return binary
+}
+
 func DefaultDashboardStyles() DashboardStyles {
 	return DashboardStyles{
 		Title: lipgloss.NewStyle().
@@ -127,10 +165,17 @@ func NewDashboardModel(s *store.Store, orch Orchestrator, resolver *keybinding.R
 }
 
 func (m DashboardModel) SelectedAgent() config.DetectedAgent {
-	if m.cursor >= 0 && m.cursor < len(m.Agents) {
-		return m.Agents[m.cursor]
+	groups := m.aggregateActiveSessions()
+	if m.cursor < 0 || m.cursor >= len(groups) {
+		return config.DetectedAgent{}
 	}
-	return config.DetectedAgent{}
+	bin := groups[m.cursor].Agent
+	for _, a := range m.Agents {
+		if a.Binary == bin || a.Name == bin {
+			return a
+		}
+	}
+	return config.DetectedAgent{Name: m.displayNameFor(bin), Binary: bin}
 }
 
 func (m DashboardModel) SelectedSession() *orchestrator.AgentSession {
@@ -141,10 +186,23 @@ func (m DashboardModel) SelectedSession() *orchestrator.AgentSession {
 			}
 		}
 	}
-	if len(m.activeAgentSessions) > 0 && m.cursor < len(m.activeAgentSessions) {
-		return m.activeAgentSessions[m.cursor]
+	groups := m.aggregateActiveSessions()
+	if m.cursor < 0 || m.cursor >= len(groups) {
+		return nil
 	}
-	return nil
+	sessions := groups[m.cursor].Sessions
+	if len(sessions) == 0 {
+		return nil
+	}
+	return sessions[0]
+}
+
+func (m DashboardModel) selectedGroup() *agentSessionGroup {
+	groups := m.aggregateActiveSessions()
+	if m.cursor < 0 || m.cursor >= len(groups) {
+		return nil
+	}
+	return &groups[m.cursor]
 }
 
 func (m DashboardModel) Init() tea.Cmd {
@@ -199,32 +257,25 @@ func (m DashboardModel) handleKey(msg tea.KeyMsg) (DashboardModel, tea.Cmd) {
 		}
 	case keybinding.ActionNextTicket:
 		m.cursor++
-		if m.activeAgentSessions == nil || len(m.activeAgentSessions) == 0 {
-			if m.cursor >= len(m.Agents) {
-				m.cursor = 0
-			}
-		} else {
-			if m.cursor >= len(m.activeAgentSessions) {
-				m.cursor = 0
-			}
-			// Update selected session
-			if m.cursor < len(m.activeAgentSessions) {
-				m.selectedSessionID = m.activeAgentSessions[m.cursor].SessionID
-			}
+		groups := m.aggregateActiveSessions()
+		if len(groups) == 0 {
+			m.cursor = 0
+		} else if m.cursor >= len(groups) {
+			m.cursor = 0
+		}
+		if g := m.selectedGroup(); g != nil && len(g.Sessions) > 0 {
+			m.selectedSessionID = g.Sessions[0].SessionID
 		}
 	case keybinding.ActionPrevTicket:
 		m.cursor--
-		if m.activeAgentSessions == nil || len(m.activeAgentSessions) == 0 {
-			if m.cursor < 0 {
-				m.cursor = len(m.Agents) - 1
-			}
-		} else {
-			if m.cursor < 0 {
-				m.cursor = len(m.activeAgentSessions) - 1
-			}
-			if m.cursor >= 0 && m.cursor < len(m.activeAgentSessions) {
-				m.selectedSessionID = m.activeAgentSessions[m.cursor].SessionID
-			}
+		groups := m.aggregateActiveSessions()
+		if len(groups) == 0 {
+			m.cursor = 0
+		} else if m.cursor < 0 {
+			m.cursor = len(groups) - 1
+		}
+		if g := m.selectedGroup(); g != nil && len(g.Sessions) > 0 {
+			m.selectedSessionID = g.Sessions[0].SessionID
 		}
 	case keybinding.ActionInteract:
 		sess := m.SelectedSession()
@@ -308,61 +359,19 @@ func (m DashboardModel) View() string {
 func (m DashboardModel) renderSidebar(width int) string {
 	var b strings.Builder
 
-	// If we have active agent sessions, show those instead of detected agents
-	sessions := m.activeAgentSessions
-	if len(sessions) == 0 {
-		// Fall back to showing detected agents
-		for i, agent := range m.Agents {
-			if !agent.Found {
-				continue
-			}
-			prefix := "  "
-			style := m.styles.Label
-			if i == m.cursor && len(sessions) == 0 {
-				prefix = "▸ "
-				style = m.styles.Title
-			}
-
-			statusDot := " ●"
-			statusColor := "240"
-			if agent.Found {
-				statusColor = "42"
-				if _, running := m.ActiveSessions[agent.Binary]; running {
-					statusColor = "213"
-				}
-			}
-			dot := lipgloss.NewStyle().Foreground(lipgloss.Color(statusColor)).Render(statusDot)
-
-			row := prefix + agent.Name + dot
-			b.WriteString(style.Width(width).Render(row))
-			b.WriteString("\n")
-		}
+	groups := m.aggregateActiveSessions()
+	if len(groups) == 0 {
+		b.WriteString(m.styles.Placeholder.Render("No agents installed"))
 	} else {
-		// Show active agent sessions
-		for i, sess := range sessions {
+		for i, g := range groups {
 			prefix := "  "
 			style := m.styles.Label
 			if i == m.cursor {
 				prefix = "▸ "
 				style = m.styles.Title
 			}
-
-			// Map agent name to display name
-			agentName := sess.Agent
-			agentLogo := "●"
-			agentColor := "213" // running color
-
-			for _, a := range m.Agents {
-				if a.Binary == sess.Agent || a.Name == sess.Agent {
-					agentName = a.Name
-					agentLogo = a.Logo
-					agentColor = "42"
-					break
-				}
-			}
-
-			dot := lipgloss.NewStyle().Foreground(lipgloss.Color(agentColor)).Render(agentLogo)
-			row := prefix + agentName + " (" + sess.TicketID + ")" + dot
+			displayName := m.displayNameFor(g.Agent)
+			row := fmt.Sprintf("%s%-12s  %d", prefix, displayName, len(g.Sessions))
 			b.WriteString(style.Width(width).Render(row))
 			b.WriteString("\n")
 		}
@@ -377,129 +386,79 @@ func (m DashboardModel) renderSidebar(width int) string {
 }
 
 func (m DashboardModel) renderContent(width int) string {
-	sess := m.SelectedSession()
-	if sess == nil {
-		agent := m.SelectedAgent()
-		if agent.Binary == "" {
-			return m.styles.Placeholder.Width(width).Render("No agent selected")
-		}
-
-		var b strings.Builder
-		logoColor := lipgloss.Color(agent.LogoClr)
-		if !agent.Found {
-			logoColor = lipgloss.Color("240")
-		}
-		logoStyle := lipgloss.NewStyle().Foreground(logoColor)
-		b.WriteString(logoStyle.Render(agent.Logo))
-		b.WriteString("\n\n")
-
-		b.WriteString(m.styles.Title.Render(agent.Name))
-		b.WriteString("\n")
-		b.WriteString(strings.Repeat("─", width))
-		b.WriteString("\n\n")
-
-statusVal := "NOT INSTALLED"
-	if agent.Found {
-		statusVal = "READY"
+	group := m.selectedGroup()
+	if group == nil {
+		return m.styles.Placeholder.Width(width).Render("No agent selected")
 	}
 
-		if sess, running := m.ActiveSessions[agent.Binary]; running {
-			statusVal = "RUNNING"
-			fields := []struct {
-				label string
-				value string
-			}{
-				{"Status:", statusVal},
-				{"Binary:", agent.Binary},
-				{"Ticket:", sess.TicketID},
-				{"Uptime:", formatUptime(sess.StartedAt)},
-			}
-			for _, f := range fields {
-				b.WriteString(m.styles.Label.Render(fmt.Sprintf("%-12s", f.label)))
-				b.WriteString(m.styles.Value.Render(f.value))
-				b.WriteString("\n")
-			}
-		} else {
-			fields := []struct {
-				label string
-				value string
-			}{
-				{"Status:", statusVal},
-				{"Binary:", agent.Binary},
-			}
-			for _, f := range fields {
-				b.WriteString(m.styles.Label.Render(fmt.Sprintf("%-12s", f.label)))
-				b.WriteString(m.styles.Value.Render(f.value))
-				b.WriteString("\n")
-			}
-		}
-
-		return lipgloss.NewStyle().
-			Padding(0, 2).
-			Width(width).
-			Height(m.height - 8).
-			Render(b.String())
-	}
-
-	// We have an active session - show its pane content
 	var b strings.Builder
 
-	// Session info
-	b.WriteString(m.styles.Title.Render(fmt.Sprintf("%s - %s", sess.Agent, sess.TicketID)))
+	displayName := m.displayNameFor(group.Agent)
+	b.WriteString(m.styles.Title.Render(displayName))
+	b.WriteString(m.styles.Label.Render(fmt.Sprintf("  (%d sessions)", len(group.Sessions))))
 	b.WriteString("\n")
 	b.WriteString(strings.Repeat("─", width))
 	b.WriteString("\n\n")
 
-	// Get pane content
-	paneContent := m.paneContent
-	if time.Since(m.paneContentLoadedAt) > 500*time.Millisecond {
-		// Refresh pane content
-		if content, err := m.orchestrator.GetPaneContent(sess.SessionID, 30); err == nil {
-			m.paneContent = content
-			m.paneContentLoadedAt = time.Now()
-			paneContent = content
-		}
-	}
-
-	if paneContent == "" {
-		// Try to get it now
-		if content, err := m.orchestrator.GetPaneContent(sess.SessionID, 30); err == nil {
-			m.paneContent = content
-			m.paneContentLoadedAt = time.Now()
-			paneContent = content
-		}
-	}
-
-	if paneContent != "" {
-		// Display the pane content in a styled box
-		lines := strings.Split(paneContent, "\n")
-		// Show last N lines that fit
-		maxLines := (m.height - 16)
-		if maxLines < 5 {
-			maxLines = 5
-		}
-		if len(lines) > maxLines {
-			lines = lines[len(lines)-maxLines:]
-		}
-
-		b.WriteString(m.styles.Title.Render("Live Agent Output"))
+	for i, sess := range group.Sessions {
+		title := m.sessionTitle(sess.TicketID)
+		row := fmt.Sprintf("  %2d  %-30s  %s", i+1, truncate(title, 30), sess.TicketID)
+		b.WriteString(m.styles.Value.Render(row))
 		b.WriteString("\n")
-		for _, line := range lines {
-			// Truncate long lines
-			if len(line) > width-6 {
-				line = line[:width-9] + "..."
+	}
+
+	if len(group.Sessions) > 0 {
+		b.WriteString("\n")
+	}
+
+	// Live pane content for the first session of the selected group
+	if len(group.Sessions) == 0 {
+		b.WriteString(m.styles.Placeholder.Render("  No active sessions"))
+		b.WriteString("\n")
+	} else {
+		sess := group.Sessions[0]
+		paneContent := m.paneContent
+		if time.Since(m.paneContentLoadedAt) > 500*time.Millisecond {
+			if content, err := m.orchestrator.GetPaneContent(sess.SessionID, 30); err == nil {
+				m.paneContent = content
+				m.paneContentLoadedAt = time.Now()
+				paneContent = content
 			}
-			b.WriteString(m.styles.Value.Render("  " + line))
+		}
+
+		if paneContent == "" {
+			if content, err := m.orchestrator.GetPaneContent(sess.SessionID, 30); err == nil {
+				m.paneContent = content
+				m.paneContentLoadedAt = time.Now()
+				paneContent = content
+			}
+		}
+
+		if paneContent != "" {
+			b.WriteString(m.styles.Title.Render("Live Agent Output"))
+			b.WriteString("\n")
+			lines := strings.Split(paneContent, "\n")
+			maxLines := m.height - 16
+			if maxLines < 5 {
+				maxLines = 5
+			}
+			if len(lines) > maxLines {
+				lines = lines[len(lines)-maxLines:]
+			}
+			for _, line := range lines {
+				if len(line) > width-6 {
+					line = line[:width-9] + "..."
+				}
+				b.WriteString(m.styles.Value.Render("  " + line))
+				b.WriteString("\n")
+			}
+		} else {
+			b.WriteString(m.styles.Placeholder.Render("  Starting agent..."))
 			b.WriteString("\n")
 		}
-	} else {
-		b.WriteString(m.styles.Placeholder.Render("  Starting agent..."))
-		b.WriteString("\n")
 	}
 
 	b.WriteString("\n")
-
-	// Show input prompt if in input mode
 	if m.isInput {
 		b.WriteString(m.styles.Label.Render("Send to agent: "))
 		b.WriteString(m.input.View())
@@ -514,6 +473,27 @@ statusVal := "NOT INSTALLED"
 		Width(width).
 		Height(m.height - 8).
 		Render(b.String())
+}
+
+func (m DashboardModel) sessionTitle(ticketID string) string {
+	if m.store == nil {
+		return ""
+	}
+	tk, err := m.store.GetTicket(context.Background(), ticketID)
+	if err != nil {
+		return ""
+	}
+	return tk.Title
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	if n <= 3 {
+		return s[:n]
+	}
+	return s[:n-3] + "..."
 }
 
 func formatUptime(since time.Time) string {
