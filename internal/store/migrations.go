@@ -63,6 +63,11 @@ func (s *Store) migrate() error {
 		prefix TEXT PRIMARY KEY,
 		next_id INTEGER NOT NULL DEFAULT 1
 	);
+
+	CREATE TABLE IF NOT EXISTS meta (
+		key   TEXT PRIMARY KEY,
+		value TEXT NOT NULL
+	);
 	`
 
 	_, err := s.db.Exec(schema)
