@@ -76,6 +76,8 @@ type runCompletedMsg struct {
 	ticketID string
 }
 
+type agentActiveChangedMsg struct{}
+
 type proposalFailedMsg struct {
 	ticketID string
 	err      error
@@ -245,7 +247,13 @@ func (a *App) applyTheme() {
 }
 
 func (a *App) Init() tea.Cmd {
-	return tea.EnterAltScreen
+	// Always arm the animation tick at startup. The kanban only advances
+	// its animFrame when an agent is active, so idle ticks are cheap.
+	cmds := []tea.Cmd{tea.EnterAltScreen}
+	if a.kanban.NeedsTick() {
+		cmds = append(cmds, animationTick())
+	}
+	return tea.Batch(cmds...)
 }
 
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -319,19 +327,25 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.modal.OpenInfo("Full Proposal for "+p.TicketID, p.Prompt, nil)
 		return a, nil
 	case runStartedMsg:
+		a.kanban, _ = a.kanban.Reload()
 		return a, tea.Batch(
 			a.showNotification("Run started", "Agent is working...", NotificationInfo),
 			a.startRunAndListenCmd(msg.proposalID),
+			a.tickCmd(),
 		)
 	case adhocRunStartedMsg:
+		a.kanban, _ = a.kanban.Reload()
 		return a, tea.Batch(
 			a.showNotification("Ad-hoc run started", fmt.Sprintf("%s is working...", msg.agent), NotificationInfo),
 			a.startAdHocRunAndListenCmd(msg.agent, msg.prompt),
+			a.tickCmd(),
 		)
 	case directRunStartedMsg:
+		a.kanban, _ = a.kanban.Reload()
 		return a, tea.Batch(
 			a.showNotification("Run started", "Agent is working...", NotificationInfo),
 			a.startDirectRunAndListenCmd(msg.ticketID, msg.agent, msg.prompt),
+			a.tickCmd(),
 		)
 	case runCompletedMsg:
 		a.kanban, _ = a.kanban.Reload()
@@ -343,6 +357,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return a, a.showNotification("Run completed", fmt.Sprintf("Agent finished working on %s", msg.ticketID), NotificationSuccess)
+	case agentActiveChangedMsg:
+		// Emitted by the start*Cmd goroutines right after they call
+		// StartApprovedRun/StartAdHocRun, which sets AgentActive=true in the
+		// store. Reload the kanban so the activity bar starts animating, and
+		// arm the tick.
+		a.kanban, _ = a.kanban.Reload()
+		return a, a.tickCmd()
 	case runStartFailedMsg:
 		return a, a.showNotification("Run failed", msg.err.Error(), NotificationError)
 	case proposalFailedMsg:
@@ -407,6 +428,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
+func (a *App) tickCmd() tea.Cmd {
+	if a.kanban.NeedsTick() {
+		return animationTick()
+	}
+	return nil
+}
+
 func (a *App) loadProposalCmd(ticketID string) tea.Cmd {
 	return func() tea.Msg {
 		p, err := a.store.GetActiveProposalForTicket(context.Background(), ticketID)
@@ -433,57 +461,69 @@ func (a *App) approveProposalCmd(proposalID string) tea.Cmd {
 }
 
 func (a *App) startRunAndListenCmd(proposalID string) tea.Cmd {
-	return func() tea.Msg {
-		ctx := context.Background()
-
-		_, err := a.orchestrator.StartApprovedRun(ctx, proposalID)
-		if err != nil {
-			return runStartFailedMsg{err: err}
-		}
-
-		select {
-		case completion := <-a.completionCh:
-			return runCompletedMsg{ticketID: completion.TicketID}
-		case <-time.After(60 * time.Second):
-			return runCompletedMsg{ticketID: ""}
-		}
-	}
+	// Two-part cmd: first synchronously start the run and emit an
+	// agentActiveChangedMsg so the kanban reloads + tick arms; then listen
+	// for completion in the background and emit runCompletedMsg when done.
+	return tea.Batch(
+		func() tea.Msg {
+			ctx := context.Background()
+			_, err := a.orchestrator.StartApprovedRun(ctx, proposalID)
+			if err != nil {
+				return runStartFailedMsg{err: err}
+			}
+			return agentActiveChangedMsg{}
+		},
+		func() tea.Msg {
+			select {
+			case completion := <-a.completionCh:
+				return runCompletedMsg{ticketID: completion.TicketID}
+			case <-time.After(60 * time.Second):
+				return runCompletedMsg{ticketID: ""}
+			}
+		},
+	)
 }
 
 func (a *App) startAdHocRunAndListenCmd(agent, prompt string) tea.Cmd {
-	return func() tea.Msg {
-		ctx := context.Background()
-
-		_, err := a.orchestrator.StartAdHocRun(ctx, "", agent, prompt)
-		if err != nil {
-			return runStartFailedMsg{err: err}
-		}
-
-		select {
-		case completion := <-a.completionCh:
-			return runCompletedMsg{ticketID: completion.TicketID}
-		case <-time.After(60 * time.Second):
-			return runCompletedMsg{ticketID: ""}
-		}
-	}
+	return tea.Batch(
+		func() tea.Msg {
+			ctx := context.Background()
+			_, err := a.orchestrator.StartAdHocRun(ctx, "", agent, prompt)
+			if err != nil {
+				return runStartFailedMsg{err: err}
+			}
+			return agentActiveChangedMsg{}
+		},
+		func() tea.Msg {
+			select {
+			case completion := <-a.completionCh:
+				return runCompletedMsg{ticketID: completion.TicketID}
+			case <-time.After(60 * time.Second):
+				return runCompletedMsg{ticketID: ""}
+			}
+		},
+	)
 }
 
 func (a *App) startDirectRunAndListenCmd(ticketID, agent, prompt string) tea.Cmd {
-	return func() tea.Msg {
-		ctx := context.Background()
-
-		_, err := a.orchestrator.StartAdHocRun(ctx, ticketID, agent, prompt)
-		if err != nil {
-			return runStartFailedMsg{err: err}
-		}
-
-		select {
-		case <-a.completionCh:
-			return runCompletedMsg{ticketID: ticketID}
-		case <-time.After(60 * time.Second):
-			return runCompletedMsg{ticketID: ""}
-		}
-	}
+	return tea.Batch(
+		func() tea.Msg {
+			ctx := context.Background()
+			_, err := a.orchestrator.StartAdHocRun(ctx, ticketID, agent, prompt)
+			if err != nil {
+				return runStartFailedMsg{err: err}
+			}
+			return agentActiveChangedMsg{}
+		},
+		func() tea.Msg {
+			select {
+			case <-a.completionCh:
+				return runCompletedMsg{ticketID: ticketID}
+			case <-time.After(60 * time.Second):
+				return runCompletedMsg{ticketID: ""}
+			}
+		},
+	)
 }
 
 func (a *App) handleStatusChanged(msg statusChangedMsg) (tea.Model, tea.Cmd) {
@@ -588,7 +628,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if a.view != viewBoard {
 			a.view = viewBoard
 			a.activeTicket = nil
-			return a, nil
+			return a, a.tickCmd()
 		}
 	}
 
@@ -635,16 +675,18 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case keybinding.ActionShowHelp:
 		if a.view == viewHelp {
 			a.view = viewBoard
-		} else {
-			a.view = viewHelp
+			return a, a.tickCmd()
 		}
+		a.view = viewHelp
+		return a, nil
 	case keybinding.ActionShowDashboard:
 		if a.view == viewDashboard {
 			a.view = viewBoard
-		} else {
-			a.dashboard = a.dashboard.Refresh()
-			a.view = viewDashboard
+			return a, a.tickCmd()
 		}
+		a.dashboard = a.dashboard.Refresh()
+		a.view = viewDashboard
+		return a, nil
 	case keybinding.ActionOpenPalette:
 		a.palette.Open()
 	case keybinding.ActionRefresh:

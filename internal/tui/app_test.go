@@ -600,3 +600,145 @@ func TestProposalApprovalAndRunWorkflow(t *testing.T) {
 		t.Error("expected ticket AgentActive to be true")
 	}
 }
+
+func TestAppInitSchedulesTickWhenAgentActive(t *testing.T) {
+	app, _ := newTestApp(t)
+	ctx := context.Background()
+
+	ticket, _ := app.store.CreateTicket(ctx, store.Ticket{Title: "active", Status: "in_progress"})
+	_ = app.store.SetAgentActive(ctx, ticket.ID, true)
+	var err error
+	app.kanban, err = app.kanban.Reload()
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+
+	cmd := app.Init()
+	if cmd == nil {
+		t.Fatal("Init should return a tick cmd when an agent is active at startup")
+	}
+	msg := cmd()
+	if _, ok := msg.(tea.BatchMsg); !ok {
+		t.Errorf("Init produced %T, want tea.BatchMsg (EnterAltScreen + animationTick)", msg)
+	}
+}
+
+func TestAppInitNoTickWhenIdle(t *testing.T) {
+	app, _ := newTestApp(t)
+	cmd := app.Init()
+	if cmd == nil {
+		t.Fatal("Init should return at least EnterAltScreen")
+	}
+	msg := cmd()
+	// tea.EnterAltScreen returns a tea.BatchMsg but with no animations; the
+	// concrete message type isn't exported. Just verify it's not a tickMsg.
+	if _, ok := msg.(tickMsg); ok {
+		t.Errorf("Init should not arm a tick when no agent is active")
+	}
+}
+
+func TestTickCmdRearmsWhenAgentActive(t *testing.T) {
+	app, _ := newTestApp(t)
+	ctx := context.Background()
+
+	ticket, _ := app.store.CreateTicket(ctx, store.Ticket{Title: "active", Status: "in_progress"})
+	_ = app.store.SetAgentActive(ctx, ticket.ID, true)
+	app.kanban, _ = app.kanban.Reload()
+
+	cmd := app.tickCmd()
+	if cmd == nil {
+		t.Fatal("tickCmd should return animationTick when an agent is active")
+	}
+	msg := cmd()
+	if _, ok := msg.(tickMsg); !ok {
+		t.Errorf("tickCmd produced %T, want tickMsg", msg)
+	}
+}
+
+func TestTickCmdNilWhenIdle(t *testing.T) {
+	app, _ := newTestApp(t)
+	if cmd := app.tickCmd(); cmd != nil {
+		t.Errorf("tickCmd = %v, want nil when no agents active", cmd)
+	}
+}
+
+func TestRunStartedReloadsKanbanAndArmsTick(t *testing.T) {
+	app, fo := newTestApp(t)
+	ctx := context.Background()
+
+	ticket, _ := app.store.CreateTicket(ctx, store.Ticket{Title: "Work", Status: "in_progress", Agent: "claude-code"})
+	proposal, _ := app.store.CreateProposal(ctx, store.Proposal{TicketID: ticket.ID, Status: "approved", Prompt: "p"})
+	_ = app.store.SetAgentActive(ctx, ticket.ID, false)
+	app.kanban, _ = app.kanban.Reload()
+
+	if app.kanban.anyAgentActive() {
+		t.Fatal("precondition: no agent should be active yet")
+	}
+
+	_, cmd := app.Update(runStartedMsg{proposalID: proposal.ID})
+	execCmd(app, cmd)
+
+	if !app.kanban.anyAgentActive() {
+		t.Error("runStartedMsg should reload kanban so AgentActive=true is reflected")
+	}
+
+	// Verify the completion path happened too — fake orchestrator marked active.
+	if !app.store.HasActiveSession(ctx, ticket.ID) {
+		t.Error("expected active session after run start")
+	}
+
+	// Drain completion so app.kanban sees AgentActive=false next time.
+	fo.completeRun(ticket.ID, "", "completed")
+}
+
+func TestEscFromDashboardRearmsTickWhenAgentActive(t *testing.T) {
+	app, _ := newTestApp(t)
+	ctx := context.Background()
+
+	ticket, _ := app.store.CreateTicket(ctx, store.Ticket{Title: "active", Status: "in_progress"})
+	_ = app.store.SetAgentActive(ctx, ticket.ID, true)
+	app.kanban, _ = app.kanban.Reload()
+
+	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	if app.view != viewDashboard {
+		t.Fatalf("expected viewDashboard, got %v", app.view)
+	}
+
+	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	if app.view != viewBoard {
+		t.Fatalf("expected viewBoard after toggle, got %v", app.view)
+	}
+	if cmd == nil {
+		t.Fatal("expected a tick cmd to be returned when toggling back to board with active agent")
+	}
+	msg := cmd()
+	if _, ok := msg.(tickMsg); !ok {
+		t.Errorf("toggle back produced %T, want tickMsg", msg)
+	}
+}
+
+func TestEscFromHelpRearmsTickWhenAgentActive(t *testing.T) {
+	app, _ := newTestApp(t)
+	ctx := context.Background()
+
+	ticket, _ := app.store.CreateTicket(ctx, store.Ticket{Title: "active", Status: "in_progress"})
+	_ = app.store.SetAgentActive(ctx, ticket.ID, true)
+	app.kanban, _ = app.kanban.Reload()
+
+	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	if app.view != viewHelp {
+		t.Fatalf("expected viewHelp, got %v", app.view)
+	}
+
+	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	if app.view != viewBoard {
+		t.Fatalf("expected viewBoard after toggle, got %v", app.view)
+	}
+	if cmd == nil {
+		t.Fatal("expected tick cmd when toggling help off with active agent")
+	}
+	msg := cmd()
+	if _, ok := msg.(tickMsg); !ok {
+		t.Errorf("toggle produced %T, want tickMsg", msg)
+	}
+}
