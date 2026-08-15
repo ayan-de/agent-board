@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 type Config struct {
@@ -29,11 +28,6 @@ func LoadFromDir(baseDir, projectName string) (*Config, error) {
 
 	if err := EnsureDirs(baseDir, projectName); err != nil {
 		return nil, err
-	}
-
-	initDate, err := GetProjectInitDate(baseDir, projectName)
-	if err == nil {
-		cfg.Board.ProjectInitDate = initDate.Format("2006-01-02")
 	}
 
 	globalPath := filepath.Join(baseDir, "config.toml")
@@ -102,33 +96,4 @@ func GetBaseDir() string {
 		return ".agentboard"
 	}
 	return filepath.Join(homeDir, ".agentboard")
-}
-
-func GetProjectInitDate(baseDir, projectName string) (time.Time, error) {
-	projDir := filepath.Join(baseDir, "projects", projectName)
-
-	// Fallback: Check multiple files to find the oldest one (proxy for creation date)
-	files := []string{
-		projDir,
-		filepath.Join(projDir, "config.toml"),
-		filepath.Join(projDir, "board.db"),
-	}
-
-	var oldest time.Time
-
-	for _, path := range files {
-		fi, err := os.Stat(path)
-		if err != nil {
-			continue
-		}
-		t := fi.ModTime()
-		if oldest.IsZero() || t.Before(oldest) {
-			oldest = t
-		}
-	}
-
-	if oldest.IsZero() {
-		return time.Now(), nil
-	}
-	return oldest, nil
 }

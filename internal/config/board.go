@@ -13,8 +13,7 @@ type Column struct {
 
 type BoardConfig struct {
 	Columns []Column `toml:"columns"`
-	Prefix          string `toml:"prefix"`
-	ProjectInitDate string `toml:"-"` // format: "2006-01-02" — read from dir mtime, not user-editable
+	Prefix  string   `toml:"prefix"`
 }
 
 func DefaultColumns() []Column {
