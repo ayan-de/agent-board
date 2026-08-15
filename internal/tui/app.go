@@ -191,12 +191,12 @@ func NewApp(cfg *config.Config, s *store.Store, reg *theme.Registry, deps AppDep
 		return nil, fmt.Errorf("tui.newApp: %w", err)
 	}
 
-	initDateStr := cfg.Board.ProjectInitDate
-	if initDateStr != "" {
-		initDate, err := time.Parse("2006-01-02", initDateStr)
-		if err == nil {
-			kanban.projectInitDate = initDate
-			kanban.monthOffset = computeOffsetToContain(time.Now(), initDate)
+	if initDate, err := s.ProjectInitDate(context.Background()); err == nil {
+		kanban.projectInitDate = initDate
+		kanban.monthOffset = computeOffsetToContain(time.Now(), initDate)
+		kanban, err = kanban.Reload()
+		if err != nil {
+			return nil, fmt.Errorf("tui.newApp: %w", err)
 		}
 	}
 
