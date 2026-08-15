@@ -347,6 +347,86 @@ esac
 	}
 }
 
+// tmux only marks a pane "dead" when its top-level process (the wrapping
+// shell the agent binary was typed into) exits — not when the agent itself
+// exits back to that shell's prompt. A clean in-app exit (e.g. freecode's or
+// claude's double Ctrl+C) leaves the pane alive with a bare shell in it, so
+// monitorPane must notice the agent binary disappearing from
+// #{pane_current_command}, not wait for pane_dead, or completion (and the
+// resume command) is never detected.
+func TestMonitorPaneDetectsAgentExitingBackToShellWithoutPaneDeath(t *testing.T) {
+	t.Setenv("TMUX", "/tmp/tmux-test,123,0")
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+
+	tmuxDir := t.TempDir()
+	logFile := filepath.Join(tmuxDir, "tmux.log")
+	countFile := filepath.Join(tmuxDir, "list-panes.count")
+	t.Setenv("FAKE_TMUX_LOG_EXIT_TEST", logFile)
+	t.Setenv("FAKE_TMUX_COUNT_EXIT_TEST", countFile)
+	t.Setenv("PATH", tmuxDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	fakeTmux := `#!/bin/sh
+printf '%s\n' "$*" >> "$FAKE_TMUX_LOG_EXIT_TEST"
+case "$1" in
+  new-window)
+    printf '%%42\n'
+    ;;
+  capture-pane)
+    printf 'Resume this session with:\nfreecode --resume test-session-123\n'
+    ;;
+  list-panes)
+    count=0
+    [ -f "$FAKE_TMUX_COUNT_EXIT_TEST" ] && count=$(cat "$FAKE_TMUX_COUNT_EXIT_TEST")
+    count=$((count + 1))
+    echo "$count" > "$FAKE_TMUX_COUNT_EXIT_TEST"
+    if [ "$count" -le 2 ]; then
+      printf '12345:0:freecode\n'
+    else
+      printf '12345:0:bash\n'
+    fi
+    ;;
+esac
+`
+	if err := os.WriteFile(filepath.Join(tmuxDir, "tmux"), []byte(fakeTmux), 0755); err != nil {
+		t.Fatalf("write fake tmux: %v", err)
+	}
+
+	runner, err := NewTmuxAgentRunner("agentboard")
+	if err != nil {
+		t.Fatalf("NewTmuxAgentRunner() error = %v", err)
+	}
+
+	type result struct {
+		outcome, summary, resumeCommand string
+	}
+	done := make(chan result, 1)
+
+	_, err = runner.Start(context.Background(), RunRequest{
+		SessionID: "session-exit-test",
+		Agent:     "freecode",
+		Prompt:    "Greet me",
+		OnComplete: func(outcome, summary, resumeCommand string) {
+			done <- result{outcome, summary, resumeCommand}
+		},
+	})
+	if err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+
+	select {
+	case r := <-done:
+		if r.resumeCommand != "freecode --resume test-session-123" {
+			t.Fatalf("resumeCommand = %q, want %q", r.resumeCommand, "freecode --resume test-session-123")
+		}
+		if r.outcome != "completed" {
+			t.Fatalf("outcome = %q, want %q", r.outcome, "completed")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("onComplete was not called within 5s; monitorPane never detected the agent exiting back to the shell")
+	}
+}
+
 func TestPtyRunnerStartLaunchesFreeCodeTUIAndInjectsPrompt(t *testing.T) {
 	t.Setenv("TMUX", "/tmp/tmux-test,123,0")
 

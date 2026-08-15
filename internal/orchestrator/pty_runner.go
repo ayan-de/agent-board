@@ -63,7 +63,7 @@ func (r *tmuxAgentRunner) Start(ctx context.Context, req RunRequest) (RunHandle,
 		req.Reporter(fmt.Sprintf("Agent %s started in tmux pane %s", req.Agent, paneID))
 	}
 
-	go r.monitorPane(req.SessionID, paneID, req.OnComplete)
+	go r.monitorPane(req.SessionID, paneID, cfg.Bin, req.OnComplete)
 
 	return RunHandle{
 		Outcome: "running",
@@ -119,11 +119,12 @@ func waitForReady(paneID string, cfg *pty.Config) error {
 	}
 }
 
-func (r *tmuxAgentRunner) monitorPane(sessionID string, paneID string, onComplete func(outcome, summary, resumeCommand string)) {
+func (r *tmuxAgentRunner) monitorPane(sessionID string, paneID string, agentBin string, onComplete func(outcome, summary, resumeCommand string)) {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
 	var lastCaptured string
+	sawAgentRunning := false
 	for {
 		select {
 		case <-context.Background().Done():
@@ -134,13 +135,29 @@ func (r *tmuxAgentRunner) monitorPane(sessionID string, paneID string, onComplet
 				lastCaptured = out
 			}
 
-			checkCmd := exec.Command("tmux", "list-panes", "-t", paneID, "-F", "#{pane_pid}:#{pane_dead}")
+			checkCmd := exec.Command("tmux", "list-panes", "-t", paneID, "-F", "#{pane_pid}:#{pane_dead}:#{pane_current_command}")
 			output, err := checkCmd.Output()
 
 			outStr := strings.TrimSpace(string(output))
-			isDead := strings.HasSuffix(outStr, ":1")
+			fields := strings.SplitN(outStr, ":", 3)
+			isDead := len(fields) > 1 && fields[1] == "1"
+			currentCommand := ""
+			if len(fields) > 2 {
+				currentCommand = fields[2]
+			}
 
-			if err != nil || len(outStr) == 0 || isDead {
+			// tmux only marks a pane dead when its top-level process (the
+			// wrapping shell) exits, not when the agent we launched inside
+			// that shell exits back to a prompt. So once we've observed the
+			// agent binary as the pane's foreground process, its absence
+			// means the agent quit (e.g. via its own exit-and-print-resume
+			// flow) even though the shell — and the pane — are still alive.
+			if currentCommand == agentBin {
+				sawAgentRunning = true
+			}
+			agentExited := sawAgentRunning && currentCommand != "" && currentCommand != agentBin
+
+			if err != nil || len(outStr) == 0 || isDead || agentExited {
 				outcome := "completed"
 				summary := fmt.Sprintf("Agent session %s finished", sessionID)
 
@@ -160,7 +177,7 @@ func (r *tmuxAgentRunner) monitorPane(sessionID string, paneID string, onComplet
 					}
 				}
 
-				if isDead {
+				if isDead || agentExited {
 					_ = exec.Command("tmux", "kill-pane", "-t", paneID).Run()
 				}
 

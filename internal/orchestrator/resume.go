@@ -13,6 +13,7 @@ import (
 var resumePatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)(opencode\s+-s\s+\S+)`),
 	regexp.MustCompile(`(?i)(claude\s+--resume\s+\S+)`),
+	regexp.MustCompile(`(?i)(freecode\s+--resume\s+\S+)`),
 	regexp.MustCompile(`(?i)(codex\s+--resume\s+\S+)`),
 	regexp.MustCompile(`(?i)(gemini\s+--resume\s+\S+)`),
 }

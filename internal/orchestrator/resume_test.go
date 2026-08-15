@@ -25,6 +25,16 @@ func TestExtractResumeCommand(t *testing.T) {
 			want:   "claude --resume 31a136eb-7bf4-496d-b00b-73c3ac8158de",
 		},
 		{
+			name:   "freecode resume",
+			output: "Resume this session with:\nfreecode --resume 55d9e6fa-26dd-4a6c-9895-0708b9d136a9",
+			want:   "freecode --resume 55d9e6fa-26dd-4a6c-9895-0708b9d136a9",
+		},
+		{
+			name:   "freecode resume from crash handler",
+			output: "freecode crashed — uncaught.\nError\nYour session was saved. Resume it with:\n  freecode --resume sess-42",
+			want:   "freecode --resume sess-42",
+		},
+		{
 			name:   "no resume command",
 			output: "Agent completed successfully",
 			want:   "",
