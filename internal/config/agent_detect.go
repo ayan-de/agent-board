@@ -56,3 +56,23 @@ func AgentColor(name string) string {
 	}
 	return ""
 }
+
+type AgentSpec struct {
+	Name    string
+	Binary  string
+	Logo    string
+	LogoClr string
+}
+
+func Specs() []AgentSpec {
+	out := make([]AgentSpec, len(agentSpecs))
+	for i, spec := range agentSpecs {
+		out[i] = AgentSpec{
+			Name:    spec.name,
+			Binary:  spec.binary,
+			Logo:    spec.logo,
+			LogoClr: spec.logoClr,
+		}
+	}
+	return out
+}

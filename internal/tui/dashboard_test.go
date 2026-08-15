@@ -44,6 +44,7 @@ func newTestDashboard(t *testing.T) DashboardModel {
 		{Name: "opencode", Binary: "opencode", Found: true},
 		{Name: "codex", Binary: "codex", Found: false},
 		{Name: "cursor", Binary: "cursor", Found: false},
+		{Name: "freecode", Binary: "freecode", Found: false},
 	}
 
 	// Create a fake orchestrator for testing
@@ -59,8 +60,8 @@ func TestNewDashboardModel(t *testing.T) {
 	if m.resolver == nil {
 		t.Error("resolver is nil")
 	}
-	if len(m.Agents) != 4 {
-		t.Errorf("Agents = %d, want 4", len(m.Agents))
+	if len(m.Agents) != 5 {
+		t.Errorf("Agents = %d, want 5", len(m.Agents))
 	}
 	if m.width != 0 {
 		t.Errorf("width = %d, want 0", m.width)
@@ -120,9 +121,18 @@ func TestDashboardViewHidesNotFoundAgents(t *testing.T) {
 	m.height = 40
 
 	view := m.View()
+	plain := stripAnsi(view)
+
+	// The sidebar shows one merged entry per spec agent (logo + name + count),
+	// regardless of install state; uninstalled agents are simply dimmed and
+	// never selectable, but they still render with a count of 0.
 	for _, name := range []string{"codex", "cursor"} {
-		if strings.Contains(view, name) {
-			t.Errorf("view should not show uninstalled agent %q", name)
+		countRe := regexp.MustCompile(`(?m)^\s*▸?\s*` + regexp.QuoteMeta(name) + `\s+0\b`)
+		if !countRe.MatchString(plain) {
+			t.Errorf("expected uninstalled agent %q to render with count 0, got:\n%s", name, plain)
+		}
+		if regexp.MustCompile(`(?m)^\s*▸\s*` + regexp.QuoteMeta(name) + `\s+\d`).MatchString(plain) {
+			t.Errorf("uninstalled agent %q should never be cursor-selected, got:\n%s", name, plain)
 		}
 	}
 }
@@ -457,12 +467,60 @@ func TestDashboardSidebarShowsInstalledAgentsEvenWhenIdle(t *testing.T) {
 	if strings.Contains(plain, "No active sessions") {
 		t.Errorf("sidebar should not show 'No active sessions' placeholder when installed agents exist, got:\n%s", plain)
 	}
-	// codex/cursor are not installed -> still hidden.
-	if strings.Contains(plain, "codex") {
-		t.Errorf("sidebar should not show uninstalled codex, got:\n%s", plain)
+	// codex/cursor/freecode are not installed → each still renders as a single
+	// merged entry (dim logo + name + count 0), just not cursor-selectable.
+	if !strings.Contains(plain, "codex") {
+		t.Errorf("sidebar should still render uninstalled codex, got:\n%s", plain)
 	}
-	if strings.Contains(plain, "cursor") {
-		t.Errorf("sidebar should not show uninstalled cursor, got:\n%s", plain)
+	if !strings.Contains(plain, "cursor") {
+		t.Errorf("sidebar should still render uninstalled cursor, got:\n%s", plain)
+	}
+	if !strings.Contains(plain, "freecode") {
+		t.Errorf("sidebar should render all 5 providers from agentSpecs, got:\n%s", plain)
+	}
+}
+
+func TestDashboardSidebarRendersMergedLogoEntries(t *testing.T) {
+	m := newTestDashboard(t)
+	m.width = 120
+	m.height = 40
+
+	sidebar := m.renderSidebar(30)
+	plain := stripAnsi(sidebar)
+	lines := strings.Split(plain, "\n")
+
+	// Each entry is "logo (3 lines) + name+count (1 line)" = 4 lines, in
+	// fixed spec order. The name and its count must appear on the same line.
+	nameLine := make(map[string]int, 5)
+	for i, l := range lines {
+		for _, name := range []string{"claude-code", "opencode", "codex", "cursor", "freecode"} {
+			if _, ok := nameLine[name]; ok {
+				continue
+			}
+			if regexp.MustCompile(`^\s*▸?\s*` + name + `\s+\d`).MatchString(l) {
+				nameLine[name] = i
+			}
+		}
+	}
+
+	wantNames := []string{"claude-code", "opencode", "codex", "cursor", "freecode"}
+	prev := -1
+	for _, name := range wantNames {
+		idx, ok := nameLine[name]
+		if !ok {
+			t.Errorf("expected merged entry (name + count on one line) for %q, got:\n%s", name, plain)
+			continue
+		}
+		if idx <= prev {
+			t.Errorf("entry %q out of order (prev=%d, this=%d):\n%s", name, prev, idx, plain)
+		}
+		prev = idx
+	}
+
+	// claude-code is the default selected group → appears exactly once,
+	// on its merged name+count line, with the cursor prefix.
+	if !regexp.MustCompile(`(?m)^\s*▸\s*claude-code\s+0\b`).MatchString(plain) {
+		t.Errorf("expected 'claude-code' to be cursor-selected on its merged line, got:\n%s", plain)
 	}
 }
 
@@ -502,13 +560,19 @@ func TestDashboardSidebarHidesIdleAgentsAndShowsCounts(t *testing.T) {
 	if !regexp.MustCompile(`(?m)^\s*▸?\s*opencode\s+1\b`).MatchString(plain) {
 		t.Errorf("expected sidebar to show 'opencode' with count 1 on its own line, got:\n%s", plain)
 	}
-	// codex is not found AND has no sessions → hidden entirely
-	if strings.Contains(plain, "codex") {
-		t.Errorf("expected 'codex' (not found, idle) to be hidden, got:\n%s", plain)
+	// codex/cursor are not found and have no sessions → still rendered as a
+	// dim merged entry with count 0, but never cursor-selected.
+	if !regexp.MustCompile(`(?m)^\s*▸?\s*codex\s+0\b`).MatchString(plain) {
+		t.Errorf("expected 'codex' (not found, idle) to render with count 0, got:\n%s", plain)
 	}
-	// cursor is not found AND has no sessions → hidden entirely
-	if strings.Contains(plain, "cursor") {
-		t.Errorf("expected 'cursor' (not found, idle) to be hidden, got:\n%s", plain)
+	if !regexp.MustCompile(`(?m)^\s*▸?\s*cursor\s+0\b`).MatchString(plain) {
+		t.Errorf("expected 'cursor' (not found, idle) to render with count 0, got:\n%s", plain)
+	}
+	if regexp.MustCompile(`(?m)^\s*▸\s*codex\s+\d`).MatchString(plain) {
+		t.Errorf("'codex' (not found, idle) should never be cursor-selected, got:\n%s", plain)
+	}
+	if regexp.MustCompile(`(?m)^\s*▸\s*cursor\s+\d`).MatchString(plain) {
+		t.Errorf("'cursor' (not found, idle) should never be cursor-selected, got:\n%s", plain)
 	}
 }
 

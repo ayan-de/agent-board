@@ -27,6 +27,7 @@ type DashboardStyles struct {
 	Placeholder lipgloss.Style
 	Footer      lipgloss.Style
 	PaneContent lipgloss.Style
+	Selected    lipgloss.Style
 }
 
 type DashboardModel struct {
@@ -115,6 +116,10 @@ func DefaultDashboardStyles() DashboardStyles {
 			Foreground(lipgloss.Color("252")).
 			Background(lipgloss.Color("235")).
 			Padding(1),
+		Selected: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("235")).
+			Background(lipgloss.Color("69")),
 	}
 }
 
@@ -145,6 +150,10 @@ func NewDashboardStyles(t *theme.Theme) DashboardStyles {
 			Foreground(t.Text).
 			Background(t.Background).
 			Padding(1),
+		Selected: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(t.Text).
+			Background(t.Primary),
 	}
 }
 
@@ -388,25 +397,62 @@ func (m DashboardModel) View() string {
 	return b.String()
 }
 
+// renderSidebar renders one entry per agent spec: the full ASCII logo on
+// top, followed by a single line with the agent name and its active session
+// count. All 5 providers are shown in fixed spec order, regardless of
+// whether their binary is installed; uninstalled entries are dimmed. The
+// cursor-selected provider is highlighted with a theme background color
+// spanning the whole entry (logo lines and the name/count line).
 func (m DashboardModel) renderSidebar(width int) string {
 	var b strings.Builder
 
 	groups := m.aggregateActiveSessions()
-	if len(groups) == 0 {
-		b.WriteString(m.styles.Placeholder.Render("No agents installed"))
-	} else {
-		for i, g := range groups {
-			prefix := "  "
-			style := m.styles.Label
-			if i == m.cursor {
+	indexByBinary := make(map[string]int, len(groups))
+	for i, g := range groups {
+		indexByBinary[g.Agent] = i
+	}
+
+	foundByBinary := make(map[string]bool, len(m.Agents))
+	for _, a := range m.Agents {
+		foundByBinary[a.Binary] = a.Found
+	}
+
+	for _, spec := range config.Specs() {
+		logoColor := lipgloss.Color(spec.LogoClr)
+		nameStyle := m.styles.Label
+		prefix := "  "
+		count := 0
+		selected := false
+		if idx, ok := indexByBinary[spec.Binary]; ok {
+			count = len(groups[idx].Sessions)
+			if idx == m.cursor {
+				selected = true
+				nameStyle = m.styles.Title
 				prefix = "▸ "
-				style = m.styles.Title
 			}
-			displayName := m.displayNameFor(g.Agent)
-			row := fmt.Sprintf("%s%-12s  %d", prefix, displayName, len(g.Sessions))
-			b.WriteString(style.Width(width).Render(row))
+		}
+		if !foundByBinary[spec.Binary] {
+			logoColor = lipgloss.Color("240")
+			nameStyle = m.styles.Placeholder
+		}
+
+		logoStyle := lipgloss.NewStyle().Foreground(logoColor).Width(width)
+		if selected {
+			logoStyle = logoStyle.Background(m.styles.Selected.GetBackground())
+			nameStyle = m.styles.Selected
+		}
+		for _, l := range strings.Split(spec.Logo, "\n") {
+			b.WriteString(logoStyle.Render(l))
 			b.WriteString("\n")
 		}
+		row := fmt.Sprintf("%s%-12s  %d", prefix, spec.Name, count)
+		b.WriteString(nameStyle.Width(width).Render(row))
+		b.WriteString("\n")
+	}
+
+	if len(groups) == 0 {
+		b.WriteString(m.styles.Placeholder.Render("No agents installed"))
+		b.WriteString("\n")
 	}
 
 	return lipgloss.NewStyle().
