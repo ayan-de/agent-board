@@ -30,6 +30,15 @@ func TestDefaultKeyMapContainsAllActions(t *testing.T) {
 		ActionJumpColumn4,
 		ActionShowHelp,
 		ActionGoToTicket,
+		ActionJumpSession1,
+		ActionJumpSession2,
+		ActionJumpSession3,
+		ActionJumpSession4,
+		ActionJumpSession5,
+		ActionJumpSession6,
+		ActionJumpSession7,
+		ActionJumpSession8,
+		ActionJumpSession9,
 	}
 
 	for _, a := range requiredActions {
@@ -94,6 +103,15 @@ func TestDefaultKeyMapExpectedBindings(t *testing.T) {
 		{"4", ActionJumpColumn4, false},
 		{"?", ActionShowHelp, false},
 		{"g", ActionGoToTicket, true},
+		{"alt+1", ActionJumpSession1, false},
+		{"alt+2", ActionJumpSession2, false},
+		{"alt+3", ActionJumpSession3, false},
+		{"alt+4", ActionJumpSession4, false},
+		{"alt+5", ActionJumpSession5, false},
+		{"alt+6", ActionJumpSession6, false},
+		{"alt+7", ActionJumpSession7, false},
+		{"alt+8", ActionJumpSession8, false},
+		{"alt+9", ActionJumpSession9, false},
 	}
 
 	for _, tt := range tests {

@@ -38,6 +38,15 @@ const (
 	ActionApproveProposal
 	ActionViewProposal
 	ActionSetDependsOn
+	ActionJumpSession1
+	ActionJumpSession2
+	ActionJumpSession3
+	ActionJumpSession4
+	ActionJumpSession5
+	ActionJumpSession6
+	ActionJumpSession7
+	ActionJumpSession8
+	ActionJumpSession9
 )
 
 func (a Action) String() string {
@@ -110,6 +119,24 @@ func (a Action) String() string {
 		return "view_proposal"
 	case ActionSetDependsOn:
 		return "set_depends_on"
+	case ActionJumpSession1:
+		return "jump_session_1"
+	case ActionJumpSession2:
+		return "jump_session_2"
+	case ActionJumpSession3:
+		return "jump_session_3"
+	case ActionJumpSession4:
+		return "jump_session_4"
+	case ActionJumpSession5:
+		return "jump_session_5"
+	case ActionJumpSession6:
+		return "jump_session_6"
+	case ActionJumpSession7:
+		return "jump_session_7"
+	case ActionJumpSession8:
+		return "jump_session_8"
+	case ActionJumpSession9:
+		return "jump_session_9"
 	default:
 		return "unknown"
 	}

@@ -205,6 +205,33 @@ func (m DashboardModel) selectedGroup() *agentSessionGroup {
 	return &groups[m.cursor]
 }
 
+var jumpSessionActions = map[keybinding.Action]int{
+	keybinding.ActionJumpSession1: 0,
+	keybinding.ActionJumpSession2: 1,
+	keybinding.ActionJumpSession3: 2,
+	keybinding.ActionJumpSession4: 3,
+	keybinding.ActionJumpSession5: 4,
+	keybinding.ActionJumpSession6: 5,
+	keybinding.ActionJumpSession7: 6,
+	keybinding.ActionJumpSession8: 7,
+	keybinding.ActionJumpSession9: 8,
+}
+
+func (m *DashboardModel) JumpToSession(index int) {
+	groups := m.aggregateActiveSessions()
+	sessionCount := 0
+	for i, g := range groups {
+		if index < sessionCount+len(g.Sessions) {
+			m.cursor = i
+			if len(g.Sessions) > 0 {
+				m.selectedSessionID = g.Sessions[index-sessionCount].SessionID
+			}
+			return
+		}
+		sessionCount += len(g.Sessions)
+	}
+}
+
 func (m DashboardModel) Init() tea.Cmd {
 	return nil
 }
@@ -247,6 +274,11 @@ func (m DashboardModel) Update(msg tea.Msg) (DashboardModel, tea.Cmd) {
 func (m DashboardModel) handleKey(msg tea.KeyMsg) (DashboardModel, tea.Cmd) {
 	key := msg.String()
 	action, _ := m.resolver.Resolve(key)
+
+	if index, ok := jumpSessionActions[action]; ok {
+		m.JumpToSession(index)
+		return m, nil
+	}
 
 	switch action {
 	case keybinding.ActionRefresh:

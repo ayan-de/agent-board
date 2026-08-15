@@ -475,6 +475,41 @@ func TestAppEscapeFromDashboard(t *testing.T) {
 	}
 }
 
+func TestAppJumpSessionEntersDashboardAndSelectsSession(t *testing.T) {
+	app, _ := newTestApp(t)
+	ctx := context.Background()
+
+	titles := []string{"task a", "task b", "task c"}
+	agents := []string{"claude", "claude", "opencode"}
+	for i := range titles {
+		tk, err := app.store.CreateTicket(ctx, store.Ticket{Title: titles[i], Status: "in_progress"})
+		if err != nil {
+			t.Fatalf("create ticket: %v", err)
+		}
+		if _, err := app.store.CreateSession(ctx, store.Session{TicketID: tk.ID, Agent: agents[i], Status: "running"}); err != nil {
+			t.Fatalf("create session: %v", err)
+		}
+	}
+
+	m, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Alt: true, Runes: []rune{'1'}})
+	app = m.(*App)
+	if app.view != viewDashboard {
+		t.Fatalf("alt+1 should switch to dashboard view, got %v", app.view)
+	}
+	first := app.dashboard.SelectedSession()
+	if first == nil || first.Agent != "claude" {
+		t.Fatalf("alt+1 should select the first session (claude), got %+v", first)
+	}
+
+	// alt+3 while already on the dashboard must jump too, not be swallowed.
+	m, _ = app.Update(tea.KeyMsg{Type: tea.KeyRunes, Alt: true, Runes: []rune{'3'}})
+	app = m.(*App)
+	third := app.dashboard.SelectedSession()
+	if third == nil || third.Agent != "opencode" {
+		t.Errorf("alt+3 while already on dashboard should select the 3rd session (opencode), got %+v", third)
+	}
+}
+
 func TestAppDashboardViewRenders(t *testing.T) {
 	app, _ := newTestApp(t)
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 40})

@@ -552,6 +552,78 @@ func TestDashboardContentListsSessionsFilteredBySelectedAgent(t *testing.T) {
 	}
 }
 
+func TestDashboardJumpToSession(t *testing.T) {
+	m := newTestDashboard(t)
+	ctx := context.Background()
+
+	for i, agent := range []string{"claude", "claude", "opencode", "opencode", "opencode"} {
+		tk, err := m.store.CreateTicket(ctx, store.Ticket{Title: "task " + string(rune(97+i)), Status: "in_progress"})
+		if err != nil {
+			t.Fatalf("create ticket: %v", err)
+		}
+		if _, err := m.store.CreateSession(ctx, store.Session{TicketID: tk.ID, Agent: agent, Status: "running"}); err != nil {
+			t.Fatalf("create session: %v", err)
+		}
+	}
+
+	m = m.Refresh()
+
+	tests := []struct {
+		index int
+		want  string
+	}{
+		{0, "claude"},
+		{1, "claude"},
+		{2, "opencode"},
+		{3, "opencode"},
+		{4, "opencode"},
+	}
+
+	for _, tt := range tests {
+		t.Run("index "+string(rune(48+tt.index)), func(t *testing.T) {
+			m.JumpToSession(tt.index)
+			selected := m.SelectedSession()
+			if selected == nil {
+				t.Fatalf("SelectedSession returned nil")
+			}
+			if selected.Agent != tt.want {
+				t.Errorf("JumpToSession(%d): got agent %q, want %q", tt.index, selected.Agent, tt.want)
+			}
+		})
+	}
+}
+
+func TestDashboardHandleKeyJumpsSessionViaKeybinding(t *testing.T) {
+	m := newTestDashboard(t)
+	ctx := context.Background()
+
+	for i, agent := range []string{"claude", "claude", "opencode"} {
+		tk, err := m.store.CreateTicket(ctx, store.Ticket{Title: "task " + string(rune(97+i)), Status: "in_progress"})
+		if err != nil {
+			t.Fatalf("create ticket: %v", err)
+		}
+		if _, err := m.store.CreateSession(ctx, store.Session{TicketID: tk.ID, Agent: agent, Status: "running"}); err != nil {
+			t.Fatalf("create session: %v", err)
+		}
+	}
+	m = m.Refresh()
+
+	// alt+1 selects the first session.
+	m, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Alt: true, Runes: []rune{'1'}})
+	first := m.SelectedSession()
+	if first == nil || first.Agent != "claude" {
+		t.Fatalf("alt+1 via handleKey should select claude, got %+v", first)
+	}
+
+	// alt+3, sent straight to the dashboard's own key handler (as happens
+	// once the dashboard view is already active), must not be swallowed.
+	m, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Alt: true, Runes: []rune{'3'}})
+	third := m.SelectedSession()
+	if third == nil || third.Agent != "opencode" {
+		t.Errorf("alt+3 via handleKey should select opencode, got %+v", third)
+	}
+}
+
 func TestFormatUptime(t *testing.T) {
 	tests := []struct {
 		name string

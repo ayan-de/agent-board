@@ -720,6 +720,12 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.kanban, _ = a.kanban.Reload()
 		}
 	default:
+		if index, ok := jumpSessionActions[action]; ok {
+			a.view = viewDashboard
+			a.dashboard = a.dashboard.Refresh()
+			a.dashboard.JumpToSession(index)
+			return a, nil
+		}
 		var cmd tea.Cmd
 		a.kanban, cmd = a.kanban.Update(msg)
 		return a, cmd
