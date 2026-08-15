@@ -380,7 +380,7 @@ func (m DashboardModel) View() string {
 	footerStr := "j/k: select │ r: refresh │ Esc: back"
 	sess := m.SelectedSession()
 	if sess != nil {
-		footerStr += " │ e: send input │ v: view in tmux"
+		footerStr += " │ e: send input │ w: switch to pane"
 	}
 	footer := m.styles.Footer.Render(footerStr)
 	b.WriteString(footer)
